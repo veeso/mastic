@@ -1,5 +1,7 @@
 # Mastic
 
+![mastic logo](./assets/images/logo.png)
+
 [![license-mit](https://img.shields.io/badge/License-MIT-teal.svg)](https://opensource.org/license/mit/)
 [![ci state](https://github.com/veeso/mastic/actions/workflows/ci.yml/badge.svg)](https://github.com/veeso/mastic/actions/workflows/ci.yml)
 [![Conventional Commits](https://img.shields.io/badge/Conventional%20Commits-1.0.0-%23FE5196?logo=conventionalcommits&logoColor=white)](https://conventionalcommits.org)
