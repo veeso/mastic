@@ -673,7 +673,7 @@ Each item in this array also has a replies property, representing the responses 
       }
     }
   ]
-}Note
+}
 ```
 
 Poll votes are serialized as `Create` activities, where the object is a Note with a name that exactly matches the name of the poll option. The Note.inReplyTo points to the URI of the Question object.
