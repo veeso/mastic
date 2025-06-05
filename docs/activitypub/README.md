@@ -53,6 +53,8 @@
   - [HTTP Signatures](#http-signatures)
     - [Signing POST requests](#signing-post-requests)
     - [Verifying Signatures](#verifying-signatures)
+  - [WebFinger](#webfinger)
+    - [WebFinger Simple Flow](#webfinger-simple-flow)
 
 This module provides a technical overview with simple diagrams of the ActivityPub protocol, which is used for federated social networking.
 
@@ -1133,3 +1135,48 @@ Mastodon verifies the signature using the following algorithm:
 3. **Fetch the `keyId`** and resolve to an actor’s `publicKey`.
 4. **RSA-SHA256 hash** the signature string and compare to the Base64-decoded signature as decrypted by `publicKey[publicKeyPem]`.
 5. Use the `Date:` header to check that the signed request was made within the past `12 hours`.
+
+---
+
+## WebFinger
+
+For fully-featured Mastodon support, Mastic also implements the WebFinger protocol, which is used to discover information about users and their profiles on the Fediverse. WebFinger is a protocol that allows clients to discover information about a user based on their account name or email address.
+
+### WebFinger Simple Flow
+
+Suppose we want to lookup the user `@Gargron` hosted on the mastodon.social website.
+
+Just make a request to that domain’s `/.well-known/webfinger` endpoint, with the `resource` query parameter set to an `acct:` URI (e.g. `acct:veeso_dev@hachyderm.io`).
+
+For instance: `https://hachyderm.io/.well-known/webfinger?resource=acct%3Aveeso_dev%40hachyderm.io`
+
+```json
+{
+  "subject": "acct:veeso_dev@hachyderm.io",
+  "aliases": [
+    "https://hachyderm.io/@veeso_dev",
+    "https://hachyderm.io/users/veeso_dev"
+  ],
+  "links": [
+    {
+      "rel": "http://webfinger.net/rel/profile-page",
+      "type": "text/html",
+      "href": "https://hachyderm.io/@veeso_dev"
+    },
+    {
+      "rel": "self",
+      "type": "application/activity+json",
+      "href": "https://hachyderm.io/users/veeso_dev"
+    },
+    {
+      "rel": "http://ostatus.org/schema/1.0/subscribe",
+      "template": "https://hachyderm.io/authorize_interaction?uri={uri}"
+    },
+    {
+      "rel": "http://webfinger.net/rel/avatar",
+      "type": "image/png",
+      "href": "https://media.hachyderm.io/accounts/avatars/114/410/957/328/747/476/original/1cc6bed1aa3ad81e.png"
+    }
+  ]
+}
+```
