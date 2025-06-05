@@ -1,6 +1,6 @@
 # Mastic
 
-<img src="./assets/images/logotype.png" alt="Mastic Logo" height="100" />
+<img src="./assets/images/logo.png" alt="Mastic Logo" height="150" />
 
 [![license-mit](https://img.shields.io/badge/License-MIT-teal.svg)](https://opensource.org/license/mit/)
 [![ci state](https://github.com/veeso/mastic/actions/workflows/ci.yml/badge.svg)](https://github.com/veeso/mastic/actions/workflows/ci.yml)
