@@ -1,0 +1,25 @@
+[package]
+name = "integration-tests"
+version = { workspace = true }
+edition = { workspace = true }
+license = { workspace = true }
+
+[dependencies]
+anyhow = { workspace = true }
+candid = { workspace = true }
+did = { path = "../src/did" }
+flate2 = { workspace = true }
+ic-agent = { workspace = true }
+ic-ledger-types = { workspace = true }
+ic-utils = { workspace = true }
+log = { workspace = true }
+pocket-ic = { workspace = true }
+pocket-test = { path = "../src/pocket-test" }
+reqwest = { workspace = true }
+serde = { workspace = true }
+tokio = { workspace = true }
+
+[features]
+default = []
+dfx = []
+pocket-ic = []
