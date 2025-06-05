@@ -1,6 +1,6 @@
-# ActivityPub
+# ActivityPub on Mastic
 
-- [ActivityPub](#activitypub)
+- [ActivityPub on Mastic](#activitypub-on-mastic)
   - [Objects](#objects)
     - [Retrieving objects](#retrieving-objects)
     - [Source](#source)
@@ -35,20 +35,28 @@
     - [Sensitive Extension](#sensitive-extension)
     - [Hashtag](#hashtag)
     - [Custom Emoji](#custom-emoji)
+    - [Focal Points](#focal-points)
     - [Quote Posts](#quote-posts)
+    - [Discoverability Flag](#discoverability-flag)
+    - [Indexable Flag](#indexable-flag)
+    - [Suspended Flag](#suspended-flag)
+    - [Memorial Flag](#memorial-flag)
     - [Polls](#polls)
     - [Mentions](#mentions)
+    - [Public Key](#public-key)
     - [Blurhash](#blurhash)
-    - [Reports](#reports)
     - [Featured Collection](#featured-collection)
-    - [Identity Proofs](#identity-proofs)
+    - [Featured Tags](#featured-tags)
     - [Profile Metadata](#profile-metadata)
     - [Account Migration](#account-migration)
     - [Remote Blocking](#remote-blocking)
+  - [HTTP Signatures](#http-signatures)
+    - [Signing POST requests](#signing-post-requests)
+    - [Verifying Signatures](#verifying-signatures)
 
 This module provides a technical overview with simple diagrams of the ActivityPub protocol, which is used for federated social networking.
 
-The diagrams illustrate the flow of activities between actors in a federated network, showing how they interact with each other through various endpoints, and so what it has to be implemented in order to support ActivityPub on Mastic.
+The diagrams illustrate the flow of activities between actors in a federated network, showing how they interact with each other through various endpoints, and so what it has to be implemented in order to support **ActivityPub on Mastic**.
 
 ## Objects
 
@@ -560,7 +568,7 @@ These are the properties used:
 
 ### Profiles Federation
 
-these are the supported activities for profiles:
+Profiles are represented as `Person` objects in ActivityPub, and they are used to represent users on the platform. Mastodon supports the following activities for profiles:
 
 - `Follow`: Indicate interest in receiving status updates from a profile.
 - `Accept/Reject`: Used to approve or deny Follow activities. Unlocked accounts will automatically reply with an Accept, while locked accounts can manually choose whether to approve or deny a follow request.
@@ -569,7 +577,7 @@ these are the supported activities for profiles:
 - `Delete`: Remove an account from the database, as well as all of their statuses.
 - `Undo`: Undo a previous Follow, Accept Follow, or Block.
 - `Block`: Signal to a remote server that they should hide your profile from that user. Not guaranteed.
-- `Flag`: Report a user to their moderation team. See the [Reports extension](#reports) for more information
+- `Flag`: Report a user to their moderation team. See the [Reports extension](#reports-extension) for more information
 - `Move`: Migrate followers from one account to another. Requires `alsoKnownAs` to be set on the new account pointing to the old account
 
 #### Profile Properties
@@ -584,13 +592,13 @@ these are the supported activities for profiles:
 - `manuallyApprovesFollowers`: Will be shown as a locked account.
 - `discoverable`: Will be shown in the profile directory.
 - `indexable`: Posts by this account can be indexed for full-text search
-- `publicKey`: Required for signatures
+- `publicKey`: Required for signatures. See [Public Key](#public-key) for more information.
 - `featured`: Pinned posts. See [Featured collection](#featured-collection)
-- `attachment`: Used for profile fields. See [Profile metadata](#profile-metadata) and [Identity Proofs](#identity-proofs).
+- `attachment`: Used for profile fields. See [Profile metadata](#profile-metadata).
 - `alsoKnownAs`: Required for `Move` activity
 - `published`: When the profile was created.
-- `memorial`: Whether the account is a memorial account
-- `suspended`: Whether the account is currently suspended
+- `memorial`: Whether the account is a memorial account. See [Memorial Flag](#memorial-flag) for more information.
+- `suspended`: Whether the account is currently suspended. See [Suspended Flag](#suspended-flag) for more information.
 - `attributionDomains`: Domains allowed to use `fediverse:creator` for this actor in published articles.
 
 ### Reports Extension
@@ -615,11 +623,179 @@ To report profiles and/or posts on remote servers, Mastodon will send a `Flag` a
 
 ### Sensitive Extension
 
+Mastodon uses the `as:sensitive` extension property to mark certain posts as sensitive. When a post is marked as sensitive, any media attached to it will be hidden by default, and if a summary is present, the status content will be collapsed behind this summary. In Mastodon, this is known as a content warning.
+
 ### Hashtag
+
+Similar to the `Mention` subtype of `Link` already defined in `ActivityStreams`, Mastodon will use `Hashtag` as a subtype of Link in order to surface posts referencing some common topic identified by a string key. The Hashtag has a name containing the `#hashtag` microsyntax – a `#` followed by a string sequence representing a topic. This is similar to the `@mention` microsyntax, where an `@` is followed by some string sequence representing a resource (where in Mastodon’s case, this resource is expected to be an account). **Mastodon will also normalize hashtags to be case-insensitive** lowercase strings, performing ASCII folding and removing invalid characters.
+
+```json
+{
+  "@context": [
+    "https://www.w3.org/ns/activitystreams",
+    {
+      "Hashtag": "https://www.w3.org/ns/activitystreams#Hashtag"
+    }
+  ],
+  "id": "https://example.com/some-post",
+  "type": "Note",
+  "attributedTo": "https://example.com",
+  "content": "I love #cats",
+  "tag": [
+    {
+      "type": "Hashtag",
+      "name": "#cats",
+      "href": "https://example.com/tagged/cats"
+    }
+  ]
+}
+```
 
 ### Custom Emoji
 
+Mastodon supports arbitrary emojis by including a tag of the Emoji type. Handling of custom emojis is similar to handling of mentions and hashtags, where the name of the tagged entity is found as a substring of the natural language properties (name, summary, content) and then linked to the local representation of some resource or topic. In the case of emoji shortcodes, the name is replaced by the HTML for an inline image represented by the icon property (where icon.url links to the image resource).
+
+```json
+{
+  "@context": [
+    "https://www.w3.org/ns/activitystreams",
+    {
+      "Emoji": "http://joinmastodon.org/ns#Emoji",
+    }
+  ],
+
+  "id": "https://example.com/@alice/hello-world",
+  "type": "Note",
+  "content": "Hello world :kappa:",
+  "tag": [
+    {
+      "id": "https://example.com/emoji/123",
+      "type": "Emoji",
+      "name": ":kappa:",
+      "icon": {
+        "type": "Image",
+        "mediaType": "image/png",
+        "url": "https://example.com/files/kappa.png"
+      }
+    }
+  ]
+}
+```
+
+### Focal Points
+
+Mastodon supports setting a focal point on uploaded images, so that wherever that image is displayed, the focal point stays in view. This is implemented using an extra property focalPoint on Image objects. The property is an array of two floating points between `-1.0` and `1.0`, with `0,0` being the center of the image, the first value being `x` (`-1.0` is the left edge, `+1.0` is the right edge) and the second value being `y` (`-1.0` is the bottom edge, `+1.0` is the top edge).
+
+```json
+{
+  "@context": [
+    "https://www.w3.org/ns/activitystreams",
+    {
+      "focalPoint": {
+        "@container": "@list",
+        "@id": "http://joinmastodon.org/ns#focalPoint"
+      }
+    }
+  ],
+
+  "id": "https://example.com/@alice/hello-world",
+  "type": "Note",
+  "content": "A picture attached!",
+  "attachment": [
+    {
+      "type": "Image",
+      "mediaType": "image/png",
+      "url": "https://example.com/files/cats.png",
+      "focalPoint": [
+        -0.55,
+        0.43
+      ]
+    }
+  ]
+}
+```
+
 ### Quote Posts
+
+Mastodon implements experimental support for handling remote quote posts according to `FEP-044f`. Additionally, it understands `quoteUri`, `quoteUrl` and `_misskey_quote` for compatibility.
+
+Should a post contain multiple quotes, Mastodon only accepts the first one.
+
+Furthermore, Mastodon does not handle the full range of interaction policies, but instead converts the authorized followers to a combination of “public”, “followers” and “unknown”, defaulting to “nobody”.
+
+At this time, Mastodon does not offer authoring quotes, nor does it expose a quote policy, or produce stamps for incoming quote requests.
+
+### Discoverability Flag
+
+Mastodon allows users to opt-in or opt-out of discoverability features like the profile directory. This flag may also be used as an indicator of the user’s preferences toward being included in external discovery services. If you are implementing such a tool, it is recommended that you respect this property if it is present. This is implemented using an extra property discoverable on objects mapping to profiles.
+
+```json
+{
+  "@context": [
+    "https://www.w3.org/ns/activitystreams",
+    {
+      "discoverable": "http://joinmastodon.org/ns#discoverable"
+    }
+  ],
+  "id": "https://mastodon.social/users/Gargron",
+  "type": "Person",
+  "discoverable": true
+}
+```
+
+### Indexable Flag
+
+Mastodon allows users to opt-in or opt-out of indexing features like full-text search of public statuses. If you are implementing such a tool, it is recommended that you respect this property if it is present. This is implemented using an extra property indexable on objects mapping to profiles.
+
+```json
+{
+  "@context": [
+    "https://www.w3.org/ns/activitystreams",
+    {
+      "indexable": "http://joinmastodon.org/ns#indexable"
+    }
+  ],
+  "id": "https://mastodon.social/users/Gargron",
+  "type": "Person",
+  "indexable": true
+}
+```
+
+### Suspended Flag
+
+Mastodon reports whether a user was locally suspended, for better handling of these accounts. **Suspended accounts in Mastodon return empty data**. If a remote account is marked as suspended, it cannot be unsuspended locally. Suspended accounts can be targeted by activities such as `Update`, `Undo`, `Reject`, and `Delete`. This functionality is implemented using an extra property `suspended` on objects.
+
+```json
+{
+  "@context": [
+    "https://www.w3.org/ns/activitystreams",
+    {
+      "suspended": "http://joinmastodon.org/ns#suspended"
+    }
+  ],
+  "id": "https://example.com/@eve",
+  "type": "Person",
+  "suspended": true
+}
+```
+
+### Memorial Flag
+
+Mastodon reports whether a user’s profile was memorialized, for better handling of these accounts. **Memorial accounts in Mastodon return normal data**, but are rendered with a header indicating that the account is a memorial account. This functionality is implemented using an extra property `memorial` on objects.
+
+```json
+{
+  "@context": [
+    "https://www.w3.org/ns/activitystreams",
+    {
+      "memorial": "http://joinmastodon.org/ns#memorial"
+    }
+  ],
+  "id": "https://example.com/@alice",
+  "type": "Person",
+  "memorial": true
+}
+```
 
 ### Polls
 
@@ -718,15 +894,137 @@ For multiple-choice polls, multiple activities may be sent. Votes will be counte
 
 ### Mentions
 
+In the `ActivityStreams` Vocabulary, `Mention` is a subtype of `Link` that is intended to represent the microsyntax of `@mentions`. The tag property is intended to add references to other `Objects` or `Links`. For Link tags, the name of the Link should be a substring of the natural language properties (`name`, `summary`, `content`) on that object. Wherever such a substring is found, it can be transformed into a hyperlink reference to the `href`.
+
+However, Mastodon also uses Mention tags for addressing in some cases. Based on the presence or exclusion of Mention tags, and compared to the explicitly declared audiences in to and cc, Mastodon will calculate a visibility level for the post. Additionally, Mastodon requires Mention tags in order to generate a notification. (The mentioned actor must still be included within to or cc explicitly in order to receive the post.)
+
+- `public`: Public statuses have the as:Public magic collection in `to`
+- `unlisted`: Unlisted statuses have the as:Public magic collection in `cc`
+- `private`: Followers-only statuses have an actor’s follower collection in `to` or `cc`, but do not include the `as:Public` magic collection
+- `limited`: Limited-audience statuses have actors in `to` or `cc`, at least one of which is not Mentioned in tag
+- `direct`: Mentions-only statuses have actors in `to` or `cc`, all of which are Mentioned in tag
+
+### Public Key
+
+Public keys are used for HTTP Signatures and Linked Data Signatures. This is implemented using an extra property `publicKey` on [actor](#actors) objects. See [HTTP Signatures](#http-signatures) for more information.
+
+```json
+{
+  "@context": [
+    "https://www.w3.org/ns/activitystreams",
+    "https://w3id.org/security/v1"
+  ],
+  "id": "https://mastodon.social/users/Gargron",
+  "type": "Person",
+  "publicKey": {
+    "id": "https://mastodon.social/users/Gargron#main-key",
+    "owner": "https://mastodon.social/users/Gargron",
+    "publicKeyPem": "-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAvXc4vkECU2/CeuSo1wtn\nFoim94Ne1jBMYxTZ9wm2YTdJq1oiZKif06I2fOqDzY/4q/S9uccrE9Bkajv1dnkO\nVm31QjWlhVpSKynVxEWjVBO5Ienue8gND0xvHIuXf87o61poqjEoepvsQFElA5ym\novljWGSA/jpj7ozygUZhCXtaS2W5AD5tnBQUpcO0lhItYPYTjnmzcc4y2NbJV8hz\n2s2G8qKv8fyimE23gY1XrPJg+cRF+g4PqFXujjlJ7MihD9oqtLGxbu7o1cifTn3x\nBfIdPythWu5b4cujNsB3m3awJjVmx+MHQ9SugkSIYXV0Ina77cTNS0M2PYiH1PFR\nTwIDAQAB\n-----END PUBLIC KEY-----\n"
+  }
+}
+```
+
 ### Blurhash
 
-### Reports
+Mastodon generates colorful preview thumbnails for attachments. This is implemented using an extra property blurhash on Image objects. The property is a string generated by the BlurHash algorithm.
+
+```json
+{
+  "@context": [
+    "https://www.w3.org/ns/activitystreams",
+    {
+      "blurhash": "http://joinmastodon.org/ns#blurhash"
+    }
+  ],
+
+  "id": "https://example.com/@alice/hello-world",
+  "type": "Note",
+  "content": "A picture attached!",
+  "attachment": [
+    {
+      "type": "Image",
+      "mediaType": "image/png",
+      "url": "https://example.com/files/cats.png",
+      "blurhash": "UBL_:rOpGG-oBUNG,qRj2so|=eE1w^n4S5NH"
+    }
+  ]
+}
+```
 
 ### Featured Collection
 
-### Identity Proofs
+What is known in Mastodon as “pinned statuses”, or statuses that are always featured at the top of people’s profiles, is implemented using an extra property featured on the actor object that points to a Collection of objects.
+
+```json
+{
+  "@context": [
+    "https://www.w3.org/ns/activitystreams",
+    {
+      "featured": {
+        "@id": "http://joinmastodon.org/ns#featured",
+        "@type": "@id"
+      }
+    }
+  ],
+
+  "id": "https://example.com/@alice",
+  "type": "Person",
+  "featured": "https://example.com/@alice/collections/featured"
+}
+```
+
+### Featured Tags
+
+Mastodon allows users to feature specific hashtags on their profile for easy browsing, as a discoverability mechanism. This is implemented using an extra property featuredTags on the actor object that points to a Collection of Hashtag objects specifically.
+
+```json
+{
+  "@context": [
+    "https://www.w3.org/ns/activitystreams",
+    {
+      "featuredTags": {
+        "@id": "http://joinmastodon.org/ns#featuredTags",
+        "@type": "@id"
+      }
+    }
+  ],
+
+  "id": "https://example.com/@alice",
+  "type": "Person",
+  "featuredTags": "https://example.com/@alice/collections/tags"
+}
+```
 
 ### Profile Metadata
+
+Mastodon supports arbitrary profile fields containing name-value pairs. This is implemented using the attachment property on actor objects, with objects in the array having a type of PropertyValue and a value property, both from the schema.org namespace.
+
+```json
+{
+  "@context": [
+    "https://www.w3.org/ns/activitystreams",
+    {
+      "schema": "http://schema.org#",
+      "PropertyValue": "schema:PropertyValue",
+      "value": "schema:value"
+    }
+  ],
+  "id": "https://mastodon.social/users/Gargron",
+  "type": "Person",
+  "attachment": [
+    {
+      "type": "PropertyValue",
+      "name": "Patreon",
+      "value": "<a href=\"https://www.patreon.com/mastodon\" rel=\"me nofollow noopener noreferrer\" target=\"_blank\"><span class=\"invisible\">https://www.</span><span class=\"\">patreon.com/mastodon</span><span class=\"invisible\"></span}"
+    },
+    {
+      "type": "PropertyValue",
+      "name": "Homepage",
+      "value": "<a href=\"https://zeonfederated.com\" rel=\"me nofollow noopener noreferrer\" target=\"_blank\"><span class=\"invisible\">https://</span><span class=\"\">zeonfederated.com</span><span class=\"invisible\"></span}"
+    }
+  ]
+}
+```
 
 ### Account Migration
 
@@ -758,3 +1056,80 @@ ActivityPub defines the Block activity for client-to-server (C2S) use-cases, but
   "to": "https://example.com/~mallory"
 }
 ```
+
+---
+
+## HTTP Signatures
+
+HTTP Signatures are used to authenticate requests between servers (S2S) part of the **Federation Protocol**.
+
+In particular, in the Public data for each user there is a `publicKey` property that contains the public key of the user. This public key is used to verify the signature of the request.
+
+When a user is created on the server, the server generates and stores securely the private key of the user.
+
+When the server sends an activity to the inbox of another server, the request MUST be signed with the private key of the user.
+
+The server receiving the request MUST verify the signature using the public key of the user.
+
+For any HTTP request incoming to Mastodon for the Federation Protocol, the `Signature` header MUST be present and contain the signature of the request:
+
+```txt
+Signature: keyId="https://my.example.com/username#main-key",headers="(request-target) host date",signature="Y2FiYW...IxNGRiZDk4ZA=="
+```
+
+The three parts of the Signature: header can be broken down like so:
+
+```txt
+Signature:
+  keyId="https://my.example.com/username#main-key",
+  headers="(request-target) host date",
+  signature="Y2FiYW...IxNGRiZDk4ZA=="
+```
+
+The `keyId` should correspond to the actor and the key being used to generate the signature, whose value is equal to all parameters in headers concatenated together and signed by the key, then Base64-encoded. See [Public key](#public-key) for more information on actor keys.
+
+An example key looks like this:
+
+```json
+{
+  "publicKey": {
+    "id": "https://my.example.com/username#main-key",
+    "owner": "https://my.example.com/username",
+    "publicKeyPem": "-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAvXc4vkECU2/CeuSo1wtn\nFoim94Ne1jBMYxTZ9wm2YTdJq1oiZKif06I2fOqDzY/4q/S9uccrE9Bkajv1dnkO\nVm31QjWlhVpSKynVxEWjVBO5Ienue8gND0xvHIuXf87o61poqjEoepvsQFElA5ym\novljWGSA/jpj7ozygUZhCXtaS2W5AD5tnBQUpcO0lhItYPYTjnmzcc4y2NbJV8hz\n2s2G8qKv8fyimE23gY1XrPJg+cRF+g4PqFXujjlJ7MihD9oqtLGxbu7o1cifTn3x\nBfIdPythWu5b4cujNsB3m3awJjVmx+MHQ9SugkSIYXV0Ina77cTNS0M2PYiH1PFR\nTwIDAQAB\n-----END PUBLIC KEY-----\n"
+ }
+}
+```
+
+### Signing POST requests
+
+When making a POST request to Mastodon, you must calculate the `RSA-SHA256` digest hash of your request’s body and include this hash (in `base64` encoding) within the `Digest:` header. The `Digest:` header must also be included within the headers parameter of the `Signature:` header. For example:
+
+```http
+POST /users/username/inbox HTTP/1.1
+HOST: mastodon.example
+Date: 18 Dec 2019 10:08:46 GMT
+Digest: sha-256=hcK0GZB1BM4R0eenYrj9clYBuyXs/lemt5iWRYmIX0A=
+Signature: keyId="https://my.example.com/actor#main-key",headers="(request-target) host date digest",signature="Y2FiYW...IxNGRiZDk4ZA=="
+Content-Type: application/ld+json; profile="https://www.w3.org/ns/activitystreams"
+
+{
+  "@context": "https://www.w3.org/ns/activitystreams",
+  "actor": "https://my.example.com/actor",
+  "type": "Create",
+  "object": {
+    "type": "Note",
+    "content": "Hello!"
+  },
+  "to": "https://mastodon.example/users/username"
+}
+```
+
+### Verifying Signatures
+
+Mastodon verifies the signature using the following algorithm:
+
+1. **Split Signature**: into its separate parameters.
+2. **Construct the signature** string from the value of headers.
+3. **Fetch the `keyId`** and resolve to an actor’s `publicKey`.
+4. **RSA-SHA256 hash** the signature string and compare to the Base64-decoded signature as decrypted by `publicKey[publicKeyPem]`.
+5. Use the `Date:` header to check that the signed request was made within the past `12 hours`.
