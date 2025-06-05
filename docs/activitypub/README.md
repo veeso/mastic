@@ -96,7 +96,6 @@ Each actor MUST, in addition to the properties for the [Objects](#objects), have
 - `liked`: (`OrderedCollection`) An Url to an [ActivityStreams](#activity-streams) collection that contains the activities that this actor has liked.
 
 ```json
-```json
 {
   "@context": ["https://www.w3.org/ns/activitystreams", { "@language": "ja" }],
   "type": "Person",
