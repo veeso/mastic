@@ -1,10 +1,11 @@
-# IC Canister Template
+# Mastic
 
 [![license-mit](https://img.shields.io/badge/License-MIT-teal.svg)](https://opensource.org/license/mit/)
-[![ci state](https://github.com/veeso/ic-canister-template/actions/workflows/ci.yml/badge.svg)](https://github.com/veeso/ic-canister-template/actions/workflows/ci.yml)
+[![ci state](https://github.com/veeso/mastic/actions/workflows/ci.yml/badge.svg)](https://github.com/veeso/mastic/actions/workflows/ci.yml)
 [![Conventional Commits](https://img.shields.io/badge/Conventional%20Commits-1.0.0-%23FE5196?logo=conventionalcommits&logoColor=white)](https://conventionalcommits.org)
+![icp](https://img.shields.io/badge/Internet%20Computer-FF5000?logo=InternetComputer)
 
-A template for building Internet Computer canisters with Rust.
+Mastic aims to bring the Fediverse - a decentralized network of interconnected social platforms - natively onto the Internet Computer ecosystem.
 
 ## Get Started
 

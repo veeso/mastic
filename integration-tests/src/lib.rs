@@ -30,5 +30,5 @@ pub trait TestEnv {
     where
         R: DeserializeOwned + CandidType;
 
-    fn hello_world(&self) -> Principal;
+    fn mastic(&self) -> Principal;
 }

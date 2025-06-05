@@ -15,12 +15,12 @@ const DEFAULT_CYCLES: u128 = 2_000_000_000_000_000;
 /// Test environment
 pub struct PocketIcTestEnv {
     pub pic: PocketIc,
-    pub hello_world: Principal,
+    pub mastic: Principal,
 }
 
 impl TestEnv for PocketIcTestEnv {
-    fn hello_world(&self) -> Principal {
-        self.hello_world
+    fn mastic(&self) -> Principal {
+        self.mastic
     }
 
     async fn query<R>(
@@ -88,12 +88,12 @@ impl PocketIcTestEnv {
             .await;
 
         // create canisters
-        let hello_world = pic.create_canister().await;
-        println!("Hello World: {hello_world}",);
+        let mastic = pic.create_canister().await;
+        println!("Hello World: {mastic}",);
 
-        Self::install_hello_world(&pic, hello_world).await;
+        Self::install_mastic(&pic, mastic).await;
 
-        Self { hello_world, pic }
+        Self { mastic, pic }
     }
 
     pub async fn stop(self) {
@@ -104,11 +104,11 @@ impl PocketIcTestEnv {
         self.pic.url().is_some()
     }
 
-    /// Install [`Canister::HelloWorld`] canister
-    async fn install_hello_world(pic: &PocketIc, canister_id: Principal) {
+    /// Install [`Canister::Mastic`] canister
+    async fn install_mastic(pic: &PocketIc, canister_id: Principal) {
         pic.add_cycles(canister_id, DEFAULT_CYCLES).await;
 
-        let wasm_bytes = Self::load_wasm(Canister::HelloWorld);
+        let wasm_bytes = Self::load_wasm(Canister::Mastic);
 
         //let init_arg = todo!();
         let init_arg = vec![]; // Encode!(&init_arg).unwrap();

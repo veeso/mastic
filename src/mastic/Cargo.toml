@@ -1,9 +1,10 @@
 [package]
-name = "hello_world"
+name = "mastic"
 version = { workspace = true }
 edition = { workspace = true }
 license = { workspace = true }
 rust-version = { workspace = true }
+description = "Mastic aims to bring the Fediverse natively onto the Internet Computer ecosystem."
 
 [lib]
 crate-type = ["cdylib", "rlib"]

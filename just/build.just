@@ -7,11 +7,11 @@ clean:
 
 # Builds all canisters
 [group('build')]
-build_all_canisters: build_hello_world
+build_all_canisters: build_mastic
 
 [group('build')]
-build_hello_world: pre_build
-  just build_canister "hello_world" "hello_world"
+build_mastic: pre_build
+  just build_canister "mastic" "mastic"
 
 [private]
 pre_build: 

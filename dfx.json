@@ -1,10 +1,10 @@
 {
   "dfx": "0.25.0",
   "canisters": {
-    "hello_world": {
+    "mastic": {
       "type": "rust",
-      "package": "hello_world",
-      "candid": "./.artifact/hello_world.did",
+      "package": "mastic",
+      "candid": "./.artifact/mastic.did",
       "declarations": {
         "node_compatibility": true
       }

@@ -1,13 +1,13 @@
 [workspace]
-members = ["src/hello_world", "src/did", "src/pocket-test", "integration-tests"]
-resolver = "2"
+members = ["integration-tests", "src/did", "src/mastic", "src/pocket-test"]
+resolver = "3"
 
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
 license = "MIT"
 rust-version = "1.85"
-repository = "https://github.com/veeso/ic-canister-template"
+repository = "https://github.com/veeso/mastic"
 
 [workspace.dependencies]
 candid = { version = "0.10", features = ["value"] }
