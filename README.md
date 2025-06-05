@@ -1,6 +1,6 @@
 # Mastic
 
-![mastic logo](./assets/images/logo.png)
+<img src="./assets/images/logotype.png" alt="Mastic Logo" height="100" />
 
 [![license-mit](https://img.shields.io/badge/License-MIT-teal.svg)](https://opensource.org/license/mit/)
 [![ci state](https://github.com/veeso/mastic/actions/workflows/ci.yml/badge.svg)](https://github.com/veeso/mastic/actions/workflows/ci.yml)
@@ -8,6 +8,14 @@
 ![icp](https://img.shields.io/badge/Internet%20Computer-FF5000?logo=InternetComputer)
 
 Mastic aims to bring the Fediverse - a decentralized network of interconnected social platforms - natively onto the Internet Computer ecosystem.
+
+## Building the Infiniverse
+
+Mastic is an implementation of a Mastodon-compatible server, which allows users to interact with the Fediverse using the ActivityPub protocol. It is designed to be modular, extensible, and performant, leveraging the unique capabilities of the Internet Computer.
+
+Everyone can run their own Mastic instance, and the platform is designed to be compatible with existing Mastodon clients and servers, enabling seamless interaction across the Fediverse, but bringing the benefits of the Internet Computer, such as scalability, security, the Internet Identity and a decentralized governance model.
+
+Mastic is not only Fediverse, but it aims to build a next level Social platform network, the **Infiniverse**, which will be a fully decentralized, user-owned social network that is not only compatible with the Fediverse, but also extends its capabilities.
 
 ## Get Started
 
