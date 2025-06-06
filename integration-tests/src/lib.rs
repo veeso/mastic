@@ -30,5 +30,15 @@ pub trait TestEnv {
     where
         R: DeserializeOwned + CandidType;
 
-    fn mastic(&self) -> Principal;
+    /// Get the principal of the orbit station canister.
+    fn orbit_station(&self) -> Principal;
+
+    /// Get the principal of the federation canister.
+    fn federation(&self) -> Principal;
+
+    /// Get the principal of the directory canister.
+    fn directory(&self) -> Principal;
+
+    /// Get the uuid of the station admin.
+    fn orbit_station_admin(&self) -> &str;
 }

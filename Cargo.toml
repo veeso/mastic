@@ -22,10 +22,13 @@ ic-cdk = "0.18"
 ic-cdk-macros = "0.18"
 ic-stable-structures = "0.6.8"
 serde = "1"
+serde_bytes = "0.11"
 
 # integration-tests
 anyhow = "1"
+candid_parser = "0.2.0-beta.4"
 flate2 = "1"
+git2 = "0.20"
 ic-agent = "0.40"
 ic-ledger-types = "0.15.0"
 ic-utils = "0.40"

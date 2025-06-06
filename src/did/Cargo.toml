@@ -16,3 +16,8 @@ candid = { workspace = true }
 ic-cdk = { workspace = true }
 ic-stable-structures = { workspace = true }
 serde = { workspace = true }
+serde_bytes = { workspace = true }
+
+[build-dependencies]
+candid_parser = { workspace = true }
+git2 = { workspace = true }

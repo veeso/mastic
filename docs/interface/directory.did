@@ -1,8 +1,11 @@
 service : (DirectoryInstallArgs) -> {
   add_moderator : (AddModeratorArgs) -> (AddModeratorResponse);
   delete_profile : () -> (DeleteProfileResponse);
+  get_user : (GetUserArgs) -> (GetUserResponse) query;
   remove_moderator : (RemoveModeratorArgs) -> (RemoveModeratorResponse);
+  search_profiles : (SearchProfilesArgs) -> (SearchProfilesResponse) query;
   sign_up : (text) -> (SignUpResponse);
+  suspend : (SuspendArgs) -> (SuspendResponse);
   user_canister : (opt Principal) -> (UserCanisterResponse) query;
   whoami : () -> (WhoAmIResponse) query
 }
