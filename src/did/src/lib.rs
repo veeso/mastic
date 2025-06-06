@@ -1,3 +1,3 @@
 //! Candid public interface for the `did` crate.
 
-pub mod mastic;
+pub mod federation;

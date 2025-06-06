@@ -1,14 +1,32 @@
 {
   "dfx": "0.27.0",
   "canisters": {
-    "mastic": {
+    "directory": {
       "type": "rust",
-      "package": "mastic",
-      "candid": "./.artifact/mastic.did",
+      "package": "directory",
+      "candid": "./.artifact/directory.did",
       "declarations": {
         "node_compatibility": true
       }
-    }
+    },
+    "federation": {
+      "type": "rust",
+      "package": "federation",
+      "candid": "./.artifact/federation.did",
+      "declarations": {
+        "node_compatibility": true
+      }
+    },
+    "user": {
+      "type": "rust",
+      "package": "user",
+      "candid": "./.artifact/user.did",
+      "declarations": {
+        "node_compatibility": true
+      }
+    },
+    "orbit-station": {},
+    "orbit-upgrader": {}
   },
   "defaults": {
     "build": {

@@ -502,6 +502,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "directory"
+version = "0.1.0"
+dependencies = [
+ "candid",
+ "did",
+ "ic-cdk",
+ "ic-cdk-macros",
+ "ic-stable-structures",
+ "serde",
+]
+
+[[package]]
 name = "displaydoc"
 version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -639,6 +651,18 @@ name = "fastrand"
 version = "2.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "37909eebbb50d72f9059c3b6d82c0463f2ff062c9e95845c43a6c9c0355411be"
+
+[[package]]
+name = "federation"
+version = "0.1.0"
+dependencies = [
+ "candid",
+ "did",
+ "ic-cdk",
+ "ic-cdk-macros",
+ "ic-stable-structures",
+ "serde",
+]
 
 [[package]]
 name = "ff"
@@ -1491,18 +1515,6 @@ name = "lru-slab"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "112b39cec0b298b6c1999fee3e31427f74f676e4cb9879ed1a121b43661a4154"
-
-[[package]]
-name = "mastic"
-version = "0.1.0"
-dependencies = [
- "candid",
- "did",
- "ic-cdk",
- "ic-cdk-macros",
- "ic-stable-structures",
- "serde",
-]
 
 [[package]]
 name = "matchers"
@@ -3063,6 +3075,18 @@ dependencies = [
  "form_urlencoded",
  "idna",
  "percent-encoding",
+]
+
+[[package]]
+name = "user"
+version = "0.1.0"
+dependencies = [
+ "candid",
+ "did",
+ "ic-cdk",
+ "ic-cdk-macros",
+ "ic-stable-structures",
+ "serde",
 ]
 
 [[package]]

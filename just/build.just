@@ -7,11 +7,19 @@ clean:
 
 # Builds all canisters
 [group('build')]
-build_all_canisters: build_mastic
+build_all_canisters: build_directory build_federation build_user
 
 [group('build')]
-build_mastic: pre_build
-  just build_canister "mastic" "mastic"
+build_directory: pre_build
+  just build_canister "directory" "directory"
+
+[group('build')]
+build_federation: pre_build
+  just build_canister "federation" "federation"
+
+[group('build')]
+build_user: pre_build
+  just build_canister "user" "user"
 
 [private]
 pre_build: 
