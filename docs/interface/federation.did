@@ -1,0 +1,4 @@
+service : (FederationInstallArgs) -> {
+  http_request : (HttpRequest) -> (HttpResponse);
+  send_activity : (SendActivityArgs) -> (SendActivityResponse)
+}

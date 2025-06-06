@@ -53,7 +53,7 @@ block-beta
 
 ```mermaid
 sequenceDiagram
-    participant A as Alice
+    actor A as Alice
     participant II as Internet Identity
     participant UC as User Canister
     participant DIR as Directory Canister
@@ -82,7 +82,7 @@ sequenceDiagram
 
 ```mermaid
 sequenceDiagram
-    participant A as Alice
+    actor A as Alice
     participant II as Internet Identity
     participant DIR as Directory Canister
 
@@ -95,7 +95,7 @@ sequenceDiagram
 
 ```mermaid
 sequenceDiagram
-    participant A as Alice
+    actor A as Alice
     participant UC as User Canister
     participant DIR as Directory Canister
 
@@ -109,7 +109,7 @@ sequenceDiagram
 
 ```mermaid
 sequenceDiagram
-    participant A as Alice
+    actor A as Alice
     participant UC as User Canister
     participant DIR as Directory Canister
     participant FED as Federation Canister
@@ -134,12 +134,12 @@ sequenceDiagram
 
 ```mermaid
 sequenceDiagram
-    participant A as Alice
+    actor A as Alice
     participant UC as User Canister
     participant DIR as Directory Canister
     participant FED as Federation Canister
     participant M as Mastodon Web2
-    participant B as Bob
+    actor B as Bob
 
     A->>DIR: Get Alice's User Canister (candid)
     DIR->>A: User Canister Principal
@@ -156,7 +156,7 @@ sequenceDiagram
 
 ```mermaid
 sequenceDiagram
-    participant A as Alice
+    actor A as Alice
     participant UC as User Canister
     participant DIR as Directory Canister
     participant FED as Federation Canister
@@ -174,7 +174,7 @@ sequenceDiagram
 
 ```mermaid
 sequenceDiagram
-    participant A as Alice
+    actor A as Alice
     participant UC as User Canister
     participant DIR as Directory Canister
     participant FED as Federation Canister
@@ -192,7 +192,7 @@ sequenceDiagram
 
 ```mermaid
 sequenceDiagram
-    participant A as Alice
+    actor A as Alice
     participant UC as User Canister
     participant DIR as Directory Canister
     participant FED as Federation Canister
@@ -210,7 +210,7 @@ sequenceDiagram
 
 ```mermaid
 sequenceDiagram
-    participant A as Alice
+    actor A as Alice
     participant UC as User Canister
     participant DIR as Directory Canister
 
@@ -225,12 +225,12 @@ sequenceDiagram
 
 ```mermaid
 sequenceDiagram
-    participant A as Alice
+    actor A as Alice
     participant UC as User Canister
     participant DIR as Directory Canister
     participant FED as Federation Canister
     participant M as Mastodon Web2
-    participant B as Bob
+    actor B as Bob
 
     B->>M: Publish Status
     M->>M: Get who Follows Bob

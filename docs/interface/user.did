@@ -1,0 +1,9 @@
+service : (UserInstallArgs) -> {
+  boost_status : (BoostStatusArgs) -> (BoostStatusResponse);
+  delete_profile : () -> (DeleteProfileResponse);
+  delete_status : (DeleteStatusArgs) -> (DeleteStatusResponse);
+  like_status : (LikeStatusArgs) -> (LikeStatusResponse);
+  publish_status : (PublishStatusArgs) -> (PublishStatusResponse);
+  read_feed : (ReadFeedArgs) -> (ReadFeedResponse) query;
+  update_profile : (UpdateProfileArgs) -> (UpdateProfileResponse)
+}
