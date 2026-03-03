@@ -1,6 +1,8 @@
 # ActivityPub on Mastic
 
 - [ActivityPub on Mastic](#activitypub-on-mastic)
+  - [Mapping to Mastic Architecture](#mapping-to-mastic-architecture)
+    - [Federation Canister HTTP Endpoints](#federation-canister-http-endpoints)
   - [Objects](#objects)
     - [Retrieving objects](#retrieving-objects)
     - [Source](#source)
@@ -59,6 +61,36 @@
 This module provides a technical overview with simple diagrams of the ActivityPub protocol, which is used for federated social networking.
 
 The diagrams illustrate the flow of activities between actors in a federated network, showing how they interact with each other through various endpoints, and so what it has to be implemented in order to support **ActivityPub on Mastic**.
+
+## Mapping to Mastic Architecture
+
+The following table shows how core ActivityPub concepts map to Mastic's canister-based architecture:
+
+| ActivityPub Concept | Mastic Component | Notes |
+|---|---|---|
+| **Actor** | **User Canister** | Each Mastic user is represented by a dedicated User Canister that acts as their ActivityPub Actor. |
+| **Inbox / Outbox** | **User Canister** | The actor's inbox and outbox collections are stored in the User Canister. They are exposed to the Fediverse via HTTP endpoints served by the Federation Canister. |
+| **Social API (C2S)** | **Candid calls to User Canister** | Instead of HTTP-based Client-to-Server interactions, Mastic users interact with their User Canister through authenticated Candid calls, using Internet Identity for authentication. |
+| **Federation Protocol (S2S)** | **Federation Canister** | All Server-to-Server HTTP traffic is handled by the Federation Canister, which receives incoming activities and forwards outgoing activities to remote instances. |
+| **HTTP Signatures** | **User Canister (key storage) + Federation Canister (signing/verification)** | Each User Canister generates and stores an RSA key pair at creation time. The Federation Canister uses the private key to sign outgoing requests and serves the public key when the actor profile is requested. |
+| **WebFinger** | **Federation Canister** | WebFinger lookups (`/.well-known/webfinger`) are handled by the Federation Canister's `http_request` query method, which resolves account handles to actor URIs via the Directory Canister. |
+
+### Federation Canister HTTP Endpoints
+
+The Federation Canister serves the following HTTP routes to enable ActivityPub federation and discovery:
+
+| Method | Route | Description |
+|--------|-------|-------------|
+| `GET` | `/.well-known/webfinger` | WebFinger lookup — resolves `acct:` URIs to actor profiles via the Directory Canister |
+| `GET` | `/users/{handle}` | Actor profile — returns the JSON-LD representation of the actor |
+| `GET` | `/users/{handle}/inbox` | Actor inbox — returns the inbox as an `OrderedCollection` |
+| `POST` | `/users/{handle}/inbox` | Receive activities from remote instances (S2S) — validates HTTP Signatures and delivers to the User Canister |
+| `GET` | `/users/{handle}/outbox` | Actor outbox — returns the outbox as an `OrderedCollection` |
+| `GET` | `/users/{handle}/followers` | Followers collection — returns the actor's followers as an `OrderedCollection` |
+| `GET` | `/users/{handle}/following` | Following collection — returns the actors followed by this actor as an `OrderedCollection` |
+| `GET` | `/users/{handle}/liked` | Liked collection — returns the activities liked by this actor as an `OrderedCollection` |
+
+All `GET` endpoints are served by the Federation Canister's `http_request` query method. The `POST /users/{handle}/inbox` endpoint is handled by `http_request_update` since it requires state changes (delivering activities to User Canisters).
 
 ## Objects
 
@@ -320,43 +352,18 @@ While the Federation Protocol is implemented with HTTP, the Social API is implem
 
 ## Social API
 
-Client to server interaction takes place through clients posting `Activities` to an **actor's outbox**.
+In the standard ActivityPub specification, client-to-server (C2S) interaction takes place through clients posting `Activities` to an actor's outbox via HTTP POST requests. Mastic replaces this HTTP-based C2S layer with **typed Candid methods** on the User Canister.
 
-To do this, clients MUST discover the URL of the actor's outbox from their profile and then MUST make an Update request passing this URL to the `url` argument.
+Instead of discovering an outbox URL and POSTing JSON-LD payloads to it, Mastic users call specific Candid methods on their User Canister, such as `publish_status`, `like_status`, `follow_user`, `boost_status`, `block_user`, etc. Each method accepts a typed Candid argument struct and returns a typed response. The User Canister internally manages the actor's outbox, appending the corresponding ActivityPub activity for each operation.
 
-The request MUST be authenticated with the credentials of the user to whom the outbox belongs.
+Requests MUST be authenticated using the Internet Computer's Internet Identity — the caller's principal must match the owner principal configured at canister install time.
 
-The query and update calls take two arguments:
+The User Canister handles the same side effects that the ActivityPub spec requires for outbox operations:
 
-- `url`: the URL of the object the user wants to interact with; this works basically in the same way of the URL on the HTTP Social API.
-- `payload`: the payload using the ActivityPub data payload Candid encoded.
-
-The body of the POST request MUST contain a single Activity (which MAY contain embedded objects), or a single non-Activity object which will be wrapped in a Create activity by the server.
-
-```json
-{
-  "@context": ["https://www.w3.org/ns/activitystreams", { "@language": "en" }],
-  "type": "Like",
-  "actor": "https://dustycloud.org/chris/",
-  "name": "Chris liked 'Minimal ActivityPub update client'",
-  "object": "https://rhiaro.co.uk/2016/05/minimal-activitypub",
-  "to": [
-    "https://rhiaro.co.uk/#amy",
-    "https://dustycloud.org/followers",
-    "https://rhiaro.co.uk/followers/"
-  ],
-  "cc": "https://e14n.com/evan"
-}
-
-```
-
-If an Activity is submitted with a value in the id property, servers MUST ignore this and generate a new id for the Activity.
-
-The server MUST remove the bto and/or bcc properties, if they exist, from the ActivityStreams object before delivery, but MUST utilize the addressing originally stored on the bto / bcc properties for determining recipients in delivery.
-
-The server MUST then add this new Activity to the outbox collection. Depending on the type of Activity, servers may then be required to carry out further side effects. (However, there is no guarantee that time the Activity may appear in the outbox. The Activity might appear after a delay or disappear at any period). These are described per individual Activity below.
-
-Attempts to submit objects to servers not implementing client to server support SHOULD result in a REJECTION.
+- The server (User Canister) MUST generate a new `id` for each Activity.
+- The server MUST remove `bto` and/or `bcc` properties before delivery, but MUST utilize the addressing originally stored on these properties for determining recipients.
+- The server MUST add the new Activity to the outbox collection.
+- Depending on the type of Activity, the server may carry out further side effects as described per individual Activity below.
 
 ### Client Addressing
 
@@ -501,6 +508,8 @@ Just follow 1:1 the document described here:
 <https://www.w3.org/TR/activitypub/#create-activity-inbox>
 
 ## Mastodon
+
+> **Note:** Not all Mastodon extensions described in this section will be implemented in the initial milestones. Features such as pinned posts (Featured Collection), Flag/reporting, and Move/account migration are documented here for completeness and future reference. See the milestone plan in [`docs/project.md`](../project.md#milestones) for the implementation timeline.
 
 ### Statuses Federation
 
@@ -1072,6 +1081,11 @@ When a user is created on the server, the server generates and stores securely t
 When the server sends an activity to the inbox of another server, the request MUST be signed with the private key of the user.
 
 The server receiving the request MUST verify the signature using the public key of the user.
+
+> **Mastic implementation:** In Mastic, each User Canister generates an RSA key pair at creation time. The private key
+> is stored securely within the User Canister and is used by the Federation Canister to sign outgoing HTTP requests on
+> behalf of the user. The public key is served by the Federation Canister when the actor profile is requested by a
+> remote instance (e.g. to verify a signature).
 
 For any HTTP request incoming to Mastodon for the Federation Protocol, the `Signature` header MUST be present and contain the signature of the request:
 
