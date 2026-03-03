@@ -1,11 +1,11 @@
 [workspace]
 members = [
-  "integration-tests",
-  "src/did",
-  "src/directory",
-  "src/federation",
-  "src/pocket-test",
-  "src/user",
+  "integration-tests/pocket-ic-tests",
+  "integration-tests/pocket-ic-tests-macro",
+  "crates/did",
+  "crates/directory",
+  "crates/federation",
+  "crates/user",
 ]
 resolver = "3"
 
@@ -13,29 +13,26 @@ resolver = "3"
 version = "0.1.0"
 edition = "2024"
 license = "MIT"
-rust-version = "1.85"
+rust-version = "1.90.0"
+authors = ["Christian Visintin <christian.visintin@veeso.dev>"]
 repository = "https://github.com/veeso/mastic"
 
 [workspace.dependencies]
 candid = { version = "0.10", features = ["value"] }
-ic-cdk = "0.18"
-ic-cdk-macros = "0.18"
-ic-stable-structures = "0.6.8"
+ic-cdk = "0.19"
+ic-cdk-macros = "0.19"
+ic-stable-structures = "0.7"
 serde = "1"
 serde_bytes = "0.11"
-
-# integration-tests
 anyhow = "1"
-candid_parser = "0.2.0-beta.4"
+ic-agent = "0.45"
+candid_parser = "0.3"
 flate2 = "1"
 git2 = "0.20"
-ic-agent = "0.40"
-ic-ledger-types = "0.15.0"
-ic-utils = "0.40"
 log = "0.4"
-pocket-ic = "9"
+pocket-ic = "12"
 proc-macro2 = "1"
 quote = "1"
-reqwest = { version = "0.12" }
+reqwest = { version = "0.13" }
 syn = "2"
 tokio = { version = "1", features = ["full"] }
