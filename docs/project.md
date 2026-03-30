@@ -31,10 +31,6 @@ thriving network of over 1.4 million monthly active users across the Fediverse.
 In particular, it will help engage the vibrant community of Rust developers, many of whom are active on Mastodon, by
 bridging their preferred social environment with the technical and philosophical foundations of the Internet Computer.
 
-Our final commitment is to unleash the power of the Internet Computer to build the **Infiniverse**, where, along with
-full compatibility with the Fediverse, we implement even more capabilities, such as integrating the Internet Identity,
-wallets for tips and internal transactions, decentralised governance and premium features.
-
 ## Impact
 
 Mastic has the potential to reshape the future of federated social platforms by demonstrating how a modern, scalable,
@@ -75,25 +71,6 @@ Token holders will be able to vote on proposals and allocate funds to the treasu
 
 Participants in the DAO will be able to apply for moderation and will be elected by the community.
 
-### A Sustainable Funding Model
-
-Premium social features, such as Pinned Posts, Profile customisations, verification, and NFT integrations, will be
-unlocked via staking or one-time contributions.
-
-## Future Integrations
-
-We plan to have future integrations with Mastic to achieve the **Infiniverse**, such as integrating **OpenChat** for
-direct messaging between users on an existing platform within the IC.
-
-Additionally, we plan to integrate **Wallets** for sending tips and sponsoring creators on the platform, as well as to
-enable creators to publish *premium content*.
-
-In our vision for creating the **Infiniverse**, we aim to create spaces on Mastic where communities can interact with
-one another.
-
-Finally, once multiple Mastic instances are launched onto the network, we can implement the **Infiniverse Protocol** to
-enable instances to communicate directly over the Internet Computer Protocol, rather than relying on an HTTP server.
-
 ## Market Analysis
 
 ### Total Addressable Market
@@ -103,15 +80,8 @@ Currently, Mastodon has 1.4 million active users per month.
 Most of these are developers, journalists, artists and niche communities. In particular, Mastodon has experienced
 significant growth following Elon Musk's acquisition of Twitter.
 
-Additionally, we have approximately 4 million crypto enthusiasts on [X.com](http://x.com), who may be interested in
-joining a web3 social platform and reducing their reliance on web2 services.
-
-It would be ideal for the Internet Computer project to engage these users within its ecosystem by creating a Mastodon
-instance on the IC.
-
 Of course, some users have left Twitter but have not joined Mastodon, either because they are using BlueSky or other
-platforms, such as Reddit or Discord groups. A captivating platform like Mastic, with the additional functionalities
-described in this document, could be a good hook for even more users.
+platforms, such as Reddit or Discord groups.
 
 ### Serviceable Available Market
 
@@ -122,12 +92,11 @@ Our first target is:
 - Rust Developers: 2.3 million developers in 2024
 - Web3 Developers: about 25k developers in 2024
 - IC developers: \~3k
-- Crypto Enthusiasts: 4 million users on X.com
 
 ### Serviceable Obtainable Market
 
-A realistic target within the first year could be around 20,000 users, if we primarily focus on developers, crypto
-enthusiasts, and web3 developers.
+A realistic target within the first year could be around 20,000 users, if we primarily focus on developers and web3
+developers.
 
 ### Differentiation from Traditional Mastodon Instances
 
@@ -142,11 +111,11 @@ By contrast, Mastic offers the following distinct advantages:
   need for traditional DevOps, hosting, and external databases.
 - Modularity and scalability: Each user operates within their User Canister, ensuring composability, privacy, and
   scalability by design.
-- Web3-native features, including integrated Internet Identity login, on-chain wallets, tipping, premium content, and
-  future NFT support, natively bridge the Fediverse with the Web3 ecosystem.
+- Internet Identity integration: Users can sign in with Internet Identity, bringing native IC authentication to the
+  Fediverse.
 - Decentralised governance: Instead of relying on a central instance admin, Mastic is governed by a DAO through the
-  Service Nervous System (SNS), enabling transparent, community-driven decisions around moderation, feature development,
-  and treasury allocation.
+  Service Nervous System (SNS), enabling transparent, community-driven decisions around moderation and feature
+  development.
 - Developer-friendly technology stack: Mastic is built entirely in Rust, offering a modern, secure, and performant
   alternative that resonates with a growing community of Rust and Web3 developers.
 
@@ -164,21 +133,9 @@ Our multi-phase growth approach includes:
 - [ ] Developer-first onboarding: We will bootstrap the platform by targeting Rust and Internet Computer developers,
   communities that already value decentralisation, composability, and performance. Early access, bounties, and
   contributor incentives will be designed to attract this group.
-- [ ] Web3 community engagement: Mastic will engage the broader Web3 ecosystem, including creators, NFT artists, and DAO
-  participants, who seek alternative social platforms for self-expression, monetisation, and identity ownership. This
-  includes strategic outreach to the active Web3 community on X.com (formerly Twitter), which comprises several million
-  users.
 - [ ] Fediverse-native advocacy: As a fully compatible ActivityPub implementation, Mastic will be promoted within the
   Fediverse itself. We aim to attract privacy-conscious users and instance operators looking for a lower-maintenance,
   modern alternative to traditional Mastodon deployments.
-- [ ] Incentivised adoption: Early users and contributors may receive governance tokens through an SNS airdrop, and
-  creators will benefit from tools for tipping, sponsorships, and gated content. This will foster long-term alignment
-  and participation in the platform’s growth.
-- [ ] Partnerships and integrations: Collaborations with existing Internet Computer projects, such as OpenChat, will
-  enable cross-platform interaction and shared user flows, further extending Mastic’s reach within the ecosystem.
-
-Through this targeted strategy, Mastic aims to establish itself as the leading Web3-native gateway to the Fediverse,
-cultivating a resilient, decentralised, and self-sustaining social platform.
 
 ## Architecture Overview
 
@@ -509,18 +466,8 @@ Duration: 1 month
 
 During this phase, we plan to launch Mastic on the SNS to add a fully decentralised governance to Mastic.
 
-We need to implement a comprehensive integration for voting, specifically for adding and removing moderators, updating
-policies, and integrating premium features.
-
-### Milestone 4 - Bringing in the IC Ecosystem
-
-Duration: 4 months
-
-In this final phase of the project, we plan to integrate other applications of the **Internet Computer** ecosystem into
-**Mastic**. The details will be planned later on, but some nice features to have would be:
-
-- Integrating **Open Chat**[[4](https://oc.app/)] for direct communication with other users on the **Infiniverse**
-- Integrating **Wallets** for sponsoring content creators
+We need to implement a comprehensive integration for voting, specifically for adding and removing moderators and updating
+policies.
 
 ## Reference
 
