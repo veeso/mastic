@@ -1,3 +1,8 @@
+---
+title: "Architecture"
+layout: page
+---
+
 # Mastic Architecture Documentation
 
 - [Mastic Architecture Documentation](#mastic-architecture-documentation)

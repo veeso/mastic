@@ -1,0 +1,7 @@
+title: Mastic
+description: A federated social platform (Mastodon-compatible via ActivityPub) running entirely on the Internet Computer.
+url: https://veeso.github.io/mastic
+theme: minima
+header_pages: []
+image: /logo-128.png
+github_url: https://github.com/veeso/mastic

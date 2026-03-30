@@ -1,3 +1,8 @@
+---
+title: "ActivityPub"
+layout: page
+---
+
 # ActivityPub on Mastic
 
 - [ActivityPub on Mastic](#activitypub-on-mastic)

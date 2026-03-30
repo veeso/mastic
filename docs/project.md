@@ -1,3 +1,8 @@
+---
+title: "Project Specification"
+layout: page
+---
+
 # Mastic
 
 Unleashing the power of IC on the Fediverse

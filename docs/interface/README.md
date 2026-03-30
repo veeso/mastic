@@ -1,3 +1,8 @@
+---
+title: "Interface"
+layout: page
+---
+
 # Interface
 
 This directory contains the Candid interface definitions for the various canisters in the Mastic project.
