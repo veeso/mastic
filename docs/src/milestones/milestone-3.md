@@ -1,262 +1,320 @@
 
-# Milestone 3 - SNS Launch
+# Milestone 3 - Integrating the Fediverse
 
-**Duration:** 1 month
+**Duration:** 2 months
 
-**Goal:** Launch Mastic on the Service Nervous System (SNS) to establish fully
-decentralised, community-driven governance. Token holders can vote on
-proposals for moderation, policy changes, canister upgrades, and treasury
-management.
+**Goal:** Implement the Federation Protocol to make Mastic fully compatible
+with the Fediverse. Remote Mastodon instances can discover Mastic users via
+WebFinger, fetch actor profiles, and exchange activities over HTTP with
+ActivityPub and HTTP Signatures.
 
-**User Stories:** None (infrastructure milestone)
+**User Stories:** UC13, UC14
 
-**Prerequisites:** Milestone 2 completed, all canisters deployed and stable on
-mainnet.
+**Prerequisites:** Milestone 2 completed.
 
 ## Work Items
 
-### WI-3.1: Prepare SNS configuration (`sns_init.yaml`)
+### WI-3.1: Extend database schema for Milestone 3
 
-**Description:** Define the SNS initialization parameters, token distribution,
-and governance model for the Mastic DAO in the canonical `sns_init.yaml`
-configuration file.
-
-**What should be done:**
-
-- Create `sns_init.yaml` with all required parameters:
-  - **Project metadata:** name, description, logo, URL
-  - **NNS proposal text:** title, forum URL, summary
-  - **Fallback controllers:** principal IDs that regain control if the swap
-    fails (critical — without these the dapp becomes uncontrollable)
-  - **Dapp canisters:** Directory and Federation canister IDs to
-    decentralize (User Canisters are managed by Directory, not directly
-    by SNS Root)
-  - **Token configuration:** name, symbol, transaction fee, logo
-  - **Governance parameters:**
-    - Proposal rejection fee
-    - Initial voting period (>= 4 days recommended)
-    - Maximum wait-for-quiet deadline extension
-    - Minimum neuron creation stake
-    - Minimum dissolve delay for voting (>= 1 month)
-    - Dissolve delay bonus (duration + percentage)
-    - Age bonus (duration + percentage)
-    - Reward rate (initial, final, transition duration)
-  - **Token distribution:**
-    - Developer neurons with dissolve delay (>= 6 months) and vesting
-      period (12-48 months) to signal long-term commitment
-    - Seed investor neurons (if any) with vesting
-    - Treasury allocation (DAO-controlled)
-    - Swap allocation (sold during decentralization swap)
-    - Total supply must equal the sum of all allocations
-  - **Decentralization swap parameters:**
-    - `minimum_participants` (100-200 recommended, not too high)
-    - Minimum/maximum direct participation ICP
-    - Per-participant minimum/maximum ICP
-    - Duration (3-7 days recommended)
-    - Neurons fund participation (true/false)
-    - Vesting schedule for swap neurons (events + interval)
-    - Confirmation text (legal disclaimer)
-    - Restricted countries list
-- Validate the configuration with `dfx sns init-config-file validate`
-- Document the governance model and tokenomics rationale in
-  `docs/src/governance.md`
-- Study successful SNS launches (OpenChat, Hot or Not, Kinic) for
-  parameter ranges the NNS community accepts
-
-**Acceptance Criteria:**
-
-- `sns_init.yaml` passes `dfx sns init-config-file validate`
-- Token distribution adds up to the total supply exactly
-- Developer neurons have non-zero dissolve delay and vesting period
-- Governance parameters are reasonable (voting period >= 4 days, quorum
-  defined, rejection fee set)
-- Fallback controller principals are defined
-- Documentation explains tokenomics and governance model clearly
-
-### WI-3.2: Implement SNS-compatible canister upgrade path
-
-**Description:** Ensure the Directory and Federation canisters can be upgraded
-through SNS proposals, and that User Canisters (dynamically created) can be
-batch-upgraded by the Directory Canister.
+**Description:** Extend the `wasm-dbms` schema to support federation-specific
+data: remote actor cache, delivery queue, and HTTP signature key references.
 
 **What should be done:**
 
-- Verify `pre_upgrade` and `post_upgrade` hooks correctly serialize and
-  deserialize all state for Directory and Federation canisters
-- For User Canisters: verify `wasm-dbms` stable memory survives upgrades
-- Implement `set_sns_governance` on the Directory Canister:
-  - Accept a principal ID for the SNS governance canister
-  - Only callable by canister controllers (before SNS launch) or by
-    the already-set governance principal
-  - Can only be set once (trap on second call)
-- Implement a `require_governance(caller)` guard for governance-gated
-  methods
-- Implement `upgrade_user_canisters` method on the Directory Canister:
-  - Accept new User Canister WASM as argument
-  - Callable only by SNS governance (via proposal)
-  - Iterate over all registered User Canisters
-  - Call `install_code` with mode `Upgrade` for each
-  - Track progress and report failures (individual failures must not
-    block the batch)
-- Test upgrade paths with state preservation
+- **Federation Canister schema:**
+  - `remote_actors` table: `actor_uri` (TEXT PK), `inbox_url` (TEXT NOT
+    NULL), `shared_inbox_url` (TEXT), `public_key_pem` (TEXT NOT NULL),
+    `display_name` (TEXT), `summary` (TEXT), `icon_url` (TEXT),
+    `fetched_at` (INTEGER NOT NULL), `expires_at` (INTEGER NOT NULL)
+  - `delivery_queue` table: `id` (TEXT PK), `activity_json` (TEXT NOT NULL),
+    `target_inbox_url` (TEXT NOT NULL), `sender_canister_id` (TEXT NOT
+    NULL), `attempts` (INTEGER DEFAULT 0), `last_attempt_at` (INTEGER),
+    `status` (TEXT NOT NULL DEFAULT 'pending'),
+    `created_at` (INTEGER NOT NULL)
+  - `authorized_canisters` table: `canister_id` (TEXT PK),
+    `registered_at` (INTEGER NOT NULL)
+  - Index on `delivery_queue.status` for pending delivery lookup
+  - Index on `remote_actors.expires_at` for cache eviction
+- **User Canister schema additions:**
+  - Add `actor_uri` (TEXT) column to `followers` and `following` tables to
+    distinguish local vs remote actors
+- Run schema migrations on canister upgrade
 
 **Acceptance Criteria:**
 
-- All canister state survives an upgrade cycle
-- `set_sns_governance` can only be called once by a controller
-- Governance-gated methods reject unauthorized callers
-- The Directory Canister can batch-upgrade all User Canisters
-- Upgrade failures for individual User Canisters do not block the batch
-- Integration test: deploy, populate state, upgrade, verify state preserved
+- New tables and columns are created on upgrade from M2 schema
+- Existing data is preserved during migration
+- Cache eviction queries work on the `remote_actors` table
+- Delivery queue supports retry queries (find pending with attempts < max)
 
-### WI-3.3: Implement SNS-governed moderation proposals
+### WI-3.2: Implement WebFinger endpoint
 
-**Description:** Transition moderation actions from direct moderator calls to
-SNS proposal-based governance. The SNS governance canister becomes the sole
-authority for moderation.
+**Description:** Serve WebFinger responses so remote instances can discover
+Mastic users by their `acct:` URI.
 
 **What should be done:**
 
-- Implement a generic proposal execution interface on the Directory Canister:
-  - Accept proposals from the SNS governance canister
-  - Parse proposal payloads to determine the action
-- Supported proposal types:
-  - `AddModerator`: add a principal to the moderator list
-  - `RemoveModerator`: remove a principal from the moderator list
-  - `SuspendUser`: suspend a user by handle
-  - `UnsuspendUser`: reactivate a suspended user
-  - `UpdatePolicy`: update instance moderation policies (e.g., content
-    rules text)
-- Restrict existing direct `add_moderator`, `remove_moderator`, and
-  `suspend` methods to the SNS governance canister principal only (no
-  longer callable by individual moderators directly)
+- In the Federation Canister, handle `GET /.well-known/webfinger` in
+  `http_request` (query)
+- Parse the `resource` query parameter (e.g.,
+  `acct:alice@mastic.social`)
+- Extract the handle, resolve it via the Directory Canister
+- Return a JSON Resource Descriptor (JRD) with:
+  - `subject`: the `acct:` URI
+  - `links`: a `self` link pointing to the actor's ActivityPub profile URL
+    with `type: application/activity+json`
+- Return 404 for unknown handles
+- Return 400 for malformed requests
 
 **Acceptance Criteria:**
 
-- Moderation actions can only be executed via SNS proposals
-- The Directory Canister correctly parses and executes each proposal type
-- Invalid proposal payloads are rejected with a descriptive error
-- The SNS governance canister principal is the only authorized caller for
-  moderation methods
-- Integration test: simulate a proposal execution, verify the action is
-  applied
+- `GET /.well-known/webfinger?resource=acct:alice@mastic.social` returns a
+  valid JRD with the correct actor URL
+- Unknown handles return 404
+- Malformed `resource` parameters return 400
+- Response has `Content-Type: application/jrd+json`
+- Integration test: create user, query WebFinger, verify JRD
 
-### WI-3.4: Implement UnsuspendUser flow
+### WI-3.3: Serve ActivityPub actor profiles
 
-**Description:** Add the ability to reactivate a suspended user account via
-SNS governance.
+**Description:** Serve actor profile JSON for remote instances that look up
+Mastic users.
 
 **What should be done:**
 
-- Implement `unsuspend` method on the Directory Canister:
-  - Authorize the caller (SNS governance canister only)
-  - Remove the suspended flag from the user record
-  - Notify the User Canister to resume operations
-  - Optionally send an `Undo(Delete)` or `Update(Person)` activity to
-    re-announce the user to followers
-- Define `UnsuspendArgs`, `UnsuspendResponse` in the `did` crate
+- In the Federation Canister, handle `GET /users/{handle}` in
+  `http_request` (query) when `Accept` header includes
+  `application/activity+json`
+- Resolve the handle via the Directory Canister
+- Fetch the user's profile from their User Canister
+- Fetch the user's RSA public key from their User Canister
+- Build an ActivityPub `Person` object with:
+  - `id`, `url`, `preferredUsername`, `name`, `summary`
+  - `inbox`, `outbox`, `followers`, `following` collection URLs
+  - `publicKey` block (key ID, owner, PEM-encoded RSA public key)
+  - `icon` and `image` if avatar/header are set
+- Return the JSON-LD response
 
 **Acceptance Criteria:**
 
-- A suspended user can be reactivated via the `unsuspend` method
-- Only the SNS governance canister can call `unsuspend`
-- After unsuspension, the user can interact with their User Canister again
-- The user reappears in `search_profiles` results
-- Integration test: suspend, then unsuspend, verify the user is active
+- `GET /users/alice` with the correct Accept header returns a valid
+  ActivityPub Person object
+- The `publicKey` block contains the correct RSA public key
+- Collection URLs are well-formed
+- Unknown handles return 404
+- Integration test: create user, fetch actor profile, verify all fields
 
-### WI-3.5: SNS testflight on local replica and mainnet
+### WI-3.4: Serve ActivityPub collections
 
-**Description:** Deploy a testflight (mock) SNS to validate the full
-governance flow before submitting the real NNS proposal. This catches
-configuration issues early, before they are visible to the NNS community.
+**Description:** Serve the `outbox`, `followers`, and `following`
+OrderedCollection endpoints for remote instances.
 
 **What should be done:**
 
-- **Local testflight:**
-  - Deploy NNS canisters locally using `sns-testing` repo tooling
-  - Deploy Mastic canisters locally
-  - Deploy a local testflight SNS using `sns_init.yaml`
-  - Test: submit a proposal to upgrade the Directory Canister, vote,
-    verify upgrade succeeds
-  - Test: submit a moderation proposal, vote, verify action is applied
-  - Test: batch-upgrade User Canisters via proposal
-- **Mainnet testflight:**
-  - Deploy a mock SNS on mainnet (does not run a real swap)
-  - Verify governance flows: proposal submission, voting, execution
-  - Verify canister upgrade path end-to-end
-  - Verify User Canister batch upgrade
+- Handle `GET /users/{handle}/outbox` in `http_request`:
+  - Return an `OrderedCollection` with `totalItems` and paginated
+    `OrderedCollectionPage` items
+  - Fetch outbox items from the User Canister
+- Handle `GET /users/{handle}/followers` in `http_request`:
+  - Return an `OrderedCollection` of follower actor URIs
+- Handle `GET /users/{handle}/following` in `http_request`:
+  - Return an `OrderedCollection` of following actor URIs
+- Support pagination via `page` query parameter
 
 **Acceptance Criteria:**
 
-- Local testflight passes all governance flow tests
-- Mainnet testflight demonstrates working proposal → vote → execute cycle
-- No issues discovered that would block the real launch
+- Each collection endpoint returns valid ActivityPub OrderedCollection JSON
+- Pagination works correctly
+- Empty collections return `totalItems: 0`
+- Unknown handles return 404
+- Integration test: create user with statuses and follows, verify collections
 
-### WI-3.6: SNS deployment and decentralization swap
+### WI-3.5: Implement HTTP Signatures for outgoing requests
 
-**Description:** Submit the NNS proposal, transfer canister control to
-SNS Root, and execute the decentralization swap. This follows the 11-stage
-SNS launch process.
+**Description:** Sign all outgoing HTTP requests from the Federation Canister
+using the sender's RSA private key, per the HTTP Signatures spec used by
+Mastodon.
 
 **What should be done:**
 
-- **Pre-submission:**
-  - Add NNS Root (`r7inp-6aaaa-aaaaa-aaabq-cai`) as co-controller of
-    the Directory and Federation canisters using
-    `dfx sns prepare-canisters add-nns-root`
-  - Final validation of `sns_init.yaml`
-  - Call `set_sns_governance` on the Directory Canister with the
-    expected SNS governance canister ID (set after SNS-W deploys it)
-- **Submit NNS proposal:**
-  - `dfx sns propose --network ic --neuron $NEURON_ID sns_init.yaml`
-  - This is irreversible once submitted — double-check all parameters
-- **During swap (3-7 days):**
-  - Monitor swap participation and ICP raised
-  - Note: six governance proposal types are restricted during the swap
-    (`ManageNervousSystemParameters`, `TransferSnsTreasuryFunds`,
-    `MintSnsTokens`, `UpgradeSnsControlledCanister`,
-    `RegisterDappCanisters`, `DeregisterDappCanisters`) — do not plan
-    operations requiring these
-- **Post-swap finalization:**
-  - Verify all canisters are controlled solely by SNS Root
-  - Verify token holders can submit and vote on proposals
-  - Document the post-swap governance workflow (how to submit proposals,
-    vote, and execute upgrades)
+- Implement HTTP Signature generation:
+  - Sign headers: `(request-target)`, `host`, `date`, `digest`,
+    `content-type`
+  - Use RSA-SHA256 algorithm
+  - Fetch the sender's private key from their User Canister
+  - Build the `Signature` header string
+- Add the `Signature` and `Digest` headers to all outgoing ActivityPub
+  requests
+- Implement a helper to compute SHA-256 digest of the request body
 
 **Acceptance Criteria:**
 
-- The NNS proposal is submitted and adopted by the community
-- SNS-W deploys all SNS canisters (Governance, Ledger, Root, Swap,
-  Index, Archive)
-- SNS Root becomes sole controller of Directory and Federation canisters
-- The decentralization swap completes successfully (meets minimum
-  participants and ICP thresholds)
-- Token holders can submit and vote on proposals
-- Post-swap documentation is published
+- All outgoing ActivityPub requests include a valid `Signature` header
+- The `Digest` header matches the SHA-256 hash of the body
+- The signature can be verified using the sender's public key
+- Unit test: sign a request, verify the signature with the public key
 
-### WI-3.7: Integration tests for SNS governance flows
+### WI-3.6: Implement HTTP Signature verification for incoming requests
 
-**Description:** Write integration tests that validate the SNS governance
-integration.
+**Description:** Verify HTTP Signatures on incoming ActivityPub requests to
+ensure authenticity.
 
 **What should be done:**
 
-- **Test proposal execution:** Simulate an SNS proposal to add a moderator,
-  verify the moderator is added
-- **Test canister upgrade via SNS:** Simulate an upgrade proposal, verify
-  state is preserved
-- **Test User Canister batch upgrade:** Upgrade all User Canisters via the
-  Directory, verify state
-- **Test suspend/unsuspend via proposal:** Simulate suspend and unsuspend
-  proposals
-- **Test unauthorized access:** Verify that direct moderation calls (not from
-  SNS governance) are rejected
-- **Test `set_sns_governance`:** Verify it can only be set once and only by
-  controllers
+- In the Federation Canister `http_request_update` handler, before
+  processing any incoming activity:
+  - Parse the `Signature` header to extract `keyId`, `headers`, `signature`
+  - Fetch the remote actor's profile from the `keyId` URL (via
+    `ic_cdk::api::management_canister::http_request`)
+  - Extract the remote actor's RSA public key
+  - Reconstruct the signing string from the specified headers
+  - Verify the signature using the remote public key
+- Cache remote actor public keys to avoid repeated fetches (with TTL)
+- Reject requests with invalid or missing signatures
 
 **Acceptance Criteria:**
 
-- All governance flows pass as integration tests
-- Tests simulate SNS governance canister calls
-- Each test is independent and can run in isolation
+- Incoming requests with valid signatures are accepted
+- Incoming requests with invalid signatures are rejected with 401
+- Incoming requests with missing signatures are rejected with 401
+- Remote public keys are cached with a reasonable TTL
+- Unit test: construct a signed request, verify it passes validation
+
+### WI-3.7: Implement incoming activity processing (inbox)
+
+**Description:** Process incoming ActivityPub activities received via HTTP POST
+to the shared inbox.
+
+**What should be done:**
+
+- In the Federation Canister, handle `POST /inbox` in
+  `http_request_update`:
+  - Verify HTTP Signature (WI-3.5)
+  - Parse the activity JSON
+  - Determine the activity type and target
+  - Route to the appropriate User Canister(s) via `receive_activity`
+- Handle the following incoming activity types:
+  - `Create(Note)`: deliver to the target user's inbox
+  - `Follow`: deliver to the target user for acceptance
+  - `Accept(Follow)`: deliver to the original requester
+  - `Reject(Follow)`: deliver to the original requester
+  - `Undo(Follow)`: deliver to the target user
+  - `Like`: deliver to the status author
+  - `Undo(Like)`: deliver to the status author
+  - `Announce`: deliver to the target user
+  - `Undo(Announce)`: deliver to the target user
+  - `Delete`: deliver to affected users
+  - `Update(Person)`: update cached remote actor info
+  - `Block`: deliver to the blocked user
+
+**Acceptance Criteria:**
+
+- All listed activity types are correctly parsed and routed
+- Invalid JSON returns 400
+- Unknown activity types are gracefully ignored (return 202)
+- Activities targeting non-existent local users return 404
+- Integration test: simulate an incoming Create(Note) from a remote instance
+
+### WI-3.8: Implement outgoing activity delivery (HTTP POST)
+
+**Description:** Deliver activities to remote Fediverse instances via signed
+HTTP POST requests.
+
+**What should be done:**
+
+- In the Federation Canister `send_activity` handler, when the target is a
+  remote actor:
+  - Resolve the remote actor's inbox URL (fetch actor profile if not cached)
+  - Serialize the activity as JSON-LD
+  - Sign the request using the sender's RSA key (WI-3.5)
+  - Send the HTTP POST via `ic_cdk::api::management_canister::http_request`
+  - Handle retries for transient failures (e.g., 5xx responses)
+- Implement delivery to shared inboxes when multiple recipients share the
+  same instance
+- Handle delivery failures gracefully (log, do not block the caller)
+
+**Acceptance Criteria:**
+
+- Activities are delivered to remote inboxes via signed HTTP POST
+- Shared inbox optimization works (one request per remote instance)
+- Transient failures are retried (up to a configurable limit)
+- Permanent failures (4xx) are not retried
+- The caller is not blocked by slow remote deliveries
+
+### WI-3.9: Implement remote actor resolution and caching
+
+**Description:** Fetch and cache remote actor profiles for use in activity
+routing and display.
+
+**What should be done:**
+
+- Implement a remote actor resolver in the Federation Canister:
+  - Given a remote actor URI, perform WebFinger lookup to find the actor URL
+  - Fetch the actor profile via HTTP GET with
+    `Accept: application/activity+json`
+  - Parse the actor profile to extract: display name, summary, public key,
+    inbox URL, followers/following URLs, icon
+  - Cache the actor profile in stable memory with a TTL (e.g., 24 hours)
+- Provide a method for User Canisters to request remote actor info (for
+  display in feeds)
+
+**Acceptance Criteria:**
+
+- Remote actor profiles are fetched and cached
+- Cached entries expire after the TTL
+- Invalid actor URIs return a descriptive error
+- The resolver handles redirects and content negotiation
+- Unit test: mock a remote actor endpoint, verify parsing
+
+### WI-3.10: Implement NodeInfo endpoint
+
+**Description:** Serve the NodeInfo endpoint so remote instances and monitoring
+tools can discover Mastic's software and protocol information.
+
+**What should be done:**
+
+- Handle `GET /.well-known/nodeinfo` in `http_request`:
+  - Return a JSON document with a link to the NodeInfo 2.0 schema URL
+- Handle `GET /nodeinfo/2.0` in `http_request`:
+  - Return NodeInfo 2.0 JSON with: software name ("mastic"), version,
+    protocols (["activitypub"]), open registrations status, usage statistics
+    (total users, active users, local posts)
+  - Fetch statistics from the Directory Canister
+
+**Acceptance Criteria:**
+
+- `GET /.well-known/nodeinfo` returns a valid link to the NodeInfo endpoint
+- `GET /nodeinfo/2.0` returns valid NodeInfo 2.0 JSON
+- Statistics reflect actual counts from the Directory Canister
+- Integration test: deploy canisters, query NodeInfo, verify response
+
+### WI-3.11: Integration tests for federation flows
+
+**Description:** Write integration tests that exercise the full federation
+flows, verifying interoperability with the ActivityPub protocol.
+
+**What should be done:**
+
+- **Test UC13 (Receive Updates from Fediverse):** Simulate a remote instance
+  sending a `Create(Note)` activity, verify it appears in the local user's
+  feed
+- **Test UC14 (Interact with Mastic from Web2):** Simulate a local user
+  publishing a status, verify the Federation Canister produces a correctly
+  signed HTTP request with the right ActivityPub payload
+- **Test WebFinger:** Query WebFinger for a local user, verify the JRD
+- **Test Actor Profile:** Fetch a local user's actor profile, verify the
+  Person object
+- **Test Collections:** Fetch outbox/followers/following collections, verify
+  pagination
+- **Test HTTP Signature round-trip:** Sign a request, verify it passes
+  validation
+- **Test incoming Follow from remote:** Simulate a remote Follow, verify the
+  local user gets a new follower
+
+**Acceptance Criteria:**
+
+- All federation flows pass as integration tests
 - Tests run in CI via `just integration_test`
+- Tests simulate remote instances by crafting raw HTTP requests with valid
+  signatures
+- Each test is independent and can run in isolation

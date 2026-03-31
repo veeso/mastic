@@ -443,7 +443,31 @@ These stories must be implemented during this phase:
 - UC15
 - UC16
 
-### Milestone 2 - Integrating the Fediverse
+### Milestone 2 - Frontend
+
+Duration: 2 months
+
+Build the Mastic web frontend as a React application deployed as an IC asset canister. The frontend provides Internet
+Identity authentication and a Mastodon-like interface covering all user stories from Milestones 0 and 1.
+
+These stories must be implemented during this phase:
+
+- UC1
+- UC2
+- UC3
+- UC4
+- UC5
+- UC6
+- UC7
+- UC8
+- UC9
+- UC10
+- UC11
+- UC12
+- UC15
+- UC16
+
+### Milestone 3 - Integrating the Fediverse
 
 Duration: 2 months
 
@@ -456,7 +480,7 @@ These user stories must be implemented during this phase:
 - UC13
 - UC14
 
-### Milestone 3 - SNS Launch
+### Milestone 4 - SNS Launch
 
 Duration: 1 month
 
