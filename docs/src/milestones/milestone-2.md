@@ -1,7 +1,3 @@
----
-title: "Milestone 2 - Integrating the Fediverse"
-layout: page
----
 
 # Milestone 2 - Integrating the Fediverse
 

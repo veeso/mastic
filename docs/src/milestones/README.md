@@ -1,7 +1,3 @@
----
-title: "Milestones"
-layout: page
----
 
 # Milestones
 

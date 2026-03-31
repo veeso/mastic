@@ -1,10 +1,6 @@
----
-title: "Mastic"
-description: "A federated social platform (Mastodon-compatible via ActivityPub) running entirely on the Internet Computer."
-nav_order: 1
----
+# Mastic
 
-![logo](/logo-128.png)
+![logo](./logo-128.png)
 
 [![license-mit](https://img.shields.io/github/license/veeso/mastic)](https://opensource.org/licenses/MIT)
 [![repo-stars](https://img.shields.io/github/stars/veeso/mastic?style=flat)](https://github.com/veeso/mastic/stargazers)
@@ -26,19 +22,19 @@ Mastic is a federated social platform fully compatible with Mastodon and the Fed
 
 System architecture, canister design, and sequence diagrams for all major flows:
 
-- [Architecture Overview](./architecture/README.md) - Canister architecture, flows, and sequence diagrams
+- [Architecture Overview](./architecture.md) - Canister architecture, flows, and sequence diagrams
 
 ### ActivityPub
 
 ActivityPub protocol reference and Mastic-specific mapping:
 
-- [ActivityPub on Mastic](./activitypub/README.md) - Protocol mapping, objects, actors, activities
+- [ActivityPub on Mastic](./activitypub.md) - Protocol mapping, objects, actors, activities
 
 ### Candid Interfaces
 
 Canonical Candid interface definitions for each canister:
 
-- [Interface Definitions](./interface/README.md) - Directory, Federation, and User canister interfaces
+- [Interface Definitions](./interface.md) - Directory, Federation, and User canister interfaces
 
 ### Project Specification
 

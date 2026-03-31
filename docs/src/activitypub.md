@@ -1,7 +1,3 @@
----
-title: "ActivityPub"
-layout: page
----
 
 # ActivityPub on Mastic
 

@@ -1,7 +1,3 @@
----
-title: "Milestone 0 - Proof of Concept"
-layout: page
----
 
 # Milestone 0 - Proof of Concept
 

@@ -1,7 +1,3 @@
----
-title: "Project Specification"
-layout: page
----
 
 # Mastic
 

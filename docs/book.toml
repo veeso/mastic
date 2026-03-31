@@ -1,0 +1,19 @@
+[book]
+title = "Mastic"
+description = "A federated social platform (Mastodon-compatible via ActivityPub) running entirely on the Internet Computer."
+authors = ["Christian Visintin"]
+language = "en"
+src = "src"
+
+[output.html]
+default-theme = "light"
+preferred-dark-theme = "ayu"
+git-repository-url = "https://github.com/veeso/mastic"
+additional-js = ["mermaid.min.js", "mermaid-init.js"]
+
+[preprocessor.mermaid]
+command = "mdbook-mermaid"
+
+[output.html.fold]
+enable = true
+level = 0

@@ -1,7 +1,3 @@
----
-title: "Milestone 3 - SNS Launch"
-layout: page
----
 
 # Milestone 3 - SNS Launch
 

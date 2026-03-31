@@ -1,7 +1,3 @@
----
-title: "Interface"
-layout: page
----
 
 # Interface
 

@@ -1,7 +1,3 @@
----
-title: "Architecture"
-layout: page
----
 
 # Mastic Architecture Documentation
 

@@ -1,7 +1,3 @@
----
-title: "Milestone 1 - Standalone Mastic Node"
-layout: page
----
 
 # Milestone 1 - Standalone Mastic Node
 

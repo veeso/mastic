@@ -13,11 +13,15 @@ crates/
 integration-tests/
   pocket-ic-tests/        # Integration tests using pocket-ic
   pocket-ic-tests-macro/  # Proc-macro support for integration tests
-docs/
-  activitypub/  # ActivityPub protocol reference and Mastic mapping
-  architecture/ # Architecture overview and sequence diagrams
-  interface/    # Canonical Candid .did files (directory, federation, user)
-  project.md    # Project spec, user stories, milestones, interface definitions
+docs/                       # mdBook site (built with `mdbook build docs`)
+  book.toml                 # mdBook config (with mdbook-mermaid preprocessor)
+  src/
+    activitypub.md          # ActivityPub protocol reference and Mastic mapping
+    architecture.md         # Architecture overview and sequence diagrams
+    interface.md            # Canonical Candid .did file index
+    *.did                   # Candid interface definitions (directory, federation, user)
+    project.md              # Project spec, user stories, milestones, interface definitions
+    milestones/             # Per-milestone implementation plans
 ```
 
 ## Build & Test
@@ -72,15 +76,16 @@ Authorization is principal-based: User→UserCanister (owner principal), Federat
 
 ### Candid Interfaces
 
-Canonical `.did` files live in `docs/interface/`. The build pipeline also auto-extracts `.did` from WASM to `.artifact/`. When adding or modifying canister methods, update **both**:
-1. `docs/interface/{canister}.did` — the spec
-2. `docs/project.md` — the Interface section (must match the .did files exactly)
+Canonical `.did` files live in `docs/src/`. The build pipeline also auto-extracts `.did` from WASM to `.artifact/`. When adding or modifying canister methods, update **both**:
+1. `docs/src/{canister}.did` — the spec
+2. `docs/src/project.md` — the Interface section (must match the .did files exactly)
 
 ### Documentation
 
-- `docs/project.md` is the single source of truth for user stories, milestones, and interface specs.
-- `docs/architecture/README.md` contains sequence diagrams for all major flows.
-- `docs/activitypub/README.md` is the ActivityPub protocol reference with Mastic-specific mapping.
+- Documentation is built with [mdBook](https://rust-lang.github.io/mdBook/) with mermaid diagram support.
+- `docs/src/project.md` is the single source of truth for user stories, milestones, and interface specs.
+- `docs/src/architecture.md` contains sequence diagrams for all major flows.
+- `docs/src/activitypub.md` is the ActivityPub protocol reference with Mastic-specific mapping.
 - When adding a new flow, add both a sequence diagram in architecture and a user story in project.md.
 
 ## Local Development

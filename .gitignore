@@ -21,3 +21,6 @@ node_modules
 .DS_Store
 
 .artifact/
+
+# mdBook output
+docs/book/
