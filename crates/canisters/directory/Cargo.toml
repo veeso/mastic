@@ -6,11 +6,6 @@ license = { workspace = true }
 rust-version = { workspace = true }
 description = "Mastic aims to bring the Fediverse natively onto the Internet Computer ecosystem."
 
-[lib]
-crate-type = ["cdylib", "rlib"]
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
 candid = { workspace = true }
 did = { path = "../../libs/did" }
@@ -18,3 +13,6 @@ ic-cdk = { workspace = true }
 ic-cdk-macros = { workspace = true }
 ic-stable-structures = { workspace = true }
 serde = { workspace = true }
+
+[lib]
+crate-type = ["cdylib", "rlib"]

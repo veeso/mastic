@@ -2,19 +2,14 @@
 name = "activitypub"
 version = { workspace = true }
 edition = { workspace = true }
+description = "An implementation of the ActivityPub protocol for the Internet Computer."
 license = { workspace = true }
 rust-version = { workspace = true }
-description = "An implementation of the ActivityPub protocol for the Internet Computer."
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
 
 [lib]
 name = "activitypub"
 path = "src/lib.rs"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
-[dependencies]
-candid = { workspace = true }
-ic-cdk = { workspace = true }
-ic-stable-structures = { workspace = true }
-serde = { workspace = true }
-serde_bytes = { workspace = true }

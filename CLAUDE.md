@@ -100,3 +100,7 @@ just dfx_deploy_local       # Deploy all canisters locally
 ```
 
 Requires: `dfx` >= 0.30.2, `ic-wasm`, `candid-extractor`, Rust nightly (for formatting).
+
+## After Making Changes to Rust Code
+
+Always run `just fmt_nightly` and `just clippy -- -D warnings` after making changes to Rust code.

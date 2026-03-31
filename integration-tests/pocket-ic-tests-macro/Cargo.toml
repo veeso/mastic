@@ -2,17 +2,17 @@
 name = "pocket-ic-tests-macro"
 version = { workspace = true }
 edition = { workspace = true }
-rust-version = { workspace = true }
+description = "pocket-test macro for testing with the pocket ic context"
 license = { workspace = true }
 repository = { workspace = true }
-description = "pocket-test macro for testing with the pocket ic context"
 publish = false
+rust-version = { workspace = true }
+
+[dependencies]
+quote = { workspace = true }
+syn = { workspace = true }
 
 [lib]
 name = "pocket_ic_tests_macro"
 path = "src/lib.rs"
 proc-macro = true
-
-[dependencies]
-quote = { workspace = true }
-syn = { workspace = true }
