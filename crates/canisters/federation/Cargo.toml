@@ -1,5 +1,5 @@
 [package]
-name = "directory"
+name = "federation"
 version = { workspace = true }
 edition = { workspace = true }
 license = { workspace = true }
@@ -13,7 +13,7 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 candid = { workspace = true }
-did = { path = "../did" }
+did = { path = "../../did" }
 ic-cdk = { workspace = true }
 ic-cdk-macros = { workspace = true }
 ic-stable-structures = { workspace = true }

@@ -1,11 +1,11 @@
 [workspace]
 members = [
+  "crates/did",
+  "crates/canisters/directory",
+  "crates/canisters/federation",
+  "crates/canisters/user",
   "integration-tests/pocket-ic-tests",
   "integration-tests/pocket-ic-tests-macro",
-  "crates/did",
-  "crates/directory",
-  "crates/federation",
-  "crates/user",
 ]
 resolver = "3"
 
@@ -19,18 +19,18 @@ repository = "https://github.com/veeso/mastic"
 
 [workspace.dependencies]
 candid = { version = "0.10", features = ["value"] }
-ic-cdk = "0.19"
-ic-cdk-macros = "0.19"
+ic-cdk = "0.20"
+ic-cdk-macros = "0.20"
 ic-stable-structures = "0.7"
 serde = "1"
 serde_bytes = "0.11"
 anyhow = "1"
-ic-agent = "0.45"
+ic-agent = "0.47"
 candid_parser = "0.3"
 flate2 = "1"
 git2 = "0.20"
 log = "0.4"
-pocket-ic = "12"
+pocket-ic = "13"
 proc-macro2 = "1"
 quote = "1"
 reqwest = { version = "0.13" }
