@@ -11,6 +11,8 @@
     - [Inbox and Outbox](#inbox-and-outbox)
   - [Activity Streams](#activity-streams)
     - [Public collections](#public-collections)
+    - [Likes Collection](#likes-collection)
+    - [Shares Collection](#shares-collection)
   - [Protocol](#protocol)
   - [Social API](#social-api)
     - [Client Addressing](#client-addressing)
@@ -22,9 +24,14 @@
     - [Remove Activity](#remove-activity)
     - [Like Activity](#like-activity)
     - [Block Activity](#block-activity)
+    - [Announce Activity](#announce-activity)
     - [Undo Activity](#undo-activity)
     - [Delivery](#delivery)
   - [Federation Protocol](#federation-protocol)
+    - [Accept Activity](#accept-activity)
+    - [Reject Activity](#reject-activity)
+    - [Shared Inbox Delivery](#shared-inbox-delivery)
+    - [Inbox Forwarding](#inbox-forwarding)
     - [Server Side Activities](#server-side-activities)
   - [Mastodon](#mastodon)
     - [Statuses Federation](#statuses-federation)
@@ -53,6 +60,8 @@
     - [Profile Metadata](#profile-metadata)
     - [Account Migration](#account-migration)
     - [Remote Blocking](#remote-blocking)
+    - [Secure Mode](#secure-mode)
+    - [Follower Synchronization](#follower-synchronization)
   - [HTTP Signatures](#http-signatures)
     - [Signing POST requests](#signing-post-requests)
     - [Verifying Signatures](#verifying-signatures)
@@ -338,6 +347,39 @@ Some collections are marked as `Public`
 
 And MUST be accessible to anyone, regardless of whether they are authenticated or not.
 
+### Likes Collection
+
+Objects MAY have a `likes` collection. This is an `OrderedCollection` containing all `Like` activities referencing that object. Servers SHOULD update this collection when a `Like` or `Undo Like` activity is received. The collection is typically exposed with at least a `totalItems` count.
+
+```json
+{
+  "@context": "https://www.w3.org/ns/activitystreams",
+  "id": "https://social.example/alice/posts/1/likes",
+  "type": "OrderedCollection",
+  "totalItems": 5,
+  "orderedItems": [
+    "https://social.example/bob/likes/1",
+    "https://social.example/carol/likes/3"
+  ]
+}
+```
+
+### Shares Collection
+
+Objects MAY have a `shares` collection. This is an `OrderedCollection` containing all `Announce` activities referencing that object. Servers SHOULD update this collection when an `Announce` or `Undo Announce` activity is received. Like the `likes` collection, it is typically exposed with at least a `totalItems` count.
+
+```json
+{
+  "@context": "https://www.w3.org/ns/activitystreams",
+  "id": "https://social.example/alice/posts/1/shares",
+  "type": "OrderedCollection",
+  "totalItems": 3,
+  "orderedItems": [
+    "https://chatty.example/ben/announces/1"
+  ]
+}
+```
+
 ## Protocol
 
 The protocol is based on HTTP and uses JSON-LD for data representation.
@@ -468,6 +510,25 @@ The Block activity is used to indicate that the posting actor does not want anot
 
 Servers SHOULD NOT deliver Block Activities to their object.
 
+### Announce Activity
+
+The `Announce` activity is used to share an existing object with the actor's followers — this is the ActivityPub equivalent of a "boost" or "reblog". When an Announce is posted to an actor's outbox, the server SHOULD add the object of the Announce to the actor's outbox as a reference and deliver it to the actor's followers.
+
+The side effect of receiving an Announce on the **inbox** (S2S) is that the server SHOULD increment the shares count of the announced object and MAY display the object as having been shared by the announcing actor.
+
+```json
+{
+  "@context": "https://www.w3.org/ns/activitystreams",
+  "id": "https://social.example/alice/posts/announce-1",
+  "type": "Announce",
+  "actor": "https://social.example/alice",
+  "published": "2024-06-01T12:00:00Z",
+  "to": ["https://www.w3.org/ns/activitystreams#Public"],
+  "cc": ["https://social.example/alice/followers"],
+  "object": "https://chatty.example/ben/p/51086"
+}
+```
+
 ### Undo Activity
 
 The Undo activity is used to undo a previous activity. See the Activity Vocabulary documentation on Inverse Activities and "Undo". For example, Undo may be used to undo a previous Like, Follow, or Block. The undo activity and the activity being undone MUST both have the same actor. Side effects should be undone, to the extent possible. For example, if undoing a Like, any counter that had been incremented previously should be decremented appropriately.
@@ -502,6 +563,81 @@ Servers performing delivery to the `inbox` or `sharedInbox` properties of actors
 
 An activity is delivered to its targets (which are actors) by first looking up the targets' inboxes and then posting the activity to those inboxes. Targets for delivery are determined by checking the ActivityStreams audience targeting; namely, the `to`, `bto`, `cc`, `bcc`, and `audience` fields of the activity.
 
+### Accept Activity
+
+The `Accept` activity is used on the server side (S2S) to approve a previously received `Follow` request. When a server receives a `Follow` activity in an actor's inbox, the server SHOULD either automatically respond with an `Accept` (for unlocked accounts) or queue the follow request for manual approval. Once approved, the server sends an `Accept` wrapping the original `Follow` back to the requesting actor's inbox.
+
+The side effect of receiving an `Accept` of a `Follow` is that the requesting actor is added to the target actor's `followers` collection, and the target actor is added to the requesting actor's `following` collection.
+
+```json
+{
+  "@context": "https://www.w3.org/ns/activitystreams",
+  "id": "https://social.example/alice/accepts/1",
+  "type": "Accept",
+  "actor": "https://social.example/alice",
+  "object": {
+    "id": "https://chatty.example/ben/follows/1",
+    "type": "Follow",
+    "actor": "https://chatty.example/ben",
+    "object": "https://social.example/alice"
+  }
+}
+```
+
+### Reject Activity
+
+The `Reject` activity is used on the server side (S2S) to deny a previously received `Follow` request. When a locked account's owner denies a follow request, the server sends a `Reject` wrapping the original `Follow` back to the requesting actor's inbox.
+
+The side effect of receiving a `Reject` of a `Follow` is that the follow relationship is not established and the requesting server SHOULD remove any pending follow state.
+
+```json
+{
+  "@context": "https://www.w3.org/ns/activitystreams",
+  "id": "https://social.example/alice/rejects/1",
+  "type": "Reject",
+  "actor": "https://social.example/alice",
+  "object": {
+    "id": "https://chatty.example/ben/follows/1",
+    "type": "Follow",
+    "actor": "https://chatty.example/ben",
+    "object": "https://social.example/alice"
+  }
+}
+```
+
+### Shared Inbox Delivery
+
+To efficiently deliver activities to multiple recipients on the same remote server, ActivityPub defines the **shared inbox** mechanism. Instead of sending a separate copy of an activity to each recipient's individual inbox, the sending server MAY deliver a single copy to the remote server's shared inbox endpoint.
+
+An actor MAY advertise a shared inbox via the `endpoints.sharedInbox` property:
+
+```json
+{
+  "id": "https://social.example/alice",
+  "type": "Person",
+  "inbox": "https://social.example/alice/inbox",
+  "endpoints": {
+    "sharedInbox": "https://social.example/inbox"
+  }
+}
+```
+
+When delivering to a shared inbox, the activity MUST still contain its full addressing (`to`, `cc`, etc.) so the receiving server can determine which local actors should see it. The sending server SHOULD use the shared inbox when an activity is addressed to multiple recipients on the same domain.
+
+> **Mastic implementation:** In Mastic, the Federation Canister acts as the shared inbox endpoint for all local users. The `POST /inbox` endpoint (without a handle) can serve as the shared inbox, routing activities to the appropriate User Canisters based on the addressing fields.
+
+### Inbox Forwarding
+
+When an activity is received in an actor's inbox and the activity's `object` is addressed to recipients that the receiving server is aware of but which are not explicitly addressed in the activity itself, the server SHOULD forward the activity to those recipients. This mechanism ensures that replies in a conversation thread are propagated to all participants.
+
+A server MUST only forward an activity if:
+
+1. The values of `to`, `cc`, or `audience` are collections owned by the server.
+2. The values of `inReplyTo`, `object`, `target`, or `tag` are objects owned by the server. The server SHOULD recurse through these values to look for linked objects owned by the server.
+3. The values of the `object` or `target` match a collection owned by the server (e.g., the followers collection).
+
+When forwarding, the server MUST sign the forwarded request with an HTTP Signature from the forwarding actor (not the original actor).
+
 ### Server Side Activities
 
 Just follow 1:1 the document described here:
@@ -519,6 +655,7 @@ In Mastodon statuses are posts, aka _toots_, of the type of `Notes` of the Activ
 Mastodon supports the following activities for `Statuses`:
 
 - `Create`: Transformed into a status and saved into database
+- `Update`: Update an existing status in the database
 - `Delete`: Delete a Status from the database
 - `Like`: Favourited a Status
 - `Announce`: Boost a status (like rt on Twitter)
@@ -528,10 +665,16 @@ Mastodon supports the following activities for `Statuses`:
 
 #### Payloads
 
-The first-class Object types supported by Mastodon are `Note` and `Question`.
+The first-class Object types supported by Mastodon are `Note` and `Question`. Additionally, the following types are accepted and transformed into statuses:
 
-- `Notes` are transformed into regular statuses.
-- `Questions` are transformed into a poll status. See the [Polls](#polls) extension for more information.
+- `Note` — transformed into regular statuses.
+- `Question` — transformed into a poll status. See the [Polls](#polls) extension for more information.
+- `Article` — long-form content, transformed into a status.
+- `Page` — web page representation, transformed into a status.
+- `Image` — image post, transformed into a status with media attachment.
+- `Audio` — audio post, transformed into a status with audio attachment.
+- `Video` — video post, transformed into a status with video attachment.
+- `Event` — event representation, transformed into a status.
 
 #### HTML Sanitization
 
@@ -1068,6 +1211,36 @@ ActivityPub defines the Block activity for client-to-server (C2S) use-cases, but
   "to": "https://example.com/~mallory"
 }
 ```
+
+### Secure Mode
+
+Mastodon supports a **secure mode** (also known as "authorized fetch") where all cross-server HTTP requests — including `GET` requests to public resources like actor profiles and statuses — MUST be signed with HTTP Signatures. In normal mode, only `POST` requests to inboxes require signatures; in secure mode, unsigned `GET` requests are rejected.
+
+When secure mode is enabled:
+
+- All outgoing `GET` requests for ActivityPub resources are signed using the requesting user's key, or a server-wide system actor key if no specific user context applies.
+- All incoming `GET` requests for ActivityPub resources are verified against the requesting actor's public key.
+- This forms the foundation for **limited federation mode**, where the server can restrict which instances are allowed to interact.
+
+> **Mastic implementation:** Since all HTTP traffic flows through the Federation Canister, secure mode can be enforced by requiring HTTP Signature verification on all incoming requests (both `GET` and `POST`) and signing all outgoing requests. A system actor key pair can be generated at Federation Canister install time for requests without a specific user context.
+
+### Follower Synchronization
+
+Mastodon implements a **follower synchronization mechanism** to detect and correct discrepancies in followers-only post delivery. Over time, follow relationships can become inconsistent between servers (e.g., due to network failures or bugs), causing followers-only posts to be delivered to actors who have unfollowed or missed by actors who have followed.
+
+The mechanism uses a `Collection-Synchronization` HTTP header on `POST` requests to remote inboxes:
+
+```text
+Collection-Synchronization: collectionId="https://social.example/alice/followers", url="https://social.example/alice/followers_synchronization", digest="sha-256=abcdef..."
+```
+
+The header contains three fields:
+
+- `collectionId`: The sender's followers collection URI.
+- `url`: A URL to a partial collection containing the identifiers of followers on the receiving domain. This URL requires a signed request to access.
+- `digest`: A SHA-256 digest computed by XOR-ing the individual SHA-256 hashes of each follower identifier on the receiving domain.
+
+The receiving server computes its own digest of the followers it believes it has for that actor. If the digests differ, the receiving server fetches the partial collection URL to reconcile the follow state.
 
 ---
 
