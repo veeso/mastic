@@ -11,7 +11,86 @@ the feed.
 
 ## Work Items
 
-### WI-0.1: Define shared Candid types in the `did` crate
+### WI-0.1: Implement ActivityPub types in the `activitypub` crate
+
+**Description:** Implement all ActivityPub and ActivityStreams protocol types in
+the `activitypub` crate (`crates/libs/activitypub`). This crate provides the
+canonical Rust representation of the ActivityPub protocol used by the Federation
+Canister for S2S communication and JSON-LD serialization/deserialization.
+Types must round-trip correctly through `serde_json` and match the JSON-LD
+payloads documented in `docs/src/activitypub.md`.
+
+**What should be done:**
+
+- **Core types (`activitypub::object`):**
+  - `Object` — base type with `id`, `type`, `content`, `name`, `summary`,
+    `published`, `updated`, `url`, `to`, `cc`, `bto`, `bcc`, `audience`,
+    `attributed_to`, `in_reply_to`, `source`, `tag`, `attachment`, `replies`,
+    `likes`, `shares`, `sensitive`
+  - `Source` — `content` + `media_type`
+  - `Tombstone` — `id`, `type`, `published`, `updated`, `deleted`
+  - `ObjectType` enum — `Note`, `Question`, `Image`, `Tombstone`, etc.
+- **Actor types (`activitypub::actor`):**
+  - `Actor` — extends Object with `inbox`, `outbox`, `following`, `followers`,
+    `liked`, `preferred_username`, `public_key`, `endpoints`,
+    `manually_approves_followers`, `discoverable`, `indexable`, `suspended`,
+    `memorial`, `featured`, `featured_tags`, `also_known_as`,
+    `attribution_domains`, `icon`, `image`
+  - `ActorType` enum — `Person`, `Application`, `Service`, `Group`,
+    `Organization`
+  - `PublicKey` — `id`, `owner`, `public_key_pem`
+  - `Endpoints` — `shared_inbox`
+- **Activity types (`activitypub::activity`):**
+  - `Activity` — extends Object with `actor`, `object`, `target`, `result`,
+    `origin`, `instrument`
+  - `ActivityType` enum — `Create`, `Update`, `Delete`, `Follow`, `Accept`,
+    `Reject`, `Like`, `Announce`, `Undo`, `Block`, `Add`, `Remove`, `Flag`,
+    `Move`
+- **Collection types (`activitypub::collection`):**
+  - `Collection` — `id`, `type`, `total_items`, `first`, `last`, `current`,
+    `items`
+  - `OrderedCollection` — same as Collection with `ordered_items`
+  - `CollectionPage` / `OrderedCollectionPage` — `part_of`, `next`, `prev`,
+    `items`/`ordered_items`
+- **Link types (`activitypub::link`):**
+  - `Link` — `href`, `rel`, `media_type`, `name`, `hreflang`, `height`,
+    `width`
+  - `Mention` — subtype of Link
+  - `Hashtag` — subtype of Link
+- **Tag types (`activitypub::tag`):**
+  - `Tag` enum — `Mention`, `Hashtag`, `Emoji`
+  - `Emoji` — `id`, `name`, `icon` (Image with `url` and `media_type`)
+- **Mastodon extensions (`activitypub::mastodon`):**
+  - `PropertyValue` — `name`, `value` (for profile metadata fields)
+  - Poll support on `Question` objects: `end_time`, `closed`,
+    `voters_count`, `one_of`/`any_of` with `name` + `replies.total_items`
+  - Attachment properties: `blurhash`, `focal_point`
+- **WebFinger types (`activitypub::webfinger`):**
+  - `WebFingerResponse` — `subject`, `aliases`, `links`
+  - `WebFingerLink` — `rel`, `type`, `href`, `template`
+- **JSON-LD context (`activitypub::context`):**
+  - Constants for standard context URIs
+    (`https://www.w3.org/ns/activitystreams`,
+    `https://w3id.org/security/v1`,
+    Mastodon namespace `http://joinmastodon.org/ns#`)
+  - `Context` type for `@context` serialization (single URI, array, or map)
+- All types derive `serde::Serialize`, `serde::Deserialize`, `Clone`,
+  `Debug`, `PartialEq`
+- Use `#[serde(rename_all = "camelCase")]` to match JSON-LD field naming
+- Use `#[serde(skip_serializing_if = "Option::is_none")]` for optional fields
+- Use `#[serde(rename = "@context")]` for the context field
+
+**Acceptance Criteria:**
+
+- All types compile and are exported from the `activitypub` crate
+- `serde_json` round-trip tests for every top-level type
+- Deserialization tests using real-world Mastodon JSON-LD payloads from
+  `docs/src/activitypub.md` examples
+- `cargo clippy` passes with zero warnings
+- Unit tests cover: Object, Actor, each ActivityType, Collection,
+  OrderedCollection, CollectionPage, WebFinger, Mention, Hashtag, Emoji
+
+### WI-0.2: Define shared Candid types in the `did` crate
 
 **Description:** Define all shared Candid types required by Milestone 0 in the
 `did` crate. These types are used across the Directory, Federation, and User
@@ -41,9 +120,7 @@ canisters.
   canister
 - Define `ReceiveActivityArgs`, `ReceiveActivityResponse` for the User
   canister
-- Define ActivityPub base types in `did::federation::activitypub`: `Activity`,
-  `ActivityType` (Create, Follow, Accept, Reject), `Object`, `Actor`
-- Ensure all types derive `CandidType`, `Deserialize`, `Clone`, `Debug`
+- Ensure all types derive `CandidType`, `Deserialize`, `Serialize`, `Clone`, `Debug`
 
 **Acceptance Criteria:**
 
@@ -52,21 +129,45 @@ canisters.
 - `cargo clippy` passes with zero warnings
 - Unit tests verify serialization/deserialization round-trips
 
-### WI-0.2: Design and implement database schema for Milestone 0
+### WI-0.3: Design and implement database schema for Milestone 0
 
 **Description:** Design the relational database schema using `wasm-dbms` for
-all entities required by Milestone 0 across the Directory and User canisters.
+all entities required by Milestone 0 in the Directory and User canisters.
+Since `wasm-dbms` manages its own stable memory, `ic-stable-structures` cannot
+be used alongside it in these canisters. Canister init arguments and runtime
+configuration are persisted in a `settings` key-value table instead.
+The Federation Canister does not use `wasm-dbms` and uses
+`ic-stable-structures` directly (see WI-0.10).
 
 **What should be done:**
 
-- Add `wasm-dbms` as a workspace dependency
+- Add `ic-dbms-canister` as a workspace dependency
+- **Create `crates/libs/db-utils` crate:**
+  - Define `SettingKey` as a `u32` newtype with named constants per canister
+    (e.g., `FEDERATION_PRINCIPAL`, `OWNER_PRINCIPAL`, `DOMAIN_NAME`)
+  - Define `SettingValue` enum wrapping `ic-dbms-canister` `Value` variants
+    (Text, Integer, Blob) with typed accessor methods
+    (`as_text()`, `as_principal()`, etc.)
+  - Provide helper functions for reading/writing settings rows
+  - Add the crate to the workspace in root `Cargo.toml`
+- **Shared `settings` table (both canisters):**
+  - `settings` table: `key` (INTEGER PK), `value` (depends on key — TEXT,
+    INTEGER, or BLOB)
+  - Uses `SettingKey` constants from `db-utils` to identify entries
 - **Directory Canister schema:**
-  - `users` table: `principal` (TEXT PK), `handle` (TEXT UNIQUE NOT NULL),
-    `user_canister_id` (TEXT NOT NULL), `status` (TEXT NOT NULL DEFAULT
-    'active'), `created_at` (INTEGER NOT NULL)
-  - `moderators` table: `principal` (TEXT PK), `added_at` (INTEGER NOT NULL)
+  - `settings` table — stores `federation_principal` from
+    `DirectoryInstallArgs`
+  - The initial moderator from `DirectoryInstallArgs` is inserted as the
+    first row in the `moderators` table during `init`
+  - `users` table: `principal` (PRINCIPAL PK), `handle` (TEXT UNIQUE NOT
+    NULL), `user_canister_id` (PRINCIPAL NOT NULL), `status` (TEXT NOT NULL
+    DEFAULT 'active'), `created_at` (INTEGER NOT NULL)
+  - `moderators` table: `principal` (PRINCIPAL PK), `added_at` (INTEGER
+    NOT NULL)
   - Index on `users.handle` for fast lookups
 - **User Canister schema:**
+  - `settings` table — stores `owner_principal`, `federation_principal`
+    from `UserInstallArgs`
   - `profile` table (single-row): `handle` (TEXT NOT NULL),
     `display_name` (TEXT), `bio` (TEXT), `avatar_url` (TEXT),
     `header_url` (TEXT), `created_at` (INTEGER NOT NULL),
@@ -84,17 +185,20 @@ all entities required by Milestone 0 across the Directory and User canisters.
   - `keypair` table (single-row): `public_key_pem` (TEXT NOT NULL),
     `private_key_pem` (TEXT NOT NULL)
   - Indexes on `statuses.created_at`, `inbox.created_at` for feed ordering
-- Initialize the schema in each canister's `init` function
-- Ensure schema survives canister upgrades (`pre_upgrade`/`post_upgrade`)
+- Initialize the schema in each canister's `init` function and persist init
+  args into the `settings` table
+- Data survives canister upgrades via `wasm-dbms` stable memory management
 
 **Acceptance Criteria:**
 
 - All tables are created on canister initialization
+- Init args are persisted in the `settings` table and retrievable after upgrade
+- `db-utils` crate compiles and is usable from both canisters
 - Schema supports all queries needed by Milestone 0 work items
 - Data persists across canister upgrades
 - Unit tests verify table creation and basic CRUD operations
 
-### WI-0.3: Implement Directory Canister - sign-up flow
+### WI-0.4: Implement Directory Canister - sign-up flow
 
 **Description:** Implement the `sign_up` method on the Directory Canister,
 which creates a new User Canister for the caller and maps their principal to a
@@ -102,12 +206,10 @@ handle and canister ID.
 
 **What should be done:**
 
-- Define canister state: a `BTreeMap` mapping principal to `UserRecord`
-  (handle, user canister ID, status)
-- Define a secondary index: handle to principal (for lookups)
-- Store state in stable memory using `ic-stable-structures`
-- Implement `init` to accept `DirectoryInstallArgs` and store the initial
-  moderator and federation canister principal
+- Use the database schema from WI-0.3 (`users`, `moderators`, `settings`
+  tables)
+- Implement `init` to accept `DirectoryInstallArgs`, create the schema,
+  and persist init args into the `settings` table
 - Implement `sign_up(handle)`:
   - Validate handle format (alphanumeric, lowercase, 1-30 chars)
   - Check handle uniqueness
@@ -118,8 +220,6 @@ handle and canister ID.
   - Store the mapping (principal -> handle, canister ID)
   - Register the new User Canister with the Federation Canister
   - Return `SignUpResponse` with the canister ID
-- Implement `pre_upgrade` / `post_upgrade` for stable memory persistence
-
 **Acceptance Criteria:**
 
 - Calling `sign_up` with a valid handle creates a User Canister and returns
@@ -130,7 +230,7 @@ handle and canister ID.
 - The user record is persisted across canister upgrades
 - Integration test: sign up, then verify the canister exists and is callable
 
-### WI-0.4: Implement Directory Canister - query methods
+### WI-0.5: Implement Directory Canister - query methods
 
 **Description:** Implement the read-only query methods on the Directory
 Canister that allow users to discover their canister and look up other users.
@@ -153,25 +253,22 @@ Canister that allow users to discover their canister and look up other users.
 - `get_user` returns the correct user for a valid handle
 - `get_user` returns an error for a non-existent handle
 
-### WI-0.5: Implement User Canister - profile and state management
+### WI-0.6: Implement User Canister - profile and state management
 
 **Description:** Implement the User Canister's internal state, initialization,
 and profile query method.
 
 **What should be done:**
 
-- Define canister state: owner principal, federation canister principal,
-  profile data, inbox, outbox, followers list, following list
-- Store state in stable memory using `ic-stable-structures`
-- Implement `init` to accept `UserInstallArgs` and store owner + federation
-  principals
-- Generate an RSA keypair for HTTP Signatures (store in stable memory)
+- Use the database schema from WI-0.3 (`settings`, `profile`, `statuses`,
+  `inbox`, `followers`, `following`, `keypair` tables)
+- Implement `init` to accept `UserInstallArgs`, create the schema, and
+  persist init args into the `settings` table
+- Generate an RSA keypair for HTTP Signatures (store in `keypair` table)
 - Implement `get_profile()` query: return the user's profile (handle,
   display name, bio, avatar, created at)
 - Implement authorization guard: reject calls from non-owner principals for
   owner-only methods
-- Implement `pre_upgrade` / `post_upgrade`
-
 **Acceptance Criteria:**
 
 - The User Canister initializes correctly with the provided args
@@ -179,7 +276,7 @@ and profile query method.
 - Owner-only methods reject unauthorized callers
 - State survives canister upgrades
 
-### WI-0.6: Implement User Canister - publish status
+### WI-0.7: Implement User Canister - publish status
 
 **Description:** Implement the `publish_status` method, which stores a status
 in the user's outbox and sends Create activities to followers via the
@@ -187,8 +284,8 @@ Federation Canister.
 
 **What should be done:**
 
-- Define status storage: a collection of `Status` records in stable memory,
-  keyed by a unique status ID (e.g., ULID or timestamp-based)
+- Define status storage: a collection of `Status` records in the `statuses`
+  table, keyed by a unique status ID (e.g., ULID or timestamp-based)
 - Implement `publish_status(PublishStatusArgs)`:
   - Authorize the caller (owner only)
   - Create a `Status` record with unique ID, content, timestamp, visibility
@@ -205,7 +302,7 @@ Federation Canister.
 - The status ID is returned to the caller
 - Statuses persist across upgrades
 
-### WI-0.7: Implement User Canister - follow user
+### WI-0.8: Implement User Canister - follow user
 
 **Description:** Implement the `follow_user`, `accept_follow`, and
 `reject_follow` methods for managing follow relationships.
@@ -241,7 +338,7 @@ Federation Canister.
 - `get_following` returns the correct following list
 - Only the Federation Canister can call `receive_activity`
 
-### WI-0.8: Implement User Canister - read feed
+### WI-0.9: Implement User Canister - read feed
 
 **Description:** Implement the `read_feed` method, which aggregates the user's
 inbox and outbox into a chronological, paginated feed.
@@ -266,7 +363,7 @@ inbox and outbox into a chronological, paginated feed.
 - An empty feed returns an empty list (no error)
 - Only the owner can read their own feed
 
-### WI-0.9: Implement Federation Canister - activity routing
+### WI-0.10: Implement Federation Canister - activity routing
 
 **Description:** Implement the Federation Canister's `send_activity` method,
 which routes activities between local User Canisters via the Directory
@@ -274,9 +371,11 @@ Canister. Remote HTTP delivery is out of scope for Milestone 0.
 
 **What should be done:**
 
-- Define canister state: directory canister principal, domain name, set of
-  authorized User Canister principals
-- Implement `init` to accept `FederationInstallArgs`
+- Define canister state using `ic-stable-structures`: directory canister
+  principal, domain name, set of authorized User Canister principals
+  (the Federation Canister does not use `wasm-dbms`)
+- Implement `init` to accept `FederationInstallArgs` and persist state in
+  stable memory
 - Implement a method to register User Canister principals (called by the
   Directory Canister during sign-up)
 - Implement `send_activity(SendActivityArgs)`:
@@ -296,7 +395,7 @@ Canister. Remote HTTP delivery is out of scope for Milestone 0.
 - Integration test: Alice follows Bob (both local), Bob sees Alice in
   followers
 
-### WI-0.10: Integration tests for Milestone 0 flows
+### WI-0.11: Integration tests for Milestone 0 flows
 
 **Description:** Write end-to-end integration tests using pocket-ic that
 exercise the complete Milestone 0 user flows.
