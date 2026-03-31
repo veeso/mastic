@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "skills": {
+    "canister-security": {
+      "source": "dfinity/icskills",
+      "sourceType": "github",
+      "computedHash": "aa599635ccf3d5996cab1230b49e2e345535cd25b5d522d1ffc07804c2944a51"
+    },
+    "https-outcalls": {
+      "source": "dfinity/icskills",
+      "sourceType": "github",
+      "computedHash": "0207638b0c3b0410900d355ad0dc63343f6ac1102b338b0349d430de34265118"
+    },
+    "internet-identity": {
+      "source": "dfinity/icskills",
+      "sourceType": "github",
+      "computedHash": "62b0349d79162f65542da398464b416f271ea307c628286237be28d437530fbe"
+    },
+    "multi-canister": {
+      "source": "dfinity/icskills",
+      "sourceType": "github",
+      "computedHash": "fe8924d455a9253204cb82129725a8c7df16deb1c44ea2f463ca7259ca48fce0"
+    },
+    "sns-launch": {
+      "source": "dfinity/icskills",
+      "sourceType": "github",
+      "computedHash": "7d02bb7addb5504ae160f94d53a97a2b1b9a6d3338efb9bc262903fbeb198056"
+    },
+    "stable-memory": {
+      "source": "dfinity/icskills",
+      "sourceType": "github",
+      "computedHash": "fff6adf86c298be8859a7af6045cb136be4f9b1a2bff25dbde90cd04781a3ba4"
+    }
+  }
+}

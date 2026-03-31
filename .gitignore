@@ -24,3 +24,6 @@ node_modules
 
 # mdBook output
 docs/book/
+
+.claude/settings.local.json
+
