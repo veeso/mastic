@@ -5,6 +5,7 @@ edition = { workspace = true }
 description = "An implementation of the ActivityPub protocol for the Internet Computer."
 license = { workspace = true }
 rust-version = { workspace = true }
+publish = false
 
 [dependencies]
 serde = { workspace = true, features = ["derive"] }

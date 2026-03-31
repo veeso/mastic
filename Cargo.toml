@@ -5,8 +5,7 @@ members = [
   "crates/canisters/user",
   "crates/libs/activitypub",
   "crates/libs/did",
-  "integration-tests/pocket-ic-tests",
-  "integration-tests/pocket-ic-tests-macro",
+  "integration-tests",
 ]
 resolver = "3"
 
@@ -19,23 +18,15 @@ repository = "https://github.com/veeso/mastic"
 rust-version = "1.90.0"
 
 [workspace.dependencies]
-anyhow = "1"
 candid = { version = "0.10", features = ["value"] }
 candid_parser = "0.3"
-flate2 = "1"
 git2 = "0.20"
-ic-agent = "0.47"
 ic-cdk = "0.20"
 ic-cdk-macros = "0.20"
 ic-stable-structures = "0.7"
 log = "0.4"
-pocket-ic = "13"
-proc-macro2 = "1"
-quote = "1"
-reqwest = "0.13"
+pocket-ic-harness = "0.1"
 serde = "1"
 serde_bytes = "0.11"
 serde_json = "1"
-syn = "2"
 tokio = { version = "1", features = ["full"] }
-url = "2"

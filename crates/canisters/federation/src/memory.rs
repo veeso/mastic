@@ -1,7 +1,5 @@
 use ic_stable_structures::DefaultMemoryImpl;
-use ic_stable_structures::memory_manager::{MemoryId, MemoryManager as IcMemoryManager};
-
-pub const STATE_MEMORY_ID: MemoryId = MemoryId::new(1);
+use ic_stable_structures::memory_manager::MemoryManager as IcMemoryManager;
 
 thread_local! {
     /// Memory manager
