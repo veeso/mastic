@@ -1,9 +1,10 @@
 [workspace]
 members = [
-  "crates/did",
   "crates/canisters/directory",
   "crates/canisters/federation",
   "crates/canisters/user",
+  "crates/libs/activitypub",
+  "crates/libs/did",
   "integration-tests/pocket-ic-tests",
   "integration-tests/pocket-ic-tests-macro",
 ]

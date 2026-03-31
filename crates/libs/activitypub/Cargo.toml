@@ -1,21 +1,20 @@
 [package]
-name = "federation"
+name = "activitypub"
 version = { workspace = true }
 edition = { workspace = true }
 license = { workspace = true }
 rust-version = { workspace = true }
-description = "Mastic aims to bring the Fediverse natively onto the Internet Computer ecosystem."
+description = "An implementation of the ActivityPub protocol for the Internet Computer."
 
 [lib]
-crate-type = ["cdylib", "rlib"]
+name = "activitypub"
+path = "src/lib.rs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-activitypub = { path = "../../libs/activitypub" }
 candid = { workspace = true }
-did = { path = "../../libs/did" }
 ic-cdk = { workspace = true }
-ic-cdk-macros = { workspace = true }
 ic-stable-structures = { workspace = true }
 serde = { workspace = true }
+serde_bytes = { workspace = true }

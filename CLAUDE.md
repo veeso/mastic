@@ -6,10 +6,13 @@ Mastic is a federated social platform (Mastodon-compatible via ActivityPub) runn
 
 ```
 crates/
-  did/          # Shared Candid types library (no cdylib)
-  directory/    # Directory Canister — user discovery, handle→canister mapping
-  federation/   # Federation Canister — S2S HTTP, WebFinger, ActivityPub
-  user/         # User Canister — per-user actor, inbox/outbox, Social API
+  canisters/
+    directory/    # Directory Canister — user discovery, handle→canister mapping
+    federation/   # Federation Canister — S2S HTTP, WebFinger, ActivityPub
+    user/         # User Canister — per-user actor, inbox/outbox, Social API
+  libs/
+    activitypub/  # ActivityPub protocol types and utilities
+    did/          # Shared Candid types library (no cdylib)
 integration-tests/
   pocket-ic-tests/        # Integration tests using pocket-ic
   pocket-ic-tests-macro/  # Proc-macro support for integration tests
@@ -51,12 +54,13 @@ Build pipeline: `cargo build --target wasm32-unknown-unknown` → `ic-wasm shrin
 
 ## Architecture
 
-Three canister types, each a separate workspace crate:
+Three canister types under `crates/canisters/`, plus shared libraries under `crates/libs/`:
 
-- **Directory Canister**: Global registry. Maps Internet Identity principals to handles and User Canister IDs. Manages sign-up, profile deletion, moderation (suspend, add/remove moderator).
-- **Federation Canister**: HTTP boundary. Handles all S2S ActivityPub traffic (incoming via `http_request`/`http_request_update`, outgoing via `send_activity`). Serves WebFinger, actor profiles, collections. Routes activities between local User Canisters via the Directory Canister.
-- **User Canister**: One per user. Stores inbox, outbox, profile, followers, following, liked collections. Exposes typed Candid methods as the Social API (C2S replacement). Holds RSA keypair for HTTP Signatures.
-- **did**: Shared library crate for Candid type definitions used across canisters.
+- **Directory Canister** (`crates/canisters/directory`): Global registry. Maps Internet Identity principals to handles and User Canister IDs. Manages sign-up, profile deletion, moderation (suspend, add/remove moderator).
+- **Federation Canister** (`crates/canisters/federation`): HTTP boundary. Handles all S2S ActivityPub traffic (incoming via `http_request`/`http_request_update`, outgoing via `send_activity`). Serves WebFinger, actor profiles, collections. Routes activities between local User Canisters via the Directory Canister.
+- **User Canister** (`crates/canisters/user`): One per user. Stores inbox, outbox, profile, followers, following, liked collections. Exposes typed Candid methods as the Social API (C2S replacement). Holds RSA keypair for HTTP Signatures.
+- **activitypub** (`crates/libs/activitypub`): ActivityPub protocol types and utilities.
+- **did** (`crates/libs/did`): Shared library crate for Candid type definitions used across canisters.
 
 Authorization is principal-based: User→UserCanister (owner principal), Federation→UserCanister (federation principal in install args), UserCanister→Federation (registered at creation).
 
