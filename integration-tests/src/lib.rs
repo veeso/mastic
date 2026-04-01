@@ -1,7 +1,9 @@
 use std::path::Path;
 
 use candid::Encode;
-use pocket_ic_harness::{Canister, CanisterSetup, PocketIcTestEnv};
+use did::directory::DirectoryInstallArgs;
+use did::federation::FederationInstallArgs;
+use pocket_ic_harness::{Canister, CanisterSetup, PocketIcTestEnv, alice};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum MasticCanister {
@@ -16,6 +18,10 @@ impl Canister for MasticCanister {
             MasticCanister::Federation => Path::new("../.artifact/federation.wasm.gz"),
         }
     }
+
+    fn all_canisters() -> &'static [Self] {
+        &[Self::Directory, Self::Federation]
+    }
 }
 
 pub struct MasticCanisterSetup;
@@ -24,11 +30,26 @@ impl CanisterSetup for MasticCanisterSetup {
     type Canister = MasticCanister;
 
     async fn setup(env: &mut PocketIcTestEnv<Self>) {
-        let directory_init_args = Encode!(&()).expect("Failed to encode directory init args");
+        let directory_canister = env.canister_id(&MasticCanister::Directory);
+        let federation_canister = env.canister_id(&MasticCanister::Federation);
+
+        // install the Directory canister first, since the Federation canister depends on it
+        let directory_init_args = DirectoryInstallArgs::Init {
+            initial_moderator: alice(),
+            federation_canister,
+        };
+        let directory_init_args =
+            Encode!(&directory_init_args).expect("Failed to encode directory init args");
         env.install_canister(MasticCanister::Directory, directory_init_args)
             .await;
 
-        let federation_init_args = Encode!(&()).expect("Failed to encode federation init args");
+        // install the Federation canister with the Directory canister's ID as an argument
+        let federation_init_args = FederationInstallArgs::Init {
+            directory_canister,
+            public_url: "https://mastic.social".to_string(),
+        };
+        let federation_init_args =
+            Encode!(&federation_init_args).expect("Failed to encode federation init args");
         env.install_canister(MasticCanister::Federation, federation_init_args)
             .await;
     }

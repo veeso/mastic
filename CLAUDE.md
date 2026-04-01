@@ -22,6 +22,8 @@ docs/                       # mdBook site (built with `mdbook build docs`)
     activitypub.md          # ActivityPub protocol reference and Mastic mapping
     architecture.md         # Architecture overview and sequence diagrams
     interface.md            # Canonical Candid .did file index
+    interface/
+      types.md              # Shared Candid type definitions
     *.did                   # Candid interface definitions (directory, federation, user)
     project.md              # Project spec, user stories, milestones, interface definitions
     milestones/             # Per-milestone implementation plans
@@ -91,6 +93,7 @@ Canonical `.did` files live in `docs/src/`. The build pipeline also auto-extract
 - `docs/src/architecture.md` contains sequence diagrams for all major flows.
 - `docs/src/activitypub.md` is the ActivityPub protocol reference with Mastic-specific mapping.
 - When adding a new flow, add both a sequence diagram in architecture and a user story in project.md.
+- When adding or removing documentation pages under `docs/src/`, always update `docs/src/SUMMARY.md` to keep the mdBook index in sync. New pages should be placed under the appropriate parent section (e.g. interface subtopics go under `interface/`, milestone plans under `milestones/`).
 
 ## Local Development
 

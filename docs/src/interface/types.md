@@ -1,0 +1,990 @@
+# Candid Types
+
+- [Candid Types](#candid-types)
+  - [Common Types](#common-types)
+    - [Visibility](#visibility)
+    - [UserProfile](#userprofile)
+    - [Status](#status)
+    - [FeedItem](#feeditem)
+  - [Directory Canister Types](#directory-canister-types)
+    - [DirectoryInstallArgs](#directoryinstallargs)
+    - [SignUp](#signup)
+    - [WhoAmI](#whoami)
+    - [UserCanister](#usercanister)
+    - [GetUser](#getuser)
+    - [AddModerator](#addmoderator)
+    - [RemoveModerator](#removemoderator)
+    - [Suspend](#suspend)
+    - [SearchProfiles](#searchprofiles)
+    - [DeleteProfile (Directory)](#deleteprofile-directory)
+  - [User Canister Types](#user-canister-types)
+    - [UserInstallArgs](#userinstallargs)
+    - [GetProfile](#getprofile)
+    - [UpdateProfile](#updateprofile)
+    - [FollowUser](#followuser)
+    - [AcceptFollow](#acceptfollow)
+    - [RejectFollow](#rejectfollow)
+    - [UnfollowUser](#unfollowuser)
+    - [BlockUser](#blockuser)
+    - [GetFollowers](#getfollowers)
+    - [GetFollowing](#getfollowing)
+    - [PublishStatus](#publishstatus)
+    - [DeleteStatus](#deletestatus)
+    - [LikeStatus](#likestatus)
+    - [UndoLike](#undolike)
+    - [BoostStatus](#booststatus)
+    - [UndoBoost](#undoboost)
+    - [GetLiked](#getliked)
+    - [ReadFeed](#readfeed)
+    - [ReceiveActivity](#receiveactivity)
+  - [Federation Canister Types](#federation-canister-types)
+    - [FederationInstallArgs](#federationinstallargs)
+    - [SendActivity](#sendactivity)
+
+This document defines all shared Candid types used across the Directory, Federation, and User canisters.
+
+## Common Types
+
+### Visibility
+
+Controls the audience of a status post. Maps to ActivityPub addressing:
+
+- **Public**: visible to everyone, appears in public timelines.
+- **Unlisted**: visible to everyone via direct link, but excluded from public timelines.
+- **FollowersOnly**: visible only to the author's followers.
+- **Direct**: visible only to explicitly mentioned users.
+
+```candid
+type Visibility = variant {
+  Public;
+  Unlisted;
+  FollowersOnly;
+  Direct;
+};
+```
+
+### UserProfile
+
+A user's public profile information. Stored in the User Canister and returned
+by profile queries.
+
+| Field          | Description                                              |
+| -------------- | -------------------------------------------------------- |
+| `handle`       | Unique username chosen at sign-up (e.g. `alice`).        |
+| `display_name` | Optional human-readable name shown in the UI.            |
+| `bio`          | Optional free-text biography.                            |
+| `avatar_url`   | Optional URL pointing to the user's avatar image.        |
+| `created_at`   | Timestamp (nanoseconds since epoch) of account creation. |
+
+```candid
+type UserProfile = record {
+  handle : text;
+  display_name : opt text;
+  bio : opt text;
+  avatar_url : opt text;
+  created_at : nat64;
+};
+```
+
+### Status
+
+A single post authored by a user. Each status has a unique ID, content body,
+author principal, creation timestamp, and visibility setting.
+
+| Field        | Description                                                       |
+| ------------ | ----------------------------------------------------------------- |
+| `id`         | Unique identifier for this status (UUID).                         |
+| `content`    | The text content of the post.                                     |
+| `author`     | Principal of the User Canister that authored the status.          |
+| `created_at` | Timestamp (nanoseconds since epoch) when the status was created.  |
+| `visibility` | Audience control for this status (see [Visibility](#visibility)). |
+
+```candid
+type Status = record {
+  id : text;
+  content : text;
+  author : principal;
+  created_at : nat64;
+  visibility : Visibility;
+};
+```
+
+### FeedItem
+
+A single entry in a user's feed. Wraps a `Status` and optionally indicates
+that it was boosted (reblogged) by another user.
+
+| Field        | Description                                                                  |
+| ------------ | ---------------------------------------------------------------------------- |
+| `status`     | The status being displayed.                                                  |
+| `boosted_by` | If present, the principal of the user who boosted this status into the feed. |
+
+```candid
+type FeedItem = record {
+  status : Status;
+  boosted_by : opt principal;
+};
+```
+
+## Directory Canister Types
+
+### DirectoryInstallArgs
+
+Install arguments for the Directory Canister. Uses the `Init`/`Upgrade`
+variant pattern required by IC canister lifecycle.
+
+- **Init**: provided on first install. Sets the initial moderator and the
+  principal of the Federation Canister this directory cooperates with.
+- **Upgrade**: provided on subsequent upgrades (currently empty).
+
+```candid
+type DirectoryInstallArgs = variant {
+  Init : record {
+    initial_moderator : principal;
+    federation_canister : principal;
+  };
+  Upgrade : record {};
+};
+```
+
+### SignUp
+
+Response and error types for the `sign_up` method. Registers a new user in the
+directory, creating a User Canister and mapping the caller's principal to the
+chosen handle.
+
+- **AlreadyRegistered**: the caller already has an account.
+- **HandleTaken**: the requested handle is in use by another user.
+- **InvalidHandle**: the handle does not meet validation rules (e.g. length,
+  allowed characters).
+
+```candid
+type SignUpResponse = variant {
+  Ok;
+  Err : SignUpError;
+};
+
+type SignUpError = variant {
+  AlreadyRegistered;
+  HandleTaken;
+  InvalidHandle;
+};
+```
+
+### WhoAmI
+
+Response and error types for the `who_am_i` method. Returns the caller's handle
+and User Canister ID, allowing a logged-in user to discover their own identity.
+
+| Field           | Description                              |
+| --------------- | -----------------------------------------|
+| `handle`        | The caller's registered handle.          |
+| `user_canister` | Principal of the caller's User Canister. |
+
+- **NotRegistered**: the caller has no account in the directory.
+
+```candid
+type WhoAmI = record {
+  handle : text;
+  user_canister : principal;
+};
+
+type WhoAmIResponse = variant {
+  Ok : WhoAmI;
+  Err : WhoAmIError;
+};
+
+type WhoAmIError = variant {
+  NotRegistered;
+};
+```
+
+### UserCanister
+
+Response and error types for the `user_canister` method. Resolves the caller's
+principal to their User Canister ID.
+
+- **NotRegistered**: the caller has no account in the directory.
+
+```candid
+type UserCanisterResponse = variant {
+  Ok : principal;
+  Err : UserCanisterError;
+};
+
+type UserCanisterError = variant {
+  NotRegistered;
+};
+```
+
+### GetUser
+
+Request, response, and error types for the `get_user` method. Looks up a user
+by handle and returns their handle and User Canister ID.
+
+| Field         | Description                                  |
+| ------------- | -------------------------------------------- |
+| `handle`      | The handle to look up.                       |
+| `canister_id` | Principal of the looked-up user's canister.  |
+
+- **NotFound**: no user exists with the given handle.
+
+```candid
+type GetUserArgs = record {
+  handle : text;
+};
+
+type GetUser = record {
+  handle : text;
+  canister_id : principal;
+};
+
+type GetUserResponse = variant {
+  Ok : GetUser;
+  Err : GetUserError;
+};
+
+type GetUserError = variant {
+  NotFound;
+};
+```
+
+### AddModerator
+
+Request, response, and error types for the `add_moderator` method. Grants
+moderator privileges to a principal. Only existing moderators may call this.
+
+| Field       | Description                              |
+| ----------- | ---------------------------------------- |
+| `principal` | The principal to promote to moderator.   |
+
+- **Unauthorized**: the caller is not a moderator.
+- **AlreadyModerator**: the target principal is already a moderator.
+
+```candid
+type AddModeratorArgs = record {
+  principal : principal;
+};
+
+type AddModeratorResponse = variant {
+  Ok;
+  Err : AddModeratorError;
+};
+
+type AddModeratorError = variant {
+  Unauthorized;
+  AlreadyModerator;
+};
+```
+
+### RemoveModerator
+
+Request, response, and error types for the `remove_moderator` method. Revokes
+moderator privileges from a principal. Only existing moderators may call this.
+
+| Field       | Description              |
+| ----------- | ------------------------ |
+| `principal` | The principal to demote. |
+
+- **Unauthorized**: the caller is not a moderator.
+- **NotModerator**: the target principal is not currently a moderator.
+
+```candid
+type RemoveModeratorArgs = record {
+  principal : principal;
+};
+
+type RemoveModeratorResponse = variant {
+  Ok;
+  Err : RemoveModeratorError;
+};
+
+type RemoveModeratorError = variant {
+  Unauthorized;
+  NotModerator;
+};
+```
+
+### Suspend
+
+Request, response, and error types for the `suspend` method. Suspends a user
+account, preventing further activity. Only moderators may call this.
+
+| Field       | Description                             |
+| ----------- | --------------------------------------- |
+| `principal` | The principal of the user to suspend.   |
+
+- **Unauthorized**: the caller is not a moderator.
+- **NotFound**: no user exists with the given principal.
+
+```candid
+type SuspendArgs = record {
+  principal : principal;
+};
+
+type SuspendResponse = variant {
+  Ok;
+  Err : SuspendError;
+};
+
+type SuspendError = variant {
+  Unauthorized;
+  NotFound;
+};
+```
+
+### SearchProfiles
+
+Request, response, and error types for the `search_profiles` method. Searches
+registered user profiles by a text query with pagination support.
+
+| Field    | Description                                      |
+| -------- | ------------------------------------------------ |
+| `query`  | Free-text search string matched against handles. |
+| `offset` | Number of results to skip (for pagination).      |
+| `limit`  | Maximum number of results to return.             |
+
+Each result entry contains:
+
+| Field         | Description                                |
+| ------------- | ------------------------------------------ |
+| `handle`      | The matched user's handle.                 |
+| `canister_id` | Principal of the matched user's canister.  |
+
+- **Unauthorized**: the caller is not permitted to search profiles.
+
+```candid
+type SearchProfilesArgs = record {
+  query : text;
+  offset : nat64;
+  limit : nat64;
+};
+
+type SearchProfileEntry = record {
+  handle : text;
+  canister_id : principal;
+};
+
+type SearchProfilesResponse = variant {
+  Ok : vec SearchProfileEntry;
+  Err : SearchProfilesError;
+};
+
+type SearchProfilesError = variant {
+  Unauthorized;
+};
+```
+
+### DeleteProfile (Directory)
+
+Response and error types for the `delete_profile` method on the Directory
+Canister. Removes the caller's account and handle mapping from the directory.
+
+- **NotRegistered**: the caller has no account to delete.
+
+```candid
+type DeleteProfileResponse = variant {
+  Ok;
+  Err : DeleteProfileError;
+};
+
+type DeleteProfileError = variant {
+  NotRegistered;
+};
+```
+
+## User Canister Types
+
+### UserInstallArgs
+
+Install arguments for the User Canister. Uses the `Init`/`Upgrade` variant
+pattern required by IC canister lifecycle.
+
+- **Init**: provided on first install. Sets the owner principal (the user's
+  Internet Identity) and the Federation Canister principal used for outbound
+  ActivityPub delivery.
+- **Upgrade**: provided on subsequent upgrades (currently empty).
+
+```candid
+type UserInstallArgs = variant {
+  Init : record {
+    owner : principal;
+    federation_canister : principal;
+  };
+  Upgrade : record {};
+};
+```
+
+### GetProfile
+
+Response and error types for the `get_profile` method. Returns the full
+`UserProfile` for this canister's owner.
+
+- **NotFound**: the profile has not been initialized yet.
+
+```candid
+type GetProfileResponse = variant {
+  Ok : UserProfile;
+  Err : GetProfileError;
+};
+
+type GetProfileError = variant {
+  NotFound;
+};
+```
+
+### UpdateProfile
+
+Request, response, and error types for the `update_profile` method. Updates
+the caller's profile fields. Only the canister owner may call this. All fields
+are optional; only provided fields are updated.
+
+| Field          | Description                                     |
+| -------------- | ----------------------------------------------- |
+| `display_name` | New display name, or `null` to leave unchanged. |
+| `bio`          | New biography, or `null` to leave unchanged.    |
+| `avatar_url`   | New avatar URL, or `null` to leave unchanged.   |
+
+- **Unauthorized**: the caller is not the canister owner.
+
+```candid
+type UpdateProfileArgs = record {
+  display_name : opt text;
+  bio : opt text;
+  avatar_url : opt text;
+};
+
+type UpdateProfileResponse = variant {
+  Ok;
+  Err : UpdateProfileError;
+};
+
+type UpdateProfileError = variant {
+  Unauthorized;
+};
+```
+
+### FollowUser
+
+Request, response, and error types for the `follow_user` method. Sends a
+follow request to another User Canister.
+
+| Field         | Description                                |
+| ------------- | ------------------------------------------ |
+| `canister_id` | Principal of the User Canister to follow.  |
+
+- **Unauthorized**: the caller is not the canister owner.
+- **AlreadyFollowing**: the caller already follows the target user.
+- **CannotFollowSelf**: the caller attempted to follow their own canister.
+
+```candid
+type FollowUserArgs = record {
+  canister_id : principal;
+};
+
+type FollowUserResponse = variant {
+  Ok;
+  Err : FollowUserError;
+};
+
+type FollowUserError = variant {
+  Unauthorized;
+  AlreadyFollowing;
+  CannotFollowSelf;
+};
+```
+
+### AcceptFollow
+
+Request, response, and error types for the `accept_follow` method. Accepts a
+pending follow request from another user, adding them to the followers list.
+
+| Field      | Description                                                     |
+| ---------- | --------------------------------------------------------------- |
+| `follower` | Principal of the User Canister whose follow request to accept.  |
+
+- **Unauthorized**: the caller is not the canister owner.
+- **RequestNotFound**: no pending follow request exists from the given principal.
+
+```candid
+type AcceptFollowArgs = record {
+  follower : principal;
+};
+
+type AcceptFollowResponse = variant {
+  Ok;
+  Err : AcceptFollowError;
+};
+
+type AcceptFollowError = variant {
+  Unauthorized;
+  RequestNotFound;
+};
+```
+
+### RejectFollow
+
+Request, response, and error types for the `reject_follow` method. Rejects a
+pending follow request from another user.
+
+| Field      | Description                                                     |
+| ---------- | --------------------------------------------------------------- |
+| `follower` | Principal of the User Canister whose follow request to reject.  |
+
+- **Unauthorized**: the caller is not the canister owner.
+- **RequestNotFound**: no pending follow request exists from the given principal.
+
+```candid
+type RejectFollowArgs = record {
+  follower : principal;
+};
+
+type RejectFollowResponse = variant {
+  Ok;
+  Err : RejectFollowError;
+};
+
+type RejectFollowError = variant {
+  Unauthorized;
+  RequestNotFound;
+};
+```
+
+### UnfollowUser
+
+Request, response, and error types for the `unfollow_user` method. Removes the
+caller from the target user's followers list and removes the target from the
+caller's following list.
+
+| Field         | Description                                  |
+| ------------- | -------------------------------------------- |
+| `canister_id` | Principal of the User Canister to unfollow.  |
+
+- **Unauthorized**: the caller is not the canister owner.
+- **NotFollowing**: the caller does not currently follow the target user.
+
+```candid
+type UnfollowUserArgs = record {
+  canister_id : principal;
+};
+
+type UnfollowUserResponse = variant {
+  Ok;
+  Err : UnfollowUserError;
+};
+
+type UnfollowUserError = variant {
+  Unauthorized;
+  NotFollowing;
+};
+```
+
+### BlockUser
+
+Request, response, and error types for the `block_user` method. Blocks another
+user, preventing them from following or interacting with the caller.
+
+| Field         | Description                               |
+| ------------- | ----------------------------------------- |
+| `canister_id` | Principal of the User Canister to block.  |
+
+- **Unauthorized**: the caller is not the canister owner.
+
+```candid
+type BlockUserArgs = record {
+  canister_id : principal;
+};
+
+type BlockUserResponse = variant {
+  Ok;
+  Err : BlockUserError;
+};
+
+type BlockUserError = variant {
+  Unauthorized;
+};
+```
+
+### GetFollowers
+
+Request, response, and error types for the `get_followers` method. Returns a
+paginated list of principals that follow this user.
+
+| Field    | Description                                 |
+| -------- | ------------------------------------------- |
+| `offset` | Number of results to skip (for pagination). |
+| `limit`  | Maximum number of results to return.        |
+
+- **Unauthorized**: the caller is not the canister owner.
+
+```candid
+type GetFollowersArgs = record {
+  offset : nat64;
+  limit : nat64;
+};
+
+type GetFollowersResponse = variant {
+  Ok : vec principal;
+  Err : GetFollowersError;
+};
+
+type GetFollowersError = variant {
+  Unauthorized;
+};
+```
+
+### GetFollowing
+
+Request, response, and error types for the `get_following` method. Returns a
+paginated list of principals that this user follows.
+
+| Field    | Description                                 |
+| -------- | ------------------------------------------- |
+| `offset` | Number of results to skip (for pagination). |
+| `limit`  | Maximum number of results to return.        |
+
+- **Unauthorized**: the caller is not the canister owner.
+
+```candid
+type GetFollowingArgs = record {
+  offset : nat64;
+  limit : nat64;
+};
+
+type GetFollowingResponse = variant {
+  Ok : vec principal;
+  Err : GetFollowingError;
+};
+
+type GetFollowingError = variant {
+  Unauthorized;
+};
+```
+
+### PublishStatus
+
+Request, response, and error types for the `publish_status` method. Creates a
+new status post in the caller's outbox and distributes it to followers via the
+Federation Canister.
+
+| Field        | Description                                                       |
+| ------------ | ----------------------------------------------------------------- |
+| `content`    | The text content of the new post.                                 |
+| `visibility` | Audience control for this status (see [Visibility](#visibility)). |
+
+On success, returns the created `Status` with its assigned ID and timestamp.
+
+- **Unauthorized**: the caller is not the canister owner.
+- **ContentTooLong**: the content exceeds the maximum allowed length.
+
+```candid
+type PublishStatusArgs = record {
+  content : text;
+  visibility : Visibility;
+};
+
+type PublishStatusResponse = variant {
+  Ok : Status;
+  Err : PublishStatusError;
+};
+
+type PublishStatusError = variant {
+  Unauthorized;
+  ContentTooLong;
+};
+```
+
+### DeleteStatus
+
+Request, response, and error types for the `delete_status` method. Removes a
+status post from the caller's outbox.
+
+| Field       | Description                             |
+| ----------- | --------------------------------------- |
+| `status_id` | The unique ID of the status to delete.  |
+
+- **Unauthorized**: the caller is not the canister owner.
+- **NotFound**: no status exists with the given ID.
+
+```candid
+type DeleteStatusArgs = record {
+  status_id : text;
+};
+
+type DeleteStatusResponse = variant {
+  Ok;
+  Err : DeleteStatusError;
+};
+
+type DeleteStatusError = variant {
+  Unauthorized;
+  NotFound;
+};
+```
+
+### LikeStatus
+
+Request, response, and error types for the `like_status` method. Records a
+like on a status authored by another user.
+
+| Field              | Description                                              |
+| ------------------ | -------------------------------------------------------- |
+| `status_id`        | The unique ID of the status to like.                     |
+| `author_canister`  | Principal of the User Canister that authored the status. |
+
+- **Unauthorized**: the caller is not the canister owner.
+- **AlreadyLiked**: the caller has already liked this status.
+
+```candid
+type LikeStatusArgs = record {
+  status_id : text;
+  author_canister : principal;
+};
+
+type LikeStatusResponse = variant {
+  Ok;
+  Err : LikeStatusError;
+};
+
+type LikeStatusError = variant {
+  Unauthorized;
+  AlreadyLiked;
+};
+```
+
+### UndoLike
+
+Request, response, and error types for the `undo_like` method. Removes a
+previously recorded like from a status.
+
+| Field              | Description                                              |
+| ------------------ | -------------------------------------------------------- |
+| `status_id`        | The unique ID of the status to unlike.                   |
+| `author_canister`  | Principal of the User Canister that authored the status. |
+
+- **Unauthorized**: the caller is not the canister owner.
+- **NotFound**: no like exists for the given status.
+
+```candid
+type UndoLikeArgs = record {
+  status_id : text;
+  author_canister : principal;
+};
+
+type UndoLikeResponse = variant {
+  Ok;
+  Err : UndoLikeError;
+};
+
+type UndoLikeError = variant {
+  Unauthorized;
+  NotFound;
+};
+```
+
+### BoostStatus
+
+Request, response, and error types for the `boost_status` method. Boosts
+(reblogs) a status authored by another user, sharing it with the caller's
+followers.
+
+| Field              | Description                                              |
+| ------------------ | -------------------------------------------------------- |
+| `status_id`        | The unique ID of the status to boost.                    |
+| `author_canister`  | Principal of the User Canister that authored the status. |
+
+- **Unauthorized**: the caller is not the canister owner.
+- **AlreadyBoosted**: the caller has already boosted this status.
+
+```candid
+type BoostStatusArgs = record {
+  status_id : text;
+  author_canister : principal;
+};
+
+type BoostStatusResponse = variant {
+  Ok;
+  Err : BoostStatusError;
+};
+
+type BoostStatusError = variant {
+  Unauthorized;
+  AlreadyBoosted;
+};
+```
+
+### UndoBoost
+
+Request, response, and error types for the `undo_boost` method. Removes a
+previously recorded boost from a status.
+
+| Field              | Description                                              |
+| ------------------ | -------------------------------------------------------- |
+| `status_id`        | The unique ID of the status to un-boost.                 |
+| `author_canister`  | Principal of the User Canister that authored the status. |
+
+- **Unauthorized**: the caller is not the canister owner.
+- **NotFound**: no boost exists for the given status.
+
+```candid
+type UndoBoostArgs = record {
+  status_id : text;
+  author_canister : principal;
+};
+
+type UndoBoostResponse = variant {
+  Ok;
+  Err : UndoBoostError;
+};
+
+type UndoBoostError = variant {
+  Unauthorized;
+  NotFound;
+};
+```
+
+### GetLiked
+
+Request, response, and error types for the `get_liked` method. Returns a
+paginated list of status IDs that the caller has liked.
+
+| Field    | Description                                 |
+| -------- | ------------------------------------------- |
+| `offset` | Number of results to skip (for pagination). |
+| `limit`  | Maximum number of results to return.        |
+
+- **Unauthorized**: the caller is not the canister owner.
+
+```candid
+type GetLikedArgs = record {
+  offset : nat64;
+  limit : nat64;
+};
+
+type GetLikedResponse = variant {
+  Ok : vec text;
+  Err : GetLikedError;
+};
+
+type GetLikedError = variant {
+  Unauthorized;
+};
+```
+
+### ReadFeed
+
+Request, response, and error types for the `read_feed` method. Returns a
+paginated list of feed items from the caller's home timeline, including
+statuses from followed users and boosted content.
+
+| Field    | Description                                 |
+| -------- | ------------------------------------------- |
+| `offset` | Number of results to skip (for pagination). |
+| `limit`  | Maximum number of results to return.        |
+
+- **Unauthorized**: the caller is not the canister owner.
+
+```candid
+type ReadFeedArgs = record {
+  offset : nat64;
+  limit : nat64;
+};
+
+type ReadFeedResponse = variant {
+  Ok : vec FeedItem;
+  Err : ReadFeedError;
+};
+
+type ReadFeedError = variant {
+  Unauthorized;
+};
+```
+
+### ReceiveActivity
+
+Request, response, and error types for the `receive_activity` method. Called by
+the Federation Canister to deliver an incoming ActivityPub activity (encoded as
+JSON) to this User Canister's inbox.
+
+| Field           | Description                                |
+| --------------- | ------------------------------------------ |
+| `activity_json` | JSON-encoded ActivityPub activity object.  |
+
+- **Unauthorized**: the caller is not the Federation Canister.
+- **InvalidActivity**: the JSON could not be parsed as a valid ActivityPub
+  activity.
+- **ProcessingFailed**: the activity was valid but could not be processed
+  (e.g. references a non-existent status).
+
+```candid
+type ReceiveActivityArgs = record {
+  activity_json : text;
+};
+
+type ReceiveActivityResponse = variant {
+  Ok;
+  Err : ReceiveActivityError;
+};
+
+type ReceiveActivityError = variant {
+  Unauthorized;
+  InvalidActivity;
+  ProcessingFailed;
+};
+```
+
+## Federation Canister Types
+
+### FederationInstallArgs
+
+Install arguments for the Federation Canister. Uses the `Init`/`Upgrade`
+variant pattern required by IC canister lifecycle.
+
+- **Init**: provided on first install. Sets the Directory Canister principal
+  (used to resolve handles to User Canisters) and the public URL used for
+  constructing ActivityPub actor URIs and WebFinger responses.
+- **Upgrade**: provided on subsequent upgrades (currently empty).
+
+```candid
+type FederationInstallArgs = variant {
+  Init : record {
+    directory_canister : principal;
+    public_url : text;
+  };
+  Upgrade : record {};
+};
+```
+
+### SendActivity
+
+Request, response, and error types for the `send_activity` method. Called by a
+User Canister to deliver an outbound ActivityPub activity to a remote server's
+inbox via HTTP.
+
+| Field           | Description                                                  |
+| --------------- | ------------------------------------------------------------ |
+| `activity_json` | JSON-encoded ActivityPub activity object to send.            |
+| `target_inbox`  | URL of the remote actor's inbox to deliver the activity to.  |
+
+- **Unauthorized**: the caller is not a registered User Canister.
+- **DeliveryFailed**: the HTTP request to the target inbox failed.
+- **InvalidActivity**: the JSON could not be parsed as a valid ActivityPub
+  activity.
+
+```candid
+type SendActivityArgs = record {
+  activity_json : text;
+  target_inbox : text;
+};
+
+type SendActivityResponse = variant {
+  Ok;
+  Err : SendActivityError;
+};
+
+type SendActivityError = variant {
+  Unauthorized;
+  DeliveryFailed;
+  InvalidActivity;
+};
+```
