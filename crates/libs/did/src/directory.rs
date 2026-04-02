@@ -32,7 +32,7 @@ pub struct SignUpRequest {
 /// Response error types for the `sign_up` method. Registers a new user in the
 /// directory, creating a User Canister and mapping the caller's principal to the
 /// chosen handle.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, CandidType, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, CandidType, Serialize, Deserialize)]
 pub enum SignUpError {
     /// The caller has already an account
     AlreadyRegistered,
@@ -40,13 +40,50 @@ pub enum SignUpError {
     HandleTaken,
     /// The chosen handle is invalid (e.g. empty or contains disallowed characters)
     InvalidHandle,
+    /// Anonymous users are not allowed to sign up
+    AnonymousPrincipal,
+    /// Internal error
+    InternalError(String),
 }
 
 /// Response result type for the `sign_up` method.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, CandidType, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, CandidType, Serialize, Deserialize)]
 pub enum SignUpResponse {
     Ok,
     Err(SignUpError),
+}
+
+/// Response error types for the `retry_sign_up` method.
+/// Retries the canister creation for a user that failed to create their canister during the sign up process.
+#[derive(Debug, Clone, PartialEq, Eq, CandidType, Serialize, Deserialize)]
+pub enum RetrySignUpError {
+    /// The caller has no account to retry
+    NotRegistered,
+    /// The caller's canister is not in a failed state, so retrying is not allowed
+    CanisterNotInFailedState,
+    /// Internal error
+    InternalError(String),
+}
+
+/// Response result type for the `retry_sign_up` method.
+#[derive(Debug, Clone, PartialEq, Eq, CandidType, Serialize, Deserialize)]
+pub enum RetrySignUpResponse {
+    Ok,
+    Err(RetrySignUpError),
+}
+
+/// The status of a user's canister, used in the `who_am_i` method to indicate whether
+/// the user's canister is active, pending creation, or failed to create.
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, CandidType, Serialize, Deserialize,
+)]
+pub enum UserCanisterStatus {
+    /// Active and created
+    Active,
+    /// Creation pending
+    CreationPending,
+    /// Creation failed
+    CreationFailed,
 }
 
 /// `who_am_i` method data to be returned in case the caller is registered in the directory.
@@ -56,6 +93,8 @@ pub struct WhoAmI {
     pub handle: String,
     /// The principal of the caller's User Canister.
     pub user_canister: candid::Principal,
+    /// The status of the caller's User Canister.
+    pub canister_status: UserCanisterStatus,
 }
 
 /// Error types for the `who_am_i` method.

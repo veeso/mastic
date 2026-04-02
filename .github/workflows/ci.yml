@@ -64,13 +64,13 @@ jobs:
           target: wasm32-unknown-unknown
           components: rustfmt, clippy
 
-      - name: check rust code style
-        run: |
-          just check_code
-
       - name: build canisters
         run: |
           just build_all
+
+      - name: check rust code style
+        run: |
+          just check_code
 
       - name: test
         run: |

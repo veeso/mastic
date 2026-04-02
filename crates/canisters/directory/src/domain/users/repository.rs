@@ -1,0 +1,370 @@
+//! User repository
+
+use candid::Principal;
+use ic_dbms_canister::prelude::DBMS_CONTEXT;
+use wasm_dbms::WasmDbmsDatabase;
+use wasm_dbms_api::prelude::*;
+
+use crate::error::{CanisterError, CanisterResult};
+use crate::schema::{
+    Schema, User, UserCanisterStatus, UserInsertRequest, UserRecord, UserUpdateRequest,
+};
+
+/// Repository for user-related database operations.
+pub struct UserRepository;
+
+impl UserRepository {
+    /// Signs up a new user by creating a canister for them and storing their information in the database.
+    ///
+    /// The user canister is set to Null and the creation state is marked to pending.
+    pub fn sign_up(user_principal: Principal, handle: String) -> CanisterResult<()> {
+        let insert = UserInsertRequest {
+            principal: ic_dbms_canister::prelude::Principal(user_principal),
+            handle: handle.into(),
+            canister_id: Nullable::Null,
+            canister_status: UserCanisterStatus::from(
+                did::directory::UserCanisterStatus::CreationPending,
+            ),
+            created_at: ic_utils::now().into(),
+        };
+
+        DBMS_CONTEXT.with(|ctx| {
+            let dbms = WasmDbmsDatabase::oneshot(ctx, Schema);
+            dbms.insert::<User>(insert)
+        })?;
+
+        Ok(())
+    }
+
+    /// Sets the canister ID for a user after successful canister creation and updates their canister status to active.
+    pub fn set_user_canister(
+        user_principal: Principal,
+        canister_id: Principal,
+    ) -> CanisterResult<()> {
+        let update = UserUpdateRequest {
+            principal: None,
+            handle: None,
+            canister_id: Some(Nullable::Value(ic_dbms_canister::prelude::Principal(
+                canister_id,
+            ))),
+            canister_status: Some(UserCanisterStatus::from(
+                did::directory::UserCanisterStatus::Active,
+            )),
+            created_at: None,
+            where_clause: Some(Filter::eq(
+                User::primary_key(),
+                ic_dbms_canister::prelude::Principal(user_principal).into(),
+            )),
+        };
+
+        let rows = DBMS_CONTEXT.with(|ctx| {
+            let dbms = WasmDbmsDatabase::oneshot(ctx, Schema);
+            dbms.update::<User>(update)
+        })?;
+
+        if rows == 0 {
+            return Err(CanisterError::SignUpFailed(format!(
+                "failed to set user canister id for user {user_principal}"
+            )));
+        }
+
+        Ok(())
+    }
+
+    /// Sets the user canister status to creation failed if the canister creation process fails for a user.
+    pub fn set_failed_user_canister_create(user_principal: Principal) -> CanisterResult<()> {
+        let update = UserUpdateRequest {
+            principal: None,
+            handle: None,
+            canister_id: None,
+            canister_status: Some(UserCanisterStatus::from(
+                did::directory::UserCanisterStatus::CreationFailed,
+            )),
+            created_at: None,
+            where_clause: Some(Filter::eq(
+                User::primary_key(),
+                ic_dbms_canister::prelude::Principal(user_principal).into(),
+            )),
+        };
+
+        let rows = DBMS_CONTEXT.with(|ctx| {
+            let dbms = WasmDbmsDatabase::oneshot(ctx, Schema);
+            dbms.update::<User>(update)
+        })?;
+
+        if rows == 0 {
+            return Err(CanisterError::SignUpFailed(format!(
+                "failed to set user canister creation failed for user {user_principal}"
+            )));
+        }
+
+        Ok(())
+    }
+
+    /// Sets the user canister status to creation failed if the canister creation process fails for a user.
+    pub fn retry_user_canister_creation(user_principal: Principal) -> CanisterResult<()> {
+        let update = UserUpdateRequest {
+            principal: None,
+            handle: None,
+            canister_id: None,
+            canister_status: Some(UserCanisterStatus::from(
+                did::directory::UserCanisterStatus::CreationPending,
+            )),
+            created_at: None,
+            where_clause: Some(Filter::eq(
+                User::primary_key(),
+                ic_dbms_canister::prelude::Principal(user_principal).into(),
+            )),
+        };
+
+        let rows = DBMS_CONTEXT.with(|ctx| {
+            let dbms = WasmDbmsDatabase::oneshot(ctx, Schema);
+            dbms.update::<User>(update)
+        })?;
+
+        if rows == 0 {
+            return Err(CanisterError::SignUpFailed(format!(
+                "failed to retry user canister creation for user {user_principal}"
+            )));
+        }
+
+        Ok(())
+    }
+
+    /// Retrieves a user's information from the database by their principal.
+    pub fn get_user_by_principal(user_principal: Principal) -> CanisterResult<Option<User>> {
+        let rows = DBMS_CONTEXT.with(|ctx| {
+            let dbms = WasmDbmsDatabase::oneshot(ctx, Schema);
+            dbms.select::<User>(
+                Query::builder()
+                    .all()
+                    .limit(1)
+                    .and_where(Filter::eq(
+                        User::primary_key(),
+                        ic_dbms_canister::prelude::Principal(user_principal).into(),
+                    ))
+                    .build(),
+            )
+        })?;
+
+        if rows.is_empty() {
+            Ok(None)
+        } else {
+            let user = rows.into_iter().next().expect("row should exist");
+            Ok(Some(Self::user_record_to_user(user)))
+        }
+    }
+
+    /// Retrieves a user's information from the database by their handle.
+    pub fn get_user_by_handle(handle: &str) -> CanisterResult<Option<User>> {
+        let rows = DBMS_CONTEXT.with(|ctx| {
+            let dbms = WasmDbmsDatabase::oneshot(ctx, Schema);
+            dbms.select::<User>(
+                Query::builder()
+                    .all()
+                    .limit(1)
+                    .and_where(Filter::eq("handle", handle.into()))
+                    .build(),
+            )
+        })?;
+
+        if rows.is_empty() {
+            Ok(None)
+        } else {
+            let user = rows.into_iter().next().expect("row should exist");
+            Ok(Some(Self::user_record_to_user(user)))
+        }
+    }
+
+    fn user_record_to_user(user: UserRecord) -> User {
+        User {
+            principal: user.principal.expect("principal cannot be empty"),
+            handle: user.handle.expect("handle cannot be empty"),
+            canister_id: user.canister_id.expect("canister_id cannot be empty"),
+            canister_status: user
+                .canister_status
+                .expect("canister_status cannot be empty"),
+            created_at: user.created_at.expect("created_at cannot be empty"),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+    use crate::test_utils::{bob, rey_canisteryo, setup};
+
+    #[test]
+    fn test_should_sign_up_user() {
+        setup();
+
+        UserRepository::sign_up(rey_canisteryo(), "rey_canisteryo".to_string())
+            .expect("should sign up user");
+
+        let user = UserRepository::get_user_by_principal(rey_canisteryo())
+            .expect("should query user")
+            .expect("user should exist");
+
+        assert_eq!(user.principal.0, rey_canisteryo());
+        assert_eq!(user.handle.0, "rey_canisteryo");
+        assert!(user.canister_id.is_null());
+        assert_eq!(
+            did::directory::UserCanisterStatus::from(user.canister_status),
+            did::directory::UserCanisterStatus::CreationPending
+        );
+    }
+
+    #[test]
+    fn test_should_reject_duplicate_principal_on_sign_up() {
+        setup();
+
+        UserRepository::sign_up(rey_canisteryo(), "rey_canisteryo".to_string())
+            .expect("should sign up user");
+
+        let result = UserRepository::sign_up(rey_canisteryo(), "alice2".to_string());
+        assert!(result.is_err(), "duplicate principal should be rejected");
+    }
+
+    #[test]
+    fn test_should_reject_duplicate_handle_on_sign_up() {
+        setup();
+
+        UserRepository::sign_up(rey_canisteryo(), "rey_canisteryo".to_string())
+            .expect("should sign up user");
+
+        let result = UserRepository::sign_up(bob(), "rey_canisteryo".to_string());
+        assert!(result.is_err(), "duplicate handle should be rejected");
+    }
+
+    #[test]
+    fn test_should_set_user_canister() {
+        setup();
+
+        UserRepository::sign_up(rey_canisteryo(), "rey_canisteryo".to_string())
+            .expect("should sign up user");
+
+        let canister_id = bob();
+        UserRepository::set_user_canister(rey_canisteryo(), canister_id)
+            .expect("should set user canister");
+
+        let user = UserRepository::get_user_by_principal(rey_canisteryo())
+            .expect("should query user")
+            .expect("user should exist");
+
+        let Nullable::Value(cid) = user.canister_id else {
+            panic!("canister_id should be set");
+        };
+        assert_eq!(cid.0, canister_id);
+        assert_eq!(
+            did::directory::UserCanisterStatus::from(user.canister_status),
+            did::directory::UserCanisterStatus::Active
+        );
+    }
+
+    #[test]
+    fn test_should_fail_set_user_canister_for_unknown_principal() {
+        setup();
+
+        let result = UserRepository::set_user_canister(rey_canisteryo(), bob());
+        assert!(result.is_err(), "should fail for unknown principal");
+    }
+
+    #[test]
+    fn test_should_set_failed_user_canister_create() {
+        setup();
+
+        UserRepository::sign_up(rey_canisteryo(), "rey_canisteryo".to_string())
+            .expect("should sign up user");
+
+        UserRepository::set_failed_user_canister_create(rey_canisteryo())
+            .expect("should set canister creation failed");
+
+        let user = UserRepository::get_user_by_principal(rey_canisteryo())
+            .expect("should query user")
+            .expect("user should exist");
+
+        assert_eq!(
+            did::directory::UserCanisterStatus::from(user.canister_status),
+            did::directory::UserCanisterStatus::CreationFailed
+        );
+    }
+
+    #[test]
+    fn test_should_fail_set_failed_canister_create_for_unknown_principal() {
+        setup();
+
+        let result = UserRepository::set_failed_user_canister_create(rey_canisteryo());
+        assert!(result.is_err(), "should fail for unknown principal");
+    }
+
+    #[test]
+    fn test_should_retry_user_canister_creation() {
+        setup();
+
+        UserRepository::sign_up(rey_canisteryo(), "rey_canisteryo".to_string())
+            .expect("should sign up user");
+
+        UserRepository::set_failed_user_canister_create(rey_canisteryo())
+            .expect("should set canister creation failed");
+
+        UserRepository::retry_user_canister_creation(rey_canisteryo())
+            .expect("should retry user canister creation");
+
+        let user = UserRepository::get_user_by_principal(rey_canisteryo())
+            .expect("should query user")
+            .expect("user should exist");
+
+        assert_eq!(
+            did::directory::UserCanisterStatus::from(user.canister_status),
+            did::directory::UserCanisterStatus::CreationPending
+        );
+    }
+
+    #[test]
+    fn test_should_get_user_by_principal() {
+        setup();
+
+        UserRepository::sign_up(rey_canisteryo(), "rey_canisteryo".to_string())
+            .expect("should sign up user");
+
+        let user = UserRepository::get_user_by_principal(rey_canisteryo())
+            .expect("should query user")
+            .expect("user should exist");
+
+        assert_eq!(user.principal.0, rey_canisteryo());
+        assert_eq!(user.handle.0, "rey_canisteryo");
+    }
+
+    #[test]
+    fn test_should_return_none_for_unknown_principal() {
+        setup();
+
+        let user =
+            UserRepository::get_user_by_principal(rey_canisteryo()).expect("should query user");
+        assert!(user.is_none(), "should return None for unknown principal");
+    }
+
+    #[test]
+    fn test_should_get_user_by_handle() {
+        setup();
+
+        UserRepository::sign_up(rey_canisteryo(), "rey_canisteryo".to_string())
+            .expect("should sign up user");
+
+        let user = UserRepository::get_user_by_handle("rey_canisteryo")
+            .expect("should query user")
+            .expect("user should exist");
+
+        assert_eq!(user.principal.0, rey_canisteryo());
+        assert_eq!(user.handle.0, "rey_canisteryo");
+    }
+
+    #[test]
+    fn test_should_return_none_for_unknown_handle() {
+        setup();
+
+        let user = UserRepository::get_user_by_handle("nonexistent").expect("should query");
+        assert!(user.is_none(), "should return None for unknown handle");
+    }
+}

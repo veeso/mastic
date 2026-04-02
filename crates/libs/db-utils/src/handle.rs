@@ -24,26 +24,64 @@ const RESERVED_HANDLES: &[&str] = &[
 /// It trims whitespace, converts to lowercase, and removes leading `@` if present.
 pub struct HandleSanitizer;
 
+impl HandleSanitizer {
+    /// Sanitizes a handle by trimming whitespace, converting to lowercase,
+    /// and removing a leading `@` if present.
+    pub fn sanitize_handle(handle: &str) -> String {
+        let sanitized = handle.trim().to_lowercase();
+        sanitized
+            .strip_prefix('@')
+            .unwrap_or(&sanitized)
+            .to_string()
+    }
+}
+
 impl Sanitize for HandleSanitizer {
     fn sanitize(&self, value: Value) -> DbmsResult<Value> {
         let Value::Text(handle) = value else {
             return Err(DbmsError::Sanitize("handle must be a `Text`".to_string()));
         };
 
-        // Trim whitespace and convert to lowercase
-        let sanitized_handle = handle.0.trim().to_lowercase();
-        // remove leading `@`
-        let sanitized_handle = sanitized_handle
-            .strip_prefix('@')
-            .unwrap_or(&sanitized_handle)
-            .to_string();
-
-        Ok(sanitized_handle.into())
+        Ok(Self::sanitize_handle(handle.as_str()).into())
     }
 }
 
 /// A validator for user handles in the Directory canister.
 pub struct HandleValidator;
+
+impl HandleValidator {
+    /// Checks if a handle is valid according to the following rules:
+    ///
+    /// | Rule               | Value                  |
+    /// | :----------------- | :--------------------- |
+    /// | Allowed characters | `a-z`, `0-9`, `_`      |
+    /// | Minimum length     | 1                      |
+    /// | Maximum length     | 30                     |
+    /// | Case sensitivity   | Case-insensitive       |
+    /// | Storage            | Stored as lowercase    |
+    pub fn check_handle(handle: &str) -> Result<(), String> {
+        // verify length is between 1 and 30 characters
+        if handle.is_empty() || handle.len() > 30 {
+            return Err("handle must be between 1 and 30 characters long".to_string());
+        }
+
+        // verify handle only contains allowed characters
+        if !handle
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_')
+        {
+            return Err(
+                "handle can only contain lowercase letters, digits, and underscores".to_string(),
+            );
+        }
+
+        if RESERVED_HANDLES.contains(&handle) {
+            return Err("handle is reserved and cannot be used".to_string());
+        }
+
+        Ok(())
+    }
+}
 
 impl Validate for HandleValidator {
     fn validate(&self, value: &Value) -> DbmsResult<()> {
@@ -51,39 +89,7 @@ impl Validate for HandleValidator {
             return Err(DbmsError::Validation("handle must be a `Text`".to_string()));
         };
 
-        // | Rule               | Value                  |
-        // | :----------------- | :--------------------- |
-        // | Allowed characters | `a-z`, `0-9`, `_`      |
-        // | Minimum length     | 1                      |
-        // | Maximum length     | 30                     |
-        // | Case sensitivity   | Case-insensitive       |
-        // | Storage            | Stored as lowercase    |
-
-        // verify length is between 1 and 30 characters
-        if handle.0.is_empty() || handle.0.len() > 30 {
-            return Err(DbmsError::Validation(
-                "handle must be between 1 and 30 characters long".to_string(),
-            ));
-        }
-
-        // verify handle only contains allowed characters
-        if !handle
-            .0
-            .chars()
-            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_')
-        {
-            return Err(DbmsError::Validation(
-                "handle can only contain lowercase letters, digits, and underscores".to_string(),
-            ));
-        }
-
-        if RESERVED_HANDLES.contains(&handle.0.as_str()) {
-            return Err(DbmsError::Validation(
-                "handle is reserved and cannot be used".to_string(),
-            ));
-        }
-
-        Ok(())
+        Self::check_handle(handle.as_str()).map_err(DbmsError::Validation)
     }
 }
 
