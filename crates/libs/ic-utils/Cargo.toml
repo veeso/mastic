@@ -1,5 +1,5 @@
 [package]
-name = "did"
+name = "ic-utils"
 version = { workspace = true }
 edition = { workspace = true }
 license = { workspace = true }
@@ -8,8 +8,8 @@ publish = false
 
 [dependencies]
 candid = { workspace = true }
-serde = { workspace = true }
+ic-cdk = { workspace = true }
 
 [lib]
-name = "did"
+name = "ic_utils"
 path = "src/lib.rs"

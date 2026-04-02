@@ -20,6 +20,15 @@ pub enum DirectoryInstallArgs {
     Upgrade {},
 }
 
+/// Request arguments for the `sign_up` method. Registers a new user in the
+/// directory, creating a User Canister and mapping the caller's principal to the
+/// chosen handle.
+#[derive(Debug, Clone, PartialEq, Eq, CandidType, Serialize, Deserialize)]
+pub struct SignUpRequest {
+    /// The desired unique username (handle) for the new user.
+    pub handle: String,
+}
+
 /// Response error types for the `sign_up` method. Registers a new user in the
 /// directory, creating a User Canister and mapping the caller's principal to the
 /// chosen handle.

@@ -149,7 +149,7 @@ type DirectoryInstallArgs = variant {
 
 ### SignUp
 
-Response and error types for the `sign_up` method. Registers a new user in the
+Response, request and error types for the `sign_up` method. Registers a new user in the
 directory, creating a User Canister and mapping the caller's principal to the
 chosen handle.
 
@@ -159,6 +159,10 @@ chosen handle.
   allowed characters).
 
 ```candid
+type SignUpRequest = record {
+  handle : text;
+};
+
 type SignUpResponse = variant {
   Ok;
   Err : SignUpError;

@@ -70,7 +70,7 @@ jobs:
 
       - name: build canisters
         run: |
-          just build_all_canisters
+          just build_all
 
       - name: test
         run: |

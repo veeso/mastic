@@ -4,7 +4,7 @@ Mastic is a federated social platform (Mastodon-compatible via ActivityPub) runn
 
 ## Project Structure
 
-```
+```txt
 crates/
   canisters/
     directory/    # Directory Canister — user discovery, handle→canister mapping
@@ -12,7 +12,9 @@ crates/
     user/         # User Canister — per-user actor, inbox/outbox, Social API
   libs/
     activitypub/  # ActivityPub protocol types and utilities
+    db-utils/     # Database utilities (stable storage, serialization, etc.)
     did/          # Shared Candid types library (no cdylib)
+    ic-utils/      # Internet Computer utilities (caller, trap, etc.)
 integration-tests/
   pocket-ic-tests/        # Integration tests using pocket-ic
   pocket-ic-tests-macro/  # Proc-macro support for integration tests
@@ -34,7 +36,7 @@ docs/                       # mdBook site (built with `mdbook build docs`)
 All commands use [just](https://just.systems/). Run `just` to list available commands.
 
 ```sh
-just build_all_canisters    # Build all three canisters (directory, federation, user)
+just build_all    # Build all three canisters (directory, federation, user)
 just build_directory        # Build only the directory canister
 just build_federation       # Build only the federation canister
 just build_user             # Build only the user canister
@@ -52,7 +54,7 @@ Build pipeline: `cargo build --target wasm32-unknown-unknown` → `ic-wasm shrin
 
 - **Formatting**: Uses nightly rustfmt. Config in `rustfmt.toml` (imports grouped by `StdExternalCrate`, module-level granularity).
 - **Linting**: `cargo clippy --all-features --all-targets -- -D warnings` — zero warnings policy.
-- **CI** runs `just check_code` then `just build_all_canisters` then `just test_all`.
+- **CI** runs `just check_code` then `just build_all` then `just test_all`.
 
 ## Architecture
 
@@ -83,6 +85,7 @@ Authorization is principal-based: User→UserCanister (owner principal), Federat
 ### Candid Interfaces
 
 Canonical `.did` files live in `docs/src/`. The build pipeline also auto-extracts `.did` from WASM to `.artifact/`. When adding or modifying canister methods, update **both**:
+
 1. `docs/src/{canister}.did` — the spec
 2. `docs/src/project.md` — the Interface section (must match the .did files exactly)
 

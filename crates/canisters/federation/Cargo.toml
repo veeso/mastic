@@ -14,6 +14,7 @@ did = { path = "../../libs/did" }
 ic-cdk = { workspace = true }
 ic-cdk-macros = { workspace = true }
 ic-stable-structures = { workspace = true }
+ic-utils = { path = "../../libs/ic-utils" }
 serde = { workspace = true }
 
 [lib]
