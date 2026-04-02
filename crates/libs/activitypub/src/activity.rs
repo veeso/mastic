@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 use crate::object::{BaseObject, Object, Reference};
 
 /// The ActivityPub activity family of type discriminators.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum ActivityType {
     /// Wraps the creation of a new object.
     Create,

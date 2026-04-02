@@ -9,10 +9,17 @@ publish = false
 
 [dependencies]
 candid = { workspace = true }
+db-utils = { path = "../../libs/db-utils" }
 did = { path = "../../libs/did" }
 ic-cdk = { workspace = true }
 ic-cdk-macros = { workspace = true }
+ic-dbms-canister = { workspace = true }
+ic-utils = { path = "../../libs/ic-utils" }
 serde = { workspace = true }
+thiserror = { workspace = true }
+wasm-dbms = { workspace = true }
+wasm-dbms-api = { workspace = true }
+wasm-dbms-memory = { workspace = true }
 
 [lib]
 crate-type = ["cdylib", "rlib"]

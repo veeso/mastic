@@ -1,5 +1,5 @@
 [package]
-name = "did"
+name = "db-utils"
 version = { workspace = true }
 edition = { workspace = true }
 license = { workspace = true }
@@ -8,8 +8,13 @@ publish = false
 
 [dependencies]
 candid = { workspace = true }
+ic-dbms-canister = { workspace = true }
 serde = { workspace = true }
+thiserror = { workspace = true }
+wasm-dbms = { workspace = true }
+wasm-dbms-api = { workspace = true }
+wasm-dbms-memory = { workspace = true }
 
 [lib]
-name = "did"
+name = "db_utils"
 path = "src/lib.rs"

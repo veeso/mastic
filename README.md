@@ -40,7 +40,9 @@ crates/
     user/
   libs/
     activitypub/
+    db-utils/
     did/
+    ic-utils/
 integration-tests/
   pocket-ic-tests/
   pocket-ic-tests-macro/
@@ -67,7 +69,7 @@ For detailed architecture diagrams and protocol flows, see the
 ### Build
 
 ```sh
-just build_all_canisters    # Build all three canisters
+just build_all    # Build all three canisters
 just build_directory        # Build only the directory canister
 just build_federation       # Build only the federation canister
 just build_user             # Build only the user canister
@@ -104,7 +106,7 @@ just dfx_deploy_local       # Deploy all canisters locally
 Contributions are welcome. Please follow [conventional commits](https://conventionalcommits.org)
 for commit messages.
 
-CI runs `just check_code` → `just build_all_canisters` → `just test_all`. Make sure all three
+CI runs `just check_code` → `just build_all` → `just test_all`. Make sure all three
 pass before submitting a PR.
 
 ## License

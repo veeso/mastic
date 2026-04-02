@@ -10,7 +10,9 @@ use serde::{Deserialize, Serialize};
 pub type Uuid = String;
 
 /// Controls the audience of a status post. Maps to ActivityPub addressing
-#[derive(Debug, Clone, Copy, PartialEq, Eq, CandidType, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, CandidType, Serialize, Deserialize,
+)]
 pub enum Visibility {
     /// visible to everyone and included in public timelines
     Public,

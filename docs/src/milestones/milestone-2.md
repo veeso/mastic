@@ -193,7 +193,7 @@ command workflow and CI pipeline.
 - Add `just build_frontend` command: runs the Vite production build and
   outputs to the asset canister directory
 - Add `just dfx_deploy_frontend` command: deploys the asset canister locally
-- Update `just build_all_canisters` to include the frontend build
+- Update `just build_all` to include the frontend build
 - Update `just dfx_deploy_local` to include the frontend canister
 - Ensure the frontend build works in CI (install Node.js dependencies,
   run build)

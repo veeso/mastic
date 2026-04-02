@@ -22,6 +22,16 @@ fn test_should_roundtrip_directory_install_args_upgrade() {
 }
 
 #[test]
+fn test_should_roundtrip_sign_up_request_ok() {
+    let resp = SignUpRequest {
+        handle: "alice".to_string(),
+    };
+    let bytes = Encode!(&resp).unwrap();
+    let decoded = Decode!(&bytes, SignUpRequest).unwrap();
+    assert_eq!(resp, decoded);
+}
+
+#[test]
 fn test_should_roundtrip_sign_up_response_ok() {
     let resp = SignUpResponse::Ok;
     let bytes = Encode!(&resp).unwrap();

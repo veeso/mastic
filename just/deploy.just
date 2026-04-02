@@ -75,4 +75,4 @@ deploy_canisters network install_mode:
   #!/usr/bin/env bash
   set -ex
 
-  just build_all_canisters
+  just build_all
