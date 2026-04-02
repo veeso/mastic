@@ -37,7 +37,7 @@ pub fn post_upgrade(args: DirectoryInstallArgs) {
 
 /// Handles the `sign_up` method call to register a new user in the directory, creating a User Canister
 pub fn sign_up(request: SignUpRequest) -> SignUpResponse {
-    let caller = ic_cdk::api::msg_caller();
+    let caller = ic_utils::caller();
 
     crate::domain::users::sign_up(caller, request)
 }
@@ -45,7 +45,7 @@ pub fn sign_up(request: SignUpRequest) -> SignUpResponse {
 /// Retry canister creation for the user that called this method.
 /// This is used in case the canister creation failed during the sign up process
 pub fn retry_sign_up() -> RetrySignUpResponse {
-    let caller = ic_cdk::api::msg_caller();
+    let caller = ic_utils::caller();
 
     crate::domain::users::retry_sign_up(caller)
 }
@@ -92,5 +92,25 @@ mod tests {
             initial_moderator: admin(),
             federation_canister: federation(),
         });
+    }
+
+    #[test]
+    fn test_should_sign_up_user() {
+        setup();
+        let request = SignUpRequest {
+            handle: "rey_canisteryo".to_string(),
+        };
+        let response = sign_up(request);
+        assert_eq!(response, SignUpResponse::Ok);
+    }
+
+    #[test]
+    fn test_should_retry_sign_up() {
+        setup();
+        let response = retry_sign_up();
+        assert_eq!(
+            response,
+            RetrySignUpResponse::Err(did::directory::RetrySignUpError::NotRegistered)
+        );
     }
 }
