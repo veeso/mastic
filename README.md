@@ -5,9 +5,11 @@
 Unleashing the power of IC on the Fediverse
 
 [![license-mit](https://img.shields.io/badge/License-MIT-teal.svg)](https://opensource.org/license/mit/)
-[![CI](https://img.shields.io/github/actions/workflow/status/veeso/mastic/ci.yml?branch=main)](https://github.com/veeso/mastic/actions/workflows/ci.yml)
 [![Conventional Commits](https://img.shields.io/badge/Conventional%20Commits-1.0.0-%23FE5196?logo=conventionalcommits&logoColor=white)](https://conventionalcommits.org)
 ![icp](https://img.shields.io/badge/Internet%20Computer-FF5000?logo=InternetComputer)
+
+[![CI](https://img.shields.io/github/actions/workflow/status/veeso/mastic/ci.yml?branch=main)](https://github.com/veeso/mastic/actions/workflows/ci.yml)
+[![Coverage Status](https://coveralls.io/repos/github/veeso/mastic/badge.svg?branch=main)](https://coveralls.io/github/veeso/mastic?branch=main)
 
 [Documentation](https://docs.mastic.social)
 
