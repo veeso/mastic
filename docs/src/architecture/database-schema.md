@@ -69,7 +69,7 @@ the `db-utils` crate and are shared by both canisters.
 
 The `handle` column uses `HandleSanitizer` (trims whitespace, lowercases,
 strips leading `@`) and `HandleValidator` (enforces the
-[handle rules](./handles.md)). See the [Handle Validation](./handles.md) page
+[handle rules](../specs/handles.md)). See the [Handle Validation](../specs/handles.md) page
 for the full specification.
 
 ## User Canister
@@ -102,7 +102,7 @@ Single-row table holding the owner's profile.
 
 | Column       | Type         | Constraint  | Description                                     |
 | :----------- | :----------- | :---------- | :---------------------------------------------- |
-| `id`         | `UINT64`     | PRIMARY KEY | [Snowflake ID](./snowflake.md)                  |
+| `id`         | `UINT64`     | PRIMARY KEY | [Snowflake ID](../specs/snowflake.md)            |
 | `content`    | `TEXT`       |             | Status body                                     |
 | `visibility` | `Visibility` |             | `Public`, `Unlisted`, `FollowersOnly`, `Direct` |
 | `created_at` | `UINT64`     | INDEX       | Creation timestamp (indexed for feed ordering)  |
@@ -113,7 +113,7 @@ Stores inbound ActivityPub activities.
 
 | Column          | Type           | Constraint  | Description                                      |
 | :-------------- | :------------- | :---------- | :----------------------------------------------- |
-| `id`            | `UINT64`       | PRIMARY KEY | [Snowflake ID](./snowflake.md)                   |
+| `id`            | `UINT64`       | PRIMARY KEY | [Snowflake ID](../specs/snowflake.md)             |
 | `activity_type` | `ActivityType` |             | Activity discriminator (`Create`, `Follow`, ...) |
 | `actor_uri`     | `TEXT`         | validated   | Originating actor's URI                          |
 | `object_data`   | `JSON`         |             | Activity object payload                          |

@@ -5,13 +5,15 @@
 ---
 
 - [Architecture](./architecture.md)
+  - [Database Schema](./architecture/database-schema.md)
 - [ActivityPub](./activitypub.md)
+- [Specs](./specs.md)
+  - [Handle Validation](./specs/handles.md)
+  - [Snowflake IDs](./specs/snowflake.md)
 - [Candid Interfaces](./interface.md)
   - [Candid Types](./interface/types.md)
-  - [Database Schema](./interface/database-schema.md)
-  - [Handle Validation](./interface/handles.md)
-  - [Snowflake IDs](./interface/snowflake.md)
 - [Project Specification](./project.md)
+  - [Flows](./project/flows.md)
 - [Milestones](./milestones/README.md)
   - [Milestone 0 - Proof of Concept](./milestones/milestone-0.md)
   - [Milestone 1 - Standalone Mastic Node](./milestones/milestone-1.md)

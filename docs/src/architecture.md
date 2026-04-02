@@ -1,29 +1,32 @@
+# Architecture
 
-# Mastic Architecture Documentation
+- [Architecture](#architecture)
+  - [Overview](#overview)
+  - [Directory Canister](#directory-canister)
+    - [Directory Responsibilities](#directory-responsibilities)
+    - [Directory Storage](#directory-storage)
+    - [Directory Install Arguments](#directory-install-arguments)
+  - [User Canister](#user-canister)
+    - [User Canister Responsibilities](#user-canister-responsibilities)
+    - [User Canister Storage](#user-canister-storage)
+    - [User Canister Install Arguments](#user-canister-install-arguments)
+    - [Custom Data Types](#custom-data-types)
+  - [Federation Canister](#federation-canister)
+    - [Federation Responsibilities](#federation-responsibilities)
+    - [Federation Storage](#federation-storage)
+    - [Federation Install Arguments](#federation-install-arguments)
+  - [Authorization Model](#authorization-model)
+  - [Inter-Canister Communication](#inter-canister-communication)
+  - [Shared Libraries](#shared-libraries)
 
-- [Mastic Architecture Documentation](#mastic-architecture-documentation)
-  - [Scope](#scope)
-  - [Architecture Overview](#architecture-overview)
-  - [Flows](#flows)
-    - [Create Profile](#create-profile)
-    - [Sign In](#sign-in)
-    - [Update Profile](#update-profile)
-    - [Delete Profile](#delete-profile)
-    - [Follow User](#follow-user)
-    - [Unfollow User](#unfollow-user)
-    - [Block User](#block-user)
-    - [Create Status](#create-status)
-    - [Like Status](#like-status)
-    - [Boost Status](#boost-status)
-    - [Delete Status](#delete-status)
-    - [Read Feed](#read-feed)
-    - [Receive Updates from Fediverse](#receive-updates-from-fediverse)
+This document describes the architecture of Mastic, detailing
+how each canister works internally, how they communicate with each other,
+and how data flows through the system.
 
-## Scope
+## Overview
 
-This document outlines the architecture of Mastic, with a focus on the core components and their interactions with the users and the Fediverse.
-
-## Architecture Overview
+Mastic is composed of three canister types and a frontend, all deployed
+on the Internet Computer:
 
 ```mermaid
 block-beta
@@ -50,313 +53,230 @@ block-beta
 
 ```
 
-## Flows
+- **Directory Canister** -- Global singleton. User registry, canister
+  lifecycle management, and moderation.
+- **User Canister** -- One per user. Stores the user's profile, statuses,
+  inbox, and social graph. Acts as the ActivityPub actor.
+- **Federation Canister** -- Global singleton. HTTP boundary for all
+  server-to-server ActivityPub traffic, WebFinger discovery, and activity
+  routing.
+- **Frontend** -- React asset canister providing the web UI and Internet
+  Identity authentication.
 
-### Create Profile
+## Directory Canister
 
-```mermaid
-sequenceDiagram
-    actor A as Alice
-    participant II as Internet Identity
-    participant UC as Alice's User Canister
-    participant DIR as Directory Canister
-    participant IC as IC Management Canister
+The Directory Canister is the global entry point for Mastic. It maps
+Internet Identity principals to handles and User Canister IDs, manages
+the full canister lifecycle (creation and deletion), and enforces
+moderation policies.
 
-    A->>II: Sign In with II
-    A->>DIR: Create Profile (candid)
-    DIR->>DIR: Add map between user and handle
-    DIR->>DIR: Start worker to create user canister
-    DIR->>IC: create_canister
-    IC-->>DIR: Canister ID
-    DIR->>IC: install_code (User Canister WASM)
-    IC-->>UC: Install Canister
-    DIR->>DIR: Store User Canister Principal for Alice
-    A->>DIR: Get user canister Principal
-    DIR->>A: Principal of User Canister
-```
+### Directory Responsibilities
 
-### Sign In
+- **User registry** -- maintains the `users` table mapping each principal
+  to a handle and an optional User Canister ID.
+- **Sign-up** -- on `sign_up`, validates the handle, inserts the user
+  record, then spawns a worker that calls the IC management canister to
+  create and install a new User Canister with the caller's principal as
+  owner.
+- **Sign-in** -- `whoami` and `user_canister` resolve the caller's
+  principal to their handle and User Canister ID.
+- **Profile deletion** -- creates a tombstone for the user, notifies the
+  User Canister (which fans out a Delete activity), then destroys the
+  canister via `stop_canister` + `delete_canister`.
+- **Moderation** -- moderators (stored in the `moderators` table) can
+  suspend users and manage the moderator list. The initial moderator is
+  set at install time.
+- **Profile search** -- `search_profiles` provides full-text lookup over
+  registered handles.
 
-```mermaid
-sequenceDiagram
-    actor A as Alice
-    participant II as Internet Identity
-    participant DIR as Directory Canister
+### Directory Storage
 
-    A->>II: Sign In with II
-    A->>DIR: Get User Canister (candid)
-    DIR->>A: Return Canister ID
-```
+Uses [wasm-dbms](https://github.com/veeso/wasm-dbms) for persistent
+relational storage in stable memory. Tables are registered once during
+`init` and survive upgrades without re-registration.
 
-### Update Profile
+Three tables:
 
-```mermaid
-sequenceDiagram
-    actor A as Alice
-    participant UC as Alice's User Canister
-    participant DIR as Directory Canister
+| Table        | Purpose                                        |
+| :----------- | :--------------------------------------------- |
+| `settings`   | Key-value configuration (federation canister)  |
+| `moderators` | Moderator principals and creation timestamps   |
+| `users`      | Principal-to-handle-to-canister mapping        |
 
-    A->>DIR: Get Alice's User Canister (candid)
-    DIR->>A: User Canister Principal
-    A->>UC: Update Profile (candid)
-    UC->>UC: Update Profile in User Canister
-```
+See [Database Schema](./architecture/database-schema.md) for full column
+definitions.
 
-### Delete Profile
+### Directory Install Arguments
 
-> **Note:** The Federation Canister must buffer the Delete activity data before the User Canister is destroyed,
-> since the User Canister will no longer exist to serve actor profile requests after deletion.
+Uses the `Init` / `Upgrade` enum variant pattern:
 
-```mermaid
-sequenceDiagram
-    actor A as Alice
-    participant UC as Alice's User Canister
-    participant DIR as Directory Canister
-    participant FED as Federation Canister
-    participant IC as IC Management Canister
-    participant M as Mastodon Web2
+- **Init** -- requires `initial_moderator` (Principal) and
+  `federation_canister` (Principal). Registers the database schema and
+  seeds the first moderator.
+- **Upgrade** -- empty variant. Validates that the caller did not
+  accidentally pass `Init` args on upgrade.
 
-    A->>DIR: Delete profile (candid)
-    DIR->>A: Ok
-    DIR->>DIR: Create tombstone for Alice
-    DIR->>DIR: Start delete canister worker
-    DIR->>UC: Notify Delete
-    UC->>UC: Aggregate notification based on followers
-    UC->>FED: Send Delete Activity
-    FED->>FED: Buffer Delete activity data
-    FED->>DIR: Route Delete to local followers
-    DIR->>DIR: Resolve local follower User Canisters
-    FED->>M: Forward Delete Activity to remote followers
-    UC->>DIR: Activity Sent
-    DIR->>IC: stop_canister + delete_canister
-    IC-->>DIR: Canister Deleted
-```
+## User Canister
 
-### Follow User
+Every Mastic user gets their own User Canister, created by the Directory
+Canister during sign-up. The User Canister is the ActivityPub actor: it
+owns the user's profile, statuses, social graph, and cryptographic
+identity.
 
-#### Local follow (both users on Mastic)
+### User Canister Responsibilities
 
-```mermaid
-sequenceDiagram
-    actor A as Alice
-    participant UC as Alice's User Canister
-    participant DIR as Directory Canister
-    participant FED as Federation Canister
-    participant BUC as Bob's User Canister
+- **Profile management** -- single-row `profiles` table stores display
+  name, bio, avatar, and header image. Updated via `update_profile`.
+- **Status publishing** -- `publish_status` generates a
+  [Snowflake ID](./specs/snowflake.md), persists the status in the
+  `statuses` table, then sends a Create activity to the Federation
+  Canister for fan-out.
+- **Feed aggregation** -- `read_feed` merges the user's own statuses
+  (outbox) with received activities (inbox) into a paginated,
+  chronologically-sorted feed.
+- **Social graph** -- `followers` and `following` tables track the
+  user's relationships. Follow requests go through
+  Pending/Accepted/Rejected states.
+- **Inbox** -- `receive_activity` (called only by the Federation
+  Canister) writes inbound ActivityPub activities into the `inbox` table.
+- **Outbound activities** -- `follow_user`, `like_status`,
+  `boost_status`, `block_user`, and their undo counterparts each send
+  the corresponding ActivityPub activity to the Federation Canister via
+  `send_activity`.
+- **HTTP Signatures** -- stores an RSA key pair (public + private PEM)
+  in settings, used by the Federation Canister to sign outbound HTTP
+  requests on behalf of this actor.
 
-    A->>DIR: Get Alice's User Canister (candid)
-    DIR->>A: User Canister Principal
-    A->>UC: follow_user (candid)
-    UC->>FED: Send Follow Activity
-    FED->>DIR: Resolve Bob's User Canister
-    DIR->>FED: Bob's User Canister Principal
-    FED->>BUC: Deliver Follow activity
-    BUC->>BUC: Record follower (Alice)
-    BUC->>FED: Send Accept Activity
-    FED->>DIR: Resolve Alice's User Canister
-    FED->>UC: Deliver Accept activity
-    UC->>UC: Record following (Bob)
-```
+### User Canister Storage
 
-#### Remote follow (target on external Fediverse instance)
+Uses [wasm-dbms](https://github.com/veeso/wasm-dbms), same as the
+Directory Canister. Six tables:
 
-```mermaid
-sequenceDiagram
-    actor A as Alice
-    participant UC as Alice's User Canister
-    participant DIR as Directory Canister
-    participant FED as Federation Canister
-    participant M as Mastodon Web2
+| Table       | Purpose                                               |
+| :---------- | :---------------------------------------------------- |
+| `settings`  | Owner principal, federation canister, RSA key pair    |
+| `profiles`  | Single-row profile (handle, display name, bio, etc.)  |
+| `statuses`  | User's own statuses, keyed by Snowflake ID            |
+| `inbox`     | Inbound ActivityPub activities                        |
+| `followers` | Actor URIs of accounts following this user            |
+| `following` | Actor URIs this user follows, with request status     |
 
-    A->>DIR: Get Alice's User Canister (candid)
-    DIR->>A: User Canister Principal
-    A->>UC: follow_user (candid)
-    UC->>FED: Send Follow Activity
-    FED->>M: Forward Follow Activity (ActivityPub / HTTP Signature)
-    M->>M: Record follower (Alice)
-    M->>FED: Send Accept Activity (ActivityPub)
-    FED->>DIR: Resolve Alice's User Canister
-    FED->>UC: Deliver Accept activity
-    UC->>UC: Record following (remote user)
-```
+See [Database Schema](./architecture/database-schema.md) for full column
+definitions.
 
-### Unfollow User
+### User Canister Install Arguments
 
-```mermaid
-sequenceDiagram
-    actor A as Alice
-    participant UC as Alice's User Canister
-    participant DIR as Directory Canister
-    participant FED as Federation Canister
-    participant BUC as Bob's User Canister (local)
-    participant M as Mastodon Web2
+- **Init** -- requires `owner` (Principal) and `federation_canister`
+  (Principal). Registers the database schema and stores both principals
+  in settings.
+- **Upgrade** -- empty variant.
 
-    A->>DIR: Get Alice's User Canister (candid)
-    DIR->>A: User Canister Principal
-    A->>UC: unfollow_user (candid)
-    UC->>UC: Remove following (Bob)
-    UC->>FED: Send Undo(Follow) Activity
-    alt Bob is local
-        FED->>DIR: Resolve Bob's User Canister
-        FED->>BUC: Deliver Undo(Follow) activity
-        BUC->>BUC: Remove follower (Alice)
-    else Bob is remote
-        FED->>M: Forward Undo(Follow) Activity (ActivityPub)
-    end
-```
+### Custom Data Types
 
-### Block User
+The User Canister defines three single-byte enum types for compact
+database storage:
 
-```mermaid
-sequenceDiagram
-    actor A as Alice
-    participant UC as Alice's User Canister
-    participant DIR as Directory Canister
-    participant FED as Federation Canister
-    participant BUC as Bob's User Canister (local)
-    participant M as Mastodon Web2
+- **Visibility** -- `Public` (0), `Unlisted` (1), `FollowersOnly` (2),
+  `Direct` (3). Controls status distribution scope.
+- **ActivityType** -- 14 variants (`Create`, `Update`, `Delete`,
+  `Follow`, `Accept`, `Reject`, `Like`, `Announce`, `Undo`, `Block`,
+  `Add`, `Remove`, `Flag`, `Move`). Discriminates inbox activities.
+- **FollowStatus** -- `Pending` (0), `Accepted` (1), `Rejected` (2).
+  Tracks the lifecycle of follow requests.
 
-    A->>DIR: Get Alice's User Canister (candid)
-    DIR->>A: User Canister Principal
-    A->>UC: block_user (candid)
-    UC->>UC: Record block locally
-    UC->>FED: Send Block Activity
-    alt Bob is local
-        FED->>DIR: Resolve Bob's User Canister
-        FED->>BUC: Deliver Block activity
-        BUC->>BUC: Hide Alice's profile from Bob
-    else Bob is remote
-        FED->>M: Forward Block Activity (ActivityPub)
-    end
-```
+## Federation Canister
 
-### Create Status
+The Federation Canister is the HTTP boundary of the Mastic node. It
+handles all server-to-server ActivityPub communication: receiving
+activities from remote Fediverse instances, sending activities out, and
+serving WebFinger discovery and actor profiles.
+
+### Federation Responsibilities
+
+- **Inbound HTTP** -- `http_request` (query) and `http_request_update`
+  (update) handle GET and POST requests from remote Fediverse instances.
+  GET serves WebFinger, actor profiles, and collections. POST receives
+  activities into user inboxes.
+- **Outbound activities** -- `send_activity` (called by User Canisters)
+  routes activities to their destinations. For local recipients, it
+  resolves the target handle via the Directory Canister and calls
+  `receive_activity` on the target User Canister. For remote recipients,
+  it performs HTTPS outcalls with HTTP Signatures.
+- **Activity buffering** -- during profile deletion, the Federation
+  Canister buffers the Delete activity payload so it can still be served
+  after the User Canister has been destroyed.
+- **WebFinger** -- responds to
+  `/.well-known/webfinger?resource=acct:user@domain` queries, enabling
+  remote instances to discover Mastic actors.
+
+### Federation Storage
+
+Unlike the Directory and User canisters, the Federation Canister uses
+`ic-stable-structures` directly (via `IcMemoryManager` with
+`DefaultMemoryImpl`) rather than wasm-dbms. This is because the
+Federation Canister primarily buffers transient data and does not need
+a relational schema.
+
+### Federation Install Arguments
+
+- **Init** -- empty (no configuration fields required at install time).
+
+## Authorization Model
+
+Mastic uses principal-based authorization. Each canister checks the
+caller's principal against an expected set configured at install time.
 
 ```mermaid
-sequenceDiagram
-    actor A as Alice
-    participant UC as Alice's User Canister
-    participant DIR as Directory Canister
-    participant FED as Federation Canister
-    participant BUC as Bob's User Canister (local)
-    participant M as Mastodon Web2
-    actor B as Bob (remote)
-
-    A->>DIR: Get Alice's User Canister (candid)
-    DIR->>A: User Canister Principal
-    A->>UC: Create Status (candid)
-    UC->>UC: Store Status in Alice's Outbox
-    UC->>UC: Aggregate Create activity for each follower
-    UC->>FED: Forward Create Status Activities (ic)
-    FED->>DIR: Resolve local followers
-    DIR->>FED: Local follower User Canister principals
-    FED->>BUC: Deliver Create activity to local follower inboxes
-    FED->>M: Forward Create activities to remote instances (ActivityPub)
-    B->>M: Get Feed
-    M->>B: Return Alice's Status
+graph LR
+    User([User]) -->|owner principal| UC[User Canister]
+    UC -->|registered principal| FED[Federation Canister]
+    FED -->|federation principal| UC
+    FED -->|directory principal| DIR[Directory Canister]
+    DIR -->|moderator principal| DIR
+    DIR -->|management canister| IC[IC Mgmt]
 ```
 
-### Like Status
+| Caller                | Target              | Trust Basis                                            |
+| :-------------------- | :------------------ | :----------------------------------------------------- |
+| User (browser)        | User Canister       | Caller matches owner principal set at install          |
+| User Canister         | Federation Canister | User Canister registered by Directory at creation      |
+| Federation Canister   | User Canister       | Federation principal set in User Canister install args |
+| Moderator             | Directory Canister  | Caller present in `moderators` table                   |
+| Directory Canister    | IC Management       | Controller of dynamically-created User Canisters       |
 
-```mermaid
-sequenceDiagram
-    actor A as Alice
-    participant UC as Alice's User Canister
-    participant DIR as Directory Canister
-    participant FED as Federation Canister
-    participant TUC as Target User Canister (local)
-    participant M as Mastodon Web2
+Anonymous principals are rejected by all authenticated endpoints.
 
-    A->>DIR: Get Alice's User Canister (candid)
-    DIR->>A: User Canister Principal
-    A->>UC: Like Status (candid)
-    UC->>UC: Store Like in Alice's Outbox
-    UC->>FED: Forward Like Activity (ic)
-    alt Status author is local
-        FED->>DIR: Resolve author's User Canister
-        FED->>TUC: Deliver Like activity
-    else Status author is remote
-        FED->>M: Forward Like Activity (ActivityPub)
-    end
-```
+## Inter-Canister Communication
 
-### Boost Status
+All inter-canister calls use standard Candid-encoded `ic_cdk::call`
+invocations. The key communication patterns are:
 
-```mermaid
-sequenceDiagram
-    actor A as Alice
-    participant UC as Alice's User Canister
-    participant DIR as Directory Canister
-    participant FED as Federation Canister
-    participant TUC as Target User Canister (local)
-    participant M as Mastodon Web2
+1. **Activity fan-out** -- User Canister calls `send_activity` on the
+   Federation Canister. Federation resolves recipients (local via
+   Directory, remote via HTTPS outcalls) and delivers to each inbox.
+2. **Activity delivery** -- Federation Canister calls
+   `receive_activity` on target User Canisters to deposit inbound
+   activities.
+3. **Handle resolution** -- Federation Canister calls the Directory
+   Canister to resolve actor handles to User Canister principals.
+4. **Canister lifecycle** -- Directory Canister calls the IC management
+   canister (`create_canister`, `install_code`, `stop_canister`,
+   `delete_canister`) to manage User Canister instances.
 
-    A->>DIR: Get Alice's User Canister (candid)
-    DIR->>A: User Canister Principal
-    A->>UC: Boost Status (candid)
-    UC->>UC: Store Boost in Alice's Outbox
-    UC->>FED: Forward Announce Activity (ic)
-    alt Status author is local
-        FED->>DIR: Resolve author's User Canister
-        FED->>TUC: Deliver Announce activity
-    else Status author is remote
-        FED->>M: Forward Announce Activity (ActivityPub)
-    end
-    Note over FED: Also delivers to Alice's followers (local + remote)
-```
+## Shared Libraries
 
-### Delete Status
+Four workspace crates provide shared functionality:
 
-```mermaid
-sequenceDiagram
-    actor A as Alice
-    participant UC as Alice's User Canister
-    participant DIR as Directory Canister
-    participant FED as Federation Canister
-    participant M as Mastodon Web2
-
-    A->>DIR: Get Alice's User Canister (candid)
-    DIR->>A: User Canister Principal
-    A->>UC: Delete Status (candid)
-    UC->>UC: Remove Status from Alice's Outbox
-    UC->>FED: Forward Delete Status Activity (ic)
-    FED->>DIR: Resolve local followers
-    FED->>FED: Deliver Delete to local follower inboxes
-    FED->>M: Forward Delete Activity to remote instances (ActivityPub)
-```
-
-### Read Feed
-
-```mermaid
-sequenceDiagram
-    actor A as Alice
-    participant UC as Alice's User Canister
-    participant DIR as Directory Canister
-
-    A->>DIR: Get Alice's User Canister (candid)
-    DIR->>A: User Canister Principal
-    A->>UC: Read Feed page (candid)
-    UC->>UC: Aggregate feed from Alice's Inbox and Outbox
-    UC->>A: Return Feed
-```
-
-### Receive Updates from Fediverse
-
-```mermaid
-sequenceDiagram
-    actor A as Alice
-    participant UC as Alice's User Canister
-    participant DIR as Directory Canister
-    participant FED as Federation Canister
-    participant M as Mastodon Web2
-    actor B as Bob
-
-    B->>M: Publish Status
-    M->>M: Get who Follows Bob
-    M->>FED: Dispatch create Status Activity for Alice
-    FED->>DIR: Get User Canister for Alice
-    DIR->>FED: User Canister ID
-    FED->>UC: Put Status to Alice's Inbox
-    A->>UC: Read feed
-    UC->>A: Return Bob's Post
-```
+- **did** (`crates/libs/did`) -- Candid type definitions shared across
+  all canisters. Defines request/response types, `UserProfile`,
+  `Status`, `Visibility`, and install argument enums.
+- **db-utils** (`crates/libs/db-utils`) -- Database utilities including
+  `HandleSanitizer`, `HandleValidator`, and the `Settings` key-value
+  abstraction used by Directory and User canisters.
+- **ic-utils** (`crates/libs/ic-utils`) -- Test-friendly wrappers around
+  IC APIs: `caller()`, `now()`, `trap()`. In unit tests these return
+  dummy values instead of calling `ic_cdk`.
+- **activitypub** (`crates/libs/activitypub`) -- W3C ActivityStreams 2.0
+  and ActivityPub protocol types: `Activity`, `Actor`, `Object`,
+  `PublicKey`, `WebFingerResponse`, collection types, and Mastodon
+  extensions.
