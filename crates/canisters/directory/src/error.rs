@@ -12,4 +12,7 @@ pub enum CanisterError {
     /// Settings error
     #[error("Settings error: {0}")]
     Settings(db_utils::settings::SettingsError),
+    /// Sign up process failed for a user.
+    #[error("Sign up failed: {0}")]
+    SignUpFailed(String),
 }

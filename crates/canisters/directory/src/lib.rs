@@ -1,14 +1,14 @@
+mod adapters;
 mod api;
+mod domain;
 mod error;
-#[cfg_attr(not(test), expect(dead_code))]
-mod moderators;
+
 mod schema;
-#[cfg_attr(not(test), expect(dead_code))]
 mod settings;
 #[cfg(test)]
 mod test_utils;
 
-use did::directory::DirectoryInstallArgs;
+use did::directory::{DirectoryInstallArgs, RetrySignUpResponse, SignUpRequest, SignUpResponse};
 
 #[ic_cdk::init]
 fn init(args: DirectoryInstallArgs) {
@@ -18,6 +18,16 @@ fn init(args: DirectoryInstallArgs) {
 #[ic_cdk::post_upgrade]
 fn post_upgrade(args: DirectoryInstallArgs) {
     api::post_upgrade(args);
+}
+
+#[ic_cdk::update]
+fn sign_up(request: SignUpRequest) -> SignUpResponse {
+    api::sign_up(request)
+}
+
+#[ic_cdk::update]
+fn retry_sign_up() -> RetrySignUpResponse {
+    api::retry_sign_up()
 }
 
 ic_cdk::export_candid!();

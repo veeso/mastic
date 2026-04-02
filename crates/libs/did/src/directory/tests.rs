@@ -58,6 +58,7 @@ fn test_should_roundtrip_who_am_i_response_ok() {
     let resp = WhoAmIResponse::Ok(WhoAmI {
         handle: "alice".to_string(),
         user_canister: candid::Principal::anonymous(),
+        canister_status: UserCanisterStatus::Active,
     });
     let bytes = Encode!(&resp).unwrap();
     let decoded = Decode!(&bytes, WhoAmIResponse).unwrap();

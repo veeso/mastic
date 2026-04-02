@@ -9,6 +9,8 @@
   - [Directory Canister Types](#directory-canister-types)
     - [DirectoryInstallArgs](#directoryinstallargs)
     - [SignUp](#signup)
+    - [RetrySignUp](#retrysignup)
+    - [UserCanisterStatus](#usercanisterstatus)
     - [WhoAmI](#whoami)
     - [UserCanister](#usercanister)
     - [GetUser](#getuser)
@@ -157,6 +159,8 @@ chosen handle.
 - **HandleTaken**: the requested handle is in use by another user.
 - **InvalidHandle**: the handle does not meet validation rules (e.g. length,
   allowed characters).
+- **AnonymousPrincipal**: anonymous users are not allowed to sign up.
+- **InternalError**: an unexpected internal error occurred.
 
 ```candid
 type SignUpRequest = record {
@@ -172,18 +176,64 @@ type SignUpError = variant {
   AlreadyRegistered;
   HandleTaken;
   InvalidHandle;
+  AnonymousPrincipal;
+  InternalError : text;
+};
+```
+
+### RetrySignUp
+
+Response and error types for the `retry_sign_up` method. Retries canister
+creation for a user whose canister creation failed during the sign-up process.
+
+- **NotRegistered**: the caller has no account to retry.
+- **CanisterNotInFailedState**: the caller's canister is not in a failed
+  state, so retrying is not allowed.
+- **InternalError**: an unexpected internal error occurred.
+
+```candid
+type RetrySignUpResponse = variant {
+  Ok;
+  Err : RetrySignUpError;
+};
+
+type RetrySignUpError = variant {
+  NotRegistered;
+  CanisterNotInFailedState;
+  InternalError : text;
+};
+```
+
+### UserCanisterStatus
+
+The status of a user's canister, indicating whether it is active, pending
+creation, or failed to create. Used in the
+[WhoAmI](#whoami) response.
+
+- **Active**: the canister is created and operational.
+- **CreationPending**: canister creation is in progress.
+- **CreationFailed**: canister creation failed; the user may retry via
+  `retry_sign_up`.
+
+```candid
+type UserCanisterStatus = variant {
+  Active;
+  CreationPending;
+  CreationFailed;
 };
 ```
 
 ### WhoAmI
 
-Response and error types for the `who_am_i` method. Returns the caller's handle
-and User Canister ID, allowing a logged-in user to discover their own identity.
+Response and error types for the `who_am_i` method. Returns the caller's handle,
+User Canister ID, and canister status, allowing a logged-in user to discover
+their own identity and check canister readiness.
 
-| Field           | Description                              |
-| --------------- | -----------------------------------------|
-| `handle`        | The caller's registered handle.          |
-| `user_canister` | Principal of the caller's User Canister. |
+| Field              | Description                                                                              |
+| :----------------- | :--------------------------------------------------------------------------------------- |
+| `handle`           | The caller's registered handle.                                                          |
+| `user_canister`    | Principal of the caller's User Canister.                                                 |
+| `canister_status`  | Status of the caller's User Canister (see [UserCanisterStatus](#usercanisterstatus)).    |
 
 - **NotRegistered**: the caller has no account in the directory.
 
@@ -191,6 +241,7 @@ and User Canister ID, allowing a logged-in user to discover their own identity.
 type WhoAmI = record {
   handle : text;
   user_canister : principal;
+  canister_status : UserCanisterStatus;
 };
 
 type WhoAmIResponse = variant {

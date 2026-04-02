@@ -1,8 +1,12 @@
 //! Database schema for the Directory canister.
 
+mod user_canister_status;
+
 use db_utils::handle::{HandleSanitizer, HandleValidator};
 use db_utils::settings::*;
 use ic_dbms_canister::prelude::*;
+
+pub use self::user_canister_status::UserCanisterStatus;
 
 /// Represents a moderator in the Directory canister.
 #[derive(Debug, Table, Clone, PartialEq, Eq)]
@@ -33,6 +37,9 @@ pub struct User {
     #[unique]
     #[custom_type]
     pub canister_id: Nullable<Principal>,
+    /// User canister status.
+    #[custom_type]
+    pub canister_status: UserCanisterStatus,
     /// The date and time when the user was added.
     pub created_at: Uint64,
 }
@@ -49,19 +56,20 @@ mod tests {
     use wasm_dbms_api::prelude::{Database, DeleteBehavior, Filter, Query};
 
     use super::*;
-    use crate::test_utils::{alice, bob, setup};
+    use crate::test_utils::{bob, rey_canisteryo, setup};
 
     #[test]
     fn test_should_insert_and_query_user() {
         setup();
 
-        let principal = Principal(alice());
+        let principal = Principal(rey_canisteryo());
         DBMS_CONTEXT.with(|ctx| {
             let db = WasmDbmsDatabase::oneshot(ctx, Schema);
             db.insert::<User>(UserInsertRequest {
                 principal: principal.clone(),
                 handle: "alice".into(),
                 canister_id: Nullable::Value(Principal(bob())),
+                canister_status: UserCanisterStatus::default(),
                 created_at: ic_utils::now().into(),
             })
             .expect("should insert user");
@@ -90,9 +98,10 @@ mod tests {
         DBMS_CONTEXT.with(|ctx| {
             let db = WasmDbmsDatabase::oneshot(ctx, Schema);
             db.insert::<User>(UserInsertRequest {
-                principal: Principal(alice()),
+                principal: Principal(rey_canisteryo()),
                 handle: "alice".into(),
                 canister_id: Nullable::Null,
+                canister_status: UserCanisterStatus::default(),
                 created_at: ic_utils::now().into(),
             })
             .expect("should insert first user");
@@ -101,6 +110,7 @@ mod tests {
                 principal: Principal(bob()),
                 handle: "alice".into(),
                 canister_id: Nullable::Null,
+                canister_status: UserCanisterStatus::default(),
                 created_at: ic_utils::now().into(),
             });
 
@@ -115,9 +125,10 @@ mod tests {
         DBMS_CONTEXT.with(|ctx| {
             let db = WasmDbmsDatabase::oneshot(ctx, Schema);
             let result = db.insert::<User>(UserInsertRequest {
-                principal: Principal(alice()),
+                principal: Principal(rey_canisteryo()),
                 handle: "INVALID!".into(),
                 canister_id: Nullable::Null,
+                canister_status: UserCanisterStatus::default(),
                 created_at: ic_utils::now().into(),
             });
 
@@ -132,9 +143,10 @@ mod tests {
         DBMS_CONTEXT.with(|ctx| {
             let db = WasmDbmsDatabase::oneshot(ctx, Schema);
             let result = db.insert::<User>(UserInsertRequest {
-                principal: Principal(alice()),
+                principal: Principal(rey_canisteryo()),
                 handle: "admin".into(),
                 canister_id: Nullable::Null,
+                canister_status: UserCanisterStatus::default(),
                 created_at: ic_utils::now().into(),
             });
 
@@ -149,9 +161,10 @@ mod tests {
         DBMS_CONTEXT.with(|ctx| {
             let db = WasmDbmsDatabase::oneshot(ctx, Schema);
             db.insert::<User>(UserInsertRequest {
-                principal: Principal(alice()),
+                principal: Principal(rey_canisteryo()),
                 handle: "  @Alice  ".into(),
                 canister_id: Nullable::Null,
+                canister_status: UserCanisterStatus::default(),
                 created_at: ic_utils::now().into(),
             })
             .expect("should insert user with sanitized handle");
@@ -179,9 +192,10 @@ mod tests {
         DBMS_CONTEXT.with(|ctx| {
             let db = WasmDbmsDatabase::oneshot(ctx, Schema);
             db.insert::<User>(UserInsertRequest {
-                principal: Principal(alice()),
+                principal: Principal(rey_canisteryo()),
                 handle: "alice".into(),
                 canister_id: Nullable::Null,
+                canister_status: UserCanisterStatus::default(),
                 created_at: ic_utils::now().into(),
             })
             .expect("should insert user with null canister_id");
@@ -191,7 +205,7 @@ mod tests {
                     Query::builder()
                         .and_where(Filter::eq(
                             "principal",
-                            wasm_dbms_api::prelude::Value::from(Principal(alice())),
+                            wasm_dbms_api::prelude::Value::from(Principal(rey_canisteryo())),
                         ))
                         .limit(1)
                         .build(),
@@ -210,13 +224,14 @@ mod tests {
     fn test_should_delete_user() {
         setup();
 
-        let principal = Principal(alice());
+        let principal = Principal(rey_canisteryo());
         DBMS_CONTEXT.with(|ctx| {
             let db = WasmDbmsDatabase::oneshot(ctx, Schema);
             db.insert::<User>(UserInsertRequest {
                 principal: principal.clone(),
                 handle: "alice".into(),
                 canister_id: Nullable::Null,
+                canister_status: UserCanisterStatus::default(),
                 created_at: ic_utils::now().into(),
             })
             .expect("should insert user");

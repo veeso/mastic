@@ -9,6 +9,7 @@ publish = false
 [dependencies]
 candid = { workspace = true }
 ic-cdk = { workspace = true }
+ic-cdk-timers = { workspace = true }
 
 [lib]
 name = "ic_utils"

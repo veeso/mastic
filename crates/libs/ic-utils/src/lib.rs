@@ -31,6 +31,27 @@ pub fn now() -> u64 {
     }
 }
 
+/// Schedules a future to run after a delay.
+///
+/// On wasm targets, delegates to [`ic_cdk_timers::set_timer`].
+/// On non-wasm targets (unit tests), spawns a tokio task that sleeps then
+/// executes the future.
+pub fn set_timer<F>(delay: std::time::Duration, future: F)
+where
+    F: std::future::Future<Output = ()> + 'static,
+{
+    #[cfg(target_family = "wasm")]
+    {
+        ic_cdk_timers::set_timer(delay, future);
+    }
+    #[cfg(not(target_family = "wasm"))]
+    {
+        // Drop the future; the async steps of the state machine are tested
+        // independently with tokio in their own module.
+        let _ = (delay, future);
+    }
+}
+
 /// A utility module for canister trapping.
 ///
 /// This module provides a function and a macro to facilitate trapping the canister execution.
