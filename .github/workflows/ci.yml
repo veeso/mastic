@@ -75,3 +75,25 @@ jobs:
       - name: test
         run: |
           just test_all
+
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-llvm-cov
+      - name: Run tests
+        run: |
+          cargo llvm-cov \
+            --no-fail-fast \
+            --workspace \
+            --lib \
+            --lcov \
+            --output-path lcov.info \
+            --ignore-filename-regex '.*(integration-tests).*' \
+            --exclude "integration-tests" \
+            --exclude-from-report "integration-tests"
+      - name: Coveralls
+        uses: coverallsapp/github-action@v2.3.6
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          file: lcov.info
+          # currently we only run one coverage report per build
+          parallel: false
