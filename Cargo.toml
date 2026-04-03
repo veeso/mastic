@@ -20,7 +20,11 @@ repository = "https://github.com/veeso/mastic"
 rust-version = "1.91.1"
 
 [workspace.dependencies]
+activitypub = { path = "crates/libs/activitypub" }
 candid = { version = "0.10", features = ["value"] }
+db-utils = { path = "crates/libs/db-utils" }
+did = { path = "crates/libs/did" }
+ic-utils = { path = "crates/libs/ic-utils" }
 candid_parser = "0.3"
 git2 = "0.20"
 ic-cdk = "0.20"

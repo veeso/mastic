@@ -80,7 +80,7 @@ Authorization is principal-based: User→UserCanister (owner principal), Federat
 - Edition 2024, resolver 3, minimum Rust version 1.90.0 (toolchain pinned to 1.93.0).
 - Target: `wasm32-unknown-unknown` for canisters.
 - Workspace dependencies defined in root `Cargo.toml` — crates reference them with `workspace = true`.
-- Key dependencies: `ic-cdk` 0.19, `candid` 0.10, `ic-stable-structures` 0.7, `pocket-ic` 12.
+- Key dependencies: `ic-cdk` 0.20, `candid` 0.10, `ic-stable-structures` 0.7, `pocket-ic` 12.
 
 ### Candid Interfaces
 
@@ -117,4 +117,4 @@ Requires: `dfx` >= 0.30.2, `ic-wasm`, `candid-extractor`, Rust nightly (for form
 
 ## After Making Changes to Rust Code
 
-Always run `just fmt_nightly` and `just clippy -- -D warnings` after making changes to Rust code.
+Always run `just fmt_nightly`, `just clippy -- -D warnings`, and `just build_all` after making changes to Rust code. The WASM build may catch errors that a native `cargo clippy` does not (e.g. ic-cdk API differences on `wasm32-unknown-unknown`).

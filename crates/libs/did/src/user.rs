@@ -237,12 +237,16 @@ pub struct PublishStatusArgs {
 }
 
 /// Error types for the `publish_status` method.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, CandidType, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, CandidType, Serialize, Deserialize)]
 pub enum PublishStatusError {
     /// The caller is not the canister owner.
     Unauthorized,
+    /// The content is empty or contains only whitespace.
+    ContentEmpty,
     /// The content exceeds the maximum allowed length.
     ContentTooLong,
+    /// Internal error occurred while publishing the status.
+    Internal(String),
 }
 
 /// Response type for the `publish_status` method.

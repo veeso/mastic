@@ -292,7 +292,7 @@ fn test_should_roundtrip_publish_status_args() {
 #[test]
 fn test_should_roundtrip_publish_status_response_ok() {
     let resp = PublishStatusResponse::Ok(crate::common::Status {
-        id: "test-id".to_string(),
+        id: 2,
         content: "Hello".to_string(),
         author: candid::Principal::anonymous(),
         created_at: 42,
@@ -307,6 +307,7 @@ fn test_should_roundtrip_publish_status_response_ok() {
 fn test_should_roundtrip_publish_status_response_err() {
     for error in [
         PublishStatusError::Unauthorized,
+        PublishStatusError::ContentEmpty,
         PublishStatusError::ContentTooLong,
     ] {
         let resp = PublishStatusResponse::Err(error);
@@ -505,7 +506,7 @@ fn test_should_roundtrip_read_feed_args() {
 fn test_should_roundtrip_read_feed_response_ok() {
     let resp = ReadFeedResponse::Ok(vec![crate::common::FeedItem {
         status: crate::common::Status {
-            id: "test-id".to_string(),
+            id: 2,
             content: "Hello".to_string(),
             author: candid::Principal::anonymous(),
             created_at: 42,

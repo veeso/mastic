@@ -8,23 +8,23 @@ description = "Mastic aims to bring the Fediverse natively onto the Internet Com
 publish = false
 
 [dependencies]
-activitypub = { path = "../../libs/activitypub" }
+activitypub = { workspace = true }
 candid = { workspace = true }
-db-utils = { path = "../../libs/db-utils" }
-did = { path = "../../libs/did" }
+db-utils = { workspace = true }
+did = { workspace = true }
 ic-cdk = { workspace = true }
 ic-cdk-macros = { workspace = true }
 ic-dbms-canister = { workspace = true }
 ic-management-canister-types = { workspace = true }
-ic-utils = { path = "../../libs/ic-utils" }
+ic-utils = { workspace = true }
 serde = { workspace = true }
+serde_json = { workspace = true }
 thiserror = { workspace = true }
 wasm-dbms = { workspace = true }
 wasm-dbms-api = { workspace = true }
 wasm-dbms-memory = { workspace = true }
 
 [dev-dependencies]
-serde_json = { workspace = true }
 tokio = { workspace = true }
 
 [lib]

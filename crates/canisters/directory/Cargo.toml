@@ -9,13 +9,13 @@ publish = false
 
 [dependencies]
 candid = { workspace = true }
-db-utils = { path = "../../libs/db-utils" }
-did = { path = "../../libs/did" }
+db-utils = { workspace = true }
+did = { workspace = true }
 ic-cdk = { workspace = true }
 ic-cdk-macros = { workspace = true }
 ic-dbms-canister = { workspace = true }
 ic-management-canister-types = { workspace = true }
-ic-utils = { path = "../../libs/ic-utils" }
+ic-utils = { workspace = true }
 serde = { workspace = true }
 thiserror = { workspace = true }
 wasm-dbms = { workspace = true }

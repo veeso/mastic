@@ -9,21 +9,24 @@ requiring a secondary index.
 
 A Mastic Snowflake ID is a `u64` with the following structure:
 
-| Bits  | Width | Field    | Description                                      |
-| ----- | ----- | -------- | ------------------------------------------------ |
+| Bits  | Width | Field     | Description                                      |
+| ----- | ----- | --------- | ------------------------------------------------ |
 | 63-16 | 48    | Timestamp | Milliseconds since the Mastic epoch              |
-| 15-0  | 16    | Sequence | Per-millisecond monotonic counter (0-65 535)     |
+| 15-0  | 16    | Sequence  | Per-millisecond monotonic counter (0-65 535)     |
 
 **Total**: 48 + 16 = 64 bits.
 
 ## Epoch
 
-The Mastic epoch is **2025-01-01T00:00:00Z** (Unix timestamp 1 735 689 600 000
-ms). Using a custom epoch extends the useful range of the 48-bit timestamp
-field.
+The Mastic epoch is **2026-01-01T00:00:00Z** (Unix timestamp 1 767 225 600 000
+ms).
 
 With 48 bits of millisecond precision the timestamp space covers approximately
-**8 919 years** from the epoch, which is more than sufficient.
+**8 919 years**, which is more than sufficient even when measured from the Unix
+epoch (1970). The custom Mastic epoch is therefore not strictly necessary for
+correctness, but subtracting it produces smaller numeric values in the early
+years of the platform, resulting in shorter IDs when serialised as decimal
+strings in URLs and JSON-LD payloads.
 
 ## Generation
 

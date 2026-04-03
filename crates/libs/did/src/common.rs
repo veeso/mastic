@@ -6,9 +6,6 @@ mod tests;
 use candid::CandidType;
 use serde::{Deserialize, Serialize};
 
-/// Representation of a UUID as a string. Used for representing `uuid` fields on candid.
-pub type Uuid = String;
-
 /// Controls the audience of a status post. Maps to ActivityPub addressing
 #[derive(
     Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, CandidType, Serialize, Deserialize,
@@ -38,7 +35,7 @@ pub struct UserProfile {
     pub avatar: Option<Vec<u8>>,
     /// Optional header image data for the user's profile. Can be empty if no header is set.
     pub header: Option<Vec<u8>>,
-    /// Timestamp (nanoseconds since epoch) of account creation.
+    /// Timestamp (milliseconds since epoch) of account creation.
     pub created_at: u64,
 }
 
@@ -46,13 +43,13 @@ pub struct UserProfile {
 /// author principal, creation timestamp, and visibility setting.
 #[derive(Debug, Clone, PartialEq, Eq, CandidType, Serialize, Deserialize)]
 pub struct Status {
-    /// Unique identifier for this status, assigned by the User Canister.
-    pub id: Uuid,
+    /// Unique identifier for this status, assigned by the User Canister. (Snowflake id)
+    pub id: u64,
     /// The text content of the status.
     pub content: String,
     /// The principal of the User Canister that authored this status.
     pub author: candid::Principal,
-    /// Timestamp (nanoseconds since epoch) of when the status was created.
+    /// Timestamp (milliseconds since epoch) of when the status was created.
     pub created_at: u64,
     /// The visibility setting of the status, controlling its audience.
     pub visibility: Visibility,

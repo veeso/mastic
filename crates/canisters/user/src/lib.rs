@@ -8,7 +8,7 @@ mod settings;
 #[cfg(test)]
 mod test_utils;
 
-use did::user::{GetProfileResponse, UserInstallArgs};
+use did::user::{GetProfileResponse, PublishStatusArgs, PublishStatusResponse, UserInstallArgs};
 
 #[ic_cdk::init]
 fn init(args: UserInstallArgs) {
@@ -28,6 +28,11 @@ fn inspect_message() {
 #[ic_cdk::query]
 fn get_profile() -> GetProfileResponse {
     api::get_profile()
+}
+
+#[ic_cdk::update]
+async fn publish_status(args: PublishStatusArgs) -> PublishStatusResponse {
+    api::publish_status(args).await
 }
 
 ic_cdk::export_candid!();
