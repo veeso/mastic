@@ -401,6 +401,28 @@ update\_profile : (*UpdateProfileArgs*) -> (*UpdateProfileResponse*)
 - The **Directory Canister** marks the user as suspended, preventing further API calls
 - The **Directory Canister** notifies the **User Canister**, which sends a *Delete* activity through the **Federation Canister** to notify remote followers that the account is no longer active
 
+### UC17: As a Controller, I should be able to upgrade all User Canisters
+
+- The **Controller** (deployer pre-SNS, SNS governance post-SNS) calls *upgrade\_user\_canisters* on the **Directory Canister** with the new WASM blob
+- The **Directory Canister** stores the WASM and starts a timer-based scheduler
+- The scheduler upgrades user canisters in batches, retrying failures up to 5 times
+- The **Controller** can query *get\_upgrade\_status* to monitor progress
+- Once all canisters are processed, the upgrade is marked as completed
+
+### UC18: As the System, sign-up spam should be prevented via a cycles fee
+
+- **Alice** calls *sign\_up* on the **Directory Canister**
+- The **Directory Canister** checks that Alice attached enough cycles to cover the canister creation fee plus initial cycles
+- If insufficient cycles are attached, the call is rejected with an *InsufficientCycles* error
+- If sufficient, the **Directory Canister** accepts the cycles and proceeds with the sign-up flow
+
+### UC19: As the System, action spam should be prevented via rate limiting
+
+- **Alice** performs mutating social actions on her **User Canister** (post, follow, like, boost, block, etc.)
+- The **User Canister** enforces a rate limit of 20 actions per minute using a sliding window
+- If Alice exceeds the limit, the call is rejected with a *RateLimitExceeded* error
+- The rate limit resets on canister upgrade
+
 ## Milestones
 
 These are the milestones we plan to achieve during the first year of Mastic's development cycle.
@@ -442,6 +464,9 @@ These stories must be implemented during this phase:
 - UC11
 - UC15
 - UC16
+- UC17
+- UC18
+- UC19
 
 ### Milestone 2 - Frontend
 

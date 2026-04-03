@@ -8,7 +8,7 @@ delete), status interactions (like, boost, delete), user search, and
 moderation. After this milestone, Mastic is a fully usable social network
 within a single node, ready for Fediverse integration.
 
-**User Stories:** UC3, UC4, UC6, UC8, UC10, UC11, UC15, UC16
+**User Stories:** UC3, UC4, UC6, UC8, UC10, UC11, UC15, UC16, UC17, UC18, UC19
 
 **Prerequisites:** Milestone 0 completed.
 
@@ -306,6 +306,112 @@ Directory Canister.
 - Integration test: Alice blocks Bob, verify follow removed and activities
   dropped
 
+### WI-1.12: Implement Directory Canister - upgrade user canisters (UC17)
+
+**Description:** Implement a controller-only method to batch-upgrade all User
+Canister WASMs via a timer-based state machine.
+
+**What should be done:**
+
+- Implement `upgrade_user_canisters(UpgradeUserCanistersArgs)`:
+  - Authorize the caller (must be a controller via `ic_cdk::api::is_controller`)
+  - Reject if an upgrade is already in progress
+  - Store the provided WASM blob
+  - Build an upgrade queue containing all registered user canister IDs
+  - Start a recurring timer that processes canisters in batches (5-10 per
+    tick)
+- Implement the upgrade state machine (mirrors sign-up flow pattern):
+  - Per-canister states: `Pending`, `Upgrading`, `Completed`,
+    `Failed(attempts)`, `PermanentlyFailed`
+  - On each tick: pick next batch of `Pending` or `Failed(n < 5)` canisters,
+    call `install_code` (mode: upgrade) via the management canister
+  - On success: mark `Completed`
+  - On failure: increment attempt counter; if attempts >= 5, mark
+    `PermanentlyFailed`
+  - When all canisters are processed, stop the timer and mark the batch as
+    completed
+- Implement `get_upgrade_status()` query:
+  - Return `UpgradeStatus` with: total count, completed count, failed count,
+    permanently failed count, and whether an upgrade is in progress
+- Define `UpgradeUserCanistersArgs`, `UpgradeUserCanistersResponse`,
+  `UpgradeStatus` in the `did` crate
+
+**Acceptance Criteria:**
+
+- Only the controller can call `upgrade_user_canisters`
+- Concurrent upgrade requests are rejected
+- Canisters are upgraded in batches without hitting instruction limits
+- Failed canisters are retried up to 5 times
+- After 5 failures a canister is marked as permanently failed and skipped
+- `get_upgrade_status` accurately reports progress
+- Integration test: deploy user canisters, trigger upgrade with new WASM,
+  verify all canisters run the new version
+
+### WI-1.13: Implement Directory Canister - sign-up fee (UC18)
+
+**Description:** Require callers to attach cycles when signing up to cover
+the cost of User Canister creation, preventing spam account creation.
+
+**What should be done:**
+
+- Modify the existing `sign_up` flow in the Directory Canister:
+  - Before any processing, check `ic_cdk::api::call::msg_cycles_available()`
+    against the required fee (canister creation fee + initial cycles, both
+    existing constants)
+  - If insufficient: reject with `InsufficientCycles { required, provided }`
+    error
+  - If sufficient: accept cycles via `msg_cycles_accept()` and proceed with
+    the existing sign-up flow, forwarding cycles to the management canister
+    for canister creation
+- Add `InsufficientCycles` variant to the sign-up error type in the `did`
+  crate
+- Update existing sign-up integration tests to attach the required cycles
+
+**Acceptance Criteria:**
+
+- Sign-up without cycles is rejected with a clear error showing required
+  amount
+- Sign-up with insufficient cycles is rejected
+- Sign-up with exact or excess cycles succeeds
+- Accepted cycles are forwarded to the management canister for User Canister
+  creation
+- Existing sign-up tests are updated and pass
+- Integration test: attempt sign-up without cycles, verify rejection; sign up
+  with cycles, verify success
+
+### WI-1.14: Implement User Canister - action rate limiting (UC19)
+
+**Description:** Enforce a per-user rate limit on mutating social actions to
+prevent action spam.
+
+**What should be done:**
+
+- Implement a rate limiter module in the User Canister:
+  - Circular buffer of 20 timestamps stored in heap memory
+  - On each rate-limited call: check if the oldest entry is less than 60
+    seconds ago
+  - If yes: reject with `RateLimitExceeded` error
+  - If no: record the current timestamp and proceed
+- Apply the rate limiter at the top of these methods:
+  - `post_status`, `delete_status`
+  - `follow_user`, `unfollow_user`
+  - `like_status`, `undo_like`
+  - `boost_status`, `undo_boost`
+  - `block_user`
+- Add `RateLimitExceeded` variant to the relevant error types in the `did`
+  crate
+- Constants: 20 actions per 60-second window (compile-time)
+
+**Acceptance Criteria:**
+
+- Actions within the limit succeed normally
+- The 21st action within 60 seconds is rejected with `RateLimitExceeded`
+- After 60 seconds the window slides and actions succeed again
+- Rate limit state resets on canister upgrade (heap-only)
+- All rate-limited methods enforce the check
+- Unit test: simulate rapid actions, verify rejection at threshold
+- Integration test: call 20 actions in quick succession, verify 21st fails
+
 ### WI-1.11: Integration tests for Milestone 1 flows
 
 **Description:** Write end-to-end integration tests for all Milestone 1 user
@@ -323,6 +429,12 @@ stories.
 - **Test UC15 (Delete Status):** Publish and delete status, verify removal
 - **Test UC16 (Moderation):** Add moderator, suspend user, verify lockout
 - **Test Block:** Block user, verify follow removal and activity filtering
+- **Test UC17 (Upgrade):** Deploy user canisters, trigger WASM upgrade,
+  verify all run new version
+- **Test UC18 (Sign-up Fee):** Attempt sign-up without cycles, verify
+  rejection; sign up with cycles, verify success
+- **Test UC19 (Rate Limit):** Perform 20 rapid actions, verify 21st is
+  rejected
 
 **Acceptance Criteria:**
 
