@@ -91,6 +91,7 @@ jobs:
             --exclude "integration-tests" \
             --exclude-from-report "integration-tests"
       - name: Coveralls
+        continue-on-error: true
         uses: coverallsapp/github-action@v2.3.6
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
