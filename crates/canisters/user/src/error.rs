@@ -8,6 +8,9 @@ pub enum CanisterError {
     #[error("Schnorr call failed: {0}")]
     #[allow(dead_code, reason = "will be used by upcoming canister methods")]
     SchnorrCall(String),
+    /// Database error
+    #[error("Database error: {0}")]
+    Database(#[from] wasm_dbms_api::prelude::DbmsError),
     /// Settings error.
     #[error("Settings error: {0}")]
     Settings(#[from] db_utils::settings::SettingsError),

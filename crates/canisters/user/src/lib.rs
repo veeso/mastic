@@ -8,7 +8,7 @@ mod settings;
 #[cfg(test)]
 mod test_utils;
 
-use did::user::UserInstallArgs;
+use did::user::{GetProfileResponse, UserInstallArgs};
 
 #[ic_cdk::init]
 fn init(args: UserInstallArgs) {
@@ -23,6 +23,11 @@ fn post_upgrade(args: UserInstallArgs) {
 #[ic_cdk::inspect_message]
 fn inspect_message() {
     inspect::inspect();
+}
+
+#[ic_cdk::query]
+fn get_profile() -> GetProfileResponse {
+    api::get_profile()
 }
 
 ic_cdk::export_candid!();

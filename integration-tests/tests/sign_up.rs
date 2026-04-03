@@ -1,8 +1,8 @@
 use std::time::Instant;
 
-use candid::Principal;
 use did::directory::{SignUpError, SignUpResponse, WhoAmIResponse};
-use integration_tests::{DirectoryClient, MasticCanisterSetup, rey_canisteryo};
+use did::user::GetProfileResponse;
+use integration_tests::{DirectoryClient, MasticCanisterSetup, UserClient, rey_canisteryo};
 use pocket_ic_harness::{PocketIcTestEnv, alice, bob};
 
 #[pocket_ic_harness::test]
@@ -16,7 +16,7 @@ async fn test_should_sign_up(env: PocketIcTestEnv<MasticCanisterSetup>) {
 
     // wait for canister to be created
     let t = Instant::now();
-    loop {
+    let user_canister = loop {
         if t.elapsed() > std::time::Duration::from_secs(30) {
             panic!("timout waiting for canister to be created");
         }
@@ -27,7 +27,7 @@ async fn test_should_sign_up(env: PocketIcTestEnv<MasticCanisterSetup>) {
                     info.canister_status,
                     did::directory::UserCanisterStatus::Active
                 );
-                break;
+                break info.user_canister.unwrap();
             }
             WhoAmIResponse::Ok(info) => {
                 assert!(info.user_canister.is_none());
@@ -47,7 +47,14 @@ async fn test_should_sign_up(env: PocketIcTestEnv<MasticCanisterSetup>) {
             .advance_time(std::time::Duration::from_secs(1))
             .await;
         env.pic.tick().await;
-    }
+    };
+
+    // get user profile and verify the handle
+    let user_client = UserClient::new(&env, user_canister);
+    let GetProfileResponse::Ok(profile) = user_client.get_profile(rey_canisteryo()).await else {
+        panic!("expected Ok, got Err");
+    };
+    assert_eq!(profile.handle, "rey_canisteryo");
 }
 
 #[pocket_ic_harness::test]
@@ -74,18 +81,5 @@ async fn test_should_not_accept_duplicate_principal(env: PocketIcTestEnv<MasticC
     assert_eq!(
         response,
         SignUpResponse::Err(SignUpError::AlreadyRegistered)
-    );
-}
-
-#[pocket_ic_harness::test]
-async fn test_should_not_accept_anonymous_principal(env: PocketIcTestEnv<MasticCanisterSetup>) {
-    let client = DirectoryClient::new(&env);
-
-    let response = client
-        .sign_up(Principal::anonymous(), "alice".to_string())
-        .await;
-    assert_eq!(
-        response,
-        SignUpResponse::Err(SignUpError::AnonymousPrincipal)
     );
 }

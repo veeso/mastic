@@ -17,16 +17,20 @@ pub enum UserInstallArgs {
         owner: candid::Principal,
         /// Principal of the Federation Canister used for outbound ActivityPub delivery.
         federation_canister: candid::Principal,
+        /// User handle
+        handle: String,
     },
     /// Upgrade argument, provided on `upgrade`.
     Upgrade {},
 }
 
 /// Error types for the `get_profile` method.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, CandidType, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, CandidType, Serialize, Deserialize)]
 pub enum GetProfileError {
     /// The profile has not been initialized yet.
     NotFound,
+    /// Internal error occurred while fetching the profile.
+    Internal(String),
 }
 
 /// Response type for the `get_profile` method.

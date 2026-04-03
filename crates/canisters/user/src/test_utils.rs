@@ -23,5 +23,6 @@ pub fn setup() {
     crate::api::init(UserInstallArgs::Init {
         owner: admin(),
         federation_canister: federation(),
+        handle: "rey_canisteryo".to_string(),
     });
 }

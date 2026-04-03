@@ -7,6 +7,7 @@ fn test_should_roundtrip_user_install_args_init() {
     let args = UserInstallArgs::Init {
         owner: candid::Principal::anonymous(),
         federation_canister: candid::Principal::anonymous(),
+        handle: "rey_canisteryo".to_string(),
     };
     let bytes = Encode!(&args).unwrap();
     let decoded = Decode!(&bytes, UserInstallArgs).unwrap();
@@ -27,7 +28,8 @@ fn test_should_roundtrip_get_profile_response_ok() {
         handle: "alice".to_string(),
         display_name: Some("Alice".to_string()),
         bio: Some("Hello".to_string()),
-        avatar_url: None,
+        avatar: None,
+        header: None,
         created_at: 1_000_000_000,
     });
     let bytes = Encode!(&resp).unwrap();

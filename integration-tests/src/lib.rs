@@ -1,4 +1,5 @@
 mod directory_client;
+mod user_client;
 
 use std::path::Path;
 
@@ -9,6 +10,7 @@ use did::user::UserInstallArgs;
 use pocket_ic_harness::{Canister, CanisterSetup, PocketIcTestEnv, alice};
 
 pub use self::directory_client::DirectoryClient;
+pub use self::user_client::UserClient;
 
 pub fn rey_canisteryo() -> Principal {
     Principal::from_text("duo63-t5gbk-nptmp-gq7dy-saoed-ni2jl-5uuzr-ikrjk-o6vhp-2c3p5-pqe")
@@ -68,7 +70,8 @@ impl CanisterSetup for MasticCanisterSetup {
         // install a user canister with the Federation canister's ID as an argument
         let user_init_args = Encode!(&UserInstallArgs::Init {
             owner: rey_canisteryo(),
-            federation_canister
+            federation_canister,
+            handle: "rey_canisteryo".to_string(),
         })
         .expect("Failed to encode user init args");
         env.install_canister(MasticCanister::User, user_init_args)

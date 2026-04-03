@@ -1,6 +1,6 @@
 //! Canister API
 
-use did::user::UserInstallArgs;
+use did::user::{GetProfileResponse, UserInstallArgs};
 use ic_dbms_canister::prelude::DBMS_CONTEXT;
 
 /// Initializes the canister with the given arguments.
@@ -10,6 +10,7 @@ pub fn init(args: UserInstallArgs) {
     let UserInstallArgs::Init {
         owner,
         federation_canister,
+        handle,
     } = args
     else {
         ic_utils::trap!("Invalid initialization arguments");
@@ -35,6 +36,12 @@ pub fn init(args: UserInstallArgs) {
         ic_utils::trap!("Failed to set federation canister: {:?}", err);
     }
 
+    // init profile
+    ic_utils::log!("Creating user profile with handle {handle}");
+    if let Err(err) = crate::domain::profile::create_profile(owner, &handle) {
+        ic_utils::trap!("Failed to create user profile: {:?}", err);
+    }
+
     ic_utils::log!("User canister initialized successfully for owner {owner}");
 }
 
@@ -47,6 +54,11 @@ pub fn post_upgrade(args: UserInstallArgs) {
     };
 
     ic_utils::log!("User canister post-upgrade completed successfully");
+}
+
+/// Gets the user profile.
+pub fn get_profile() -> GetProfileResponse {
+    crate::domain::profile::get_profile()
 }
 
 #[cfg(test)]
@@ -88,6 +100,23 @@ mod tests {
         post_upgrade(UserInstallArgs::Init {
             owner: admin(),
             federation_canister: federation(),
+            handle: "rey_canisteryo".to_string(),
         });
+    }
+
+    #[test]
+    fn test_should_init_canister_with_profile() {
+        setup();
+
+        let response = get_profile();
+
+        let GetProfileResponse::Ok(profile) = response else {
+            panic!("expected Ok, got {response:?}");
+        };
+        assert_eq!(profile.handle, "rey_canisteryo");
+        assert!(profile.display_name.is_none());
+        assert!(profile.bio.is_none());
+        assert!(profile.avatar.is_none());
+        assert!(profile.header.is_none());
     }
 }
