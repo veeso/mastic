@@ -8,7 +8,8 @@ delete), status interactions (like, boost, delete), user search, and
 moderation. After this milestone, Mastic is a fully usable social network
 within a single node, ready for Fediverse integration.
 
-**User Stories:** UC3, UC4, UC6, UC8, UC10, UC11, UC15, UC16, UC17, UC18, UC19
+**User Stories:** UC3, UC4, UC6, UC8, UC10, UC11, UC15, UC16, UC17, UC18, UC19,
+UC20, UC21
 
 **Prerequisites:** Milestone 0 completed.
 
@@ -29,6 +30,11 @@ deletion tracking.
     0) columns to the `statuses` table
   - Add `is_boost` (INTEGER DEFAULT 0) and `original_status_uri` (TEXT)
     columns to the `inbox` table for boost tracking
+  - `media` table: `id` (TEXT PK), `status_id` (TEXT NOT NULL, FK →
+    statuses.id), `media_type` (TEXT NOT NULL), `description` (TEXT),
+    `blurhash` (TEXT), `data` (BLOB NOT NULL), `created_at` (INTEGER NOT
+    NULL)
+  - Add index on `media.status_id`
 - **Directory Canister schema additions:**
   - `tombstones` table: `handle` (TEXT PK), `deleted_at` (INTEGER NOT NULL),
     `expires_at` (INTEGER NOT NULL)
@@ -412,6 +418,91 @@ prevent action spam.
 - Unit test: simulate rapid actions, verify rejection at threshold
 - Integration test: call 20 actions in quick succession, verify 21st fails
 
+### WI-1.15: Implement User Canister - reply to status (UC20)
+
+**Description:** Allow a user to reply to an existing status, creating a
+thread. This is essential for meaningful social interaction and for Fediverse
+compatibility (M3), where remote instances expect `inReplyTo` on `Note`
+objects.
+
+**What should be done:**
+
+- Extend `PublishStatusArgs` in the `did` crate:
+  - Add `in_reply_to` field (optional status URI string)
+- Extend the `Status` type in the `did` crate:
+  - Add `in_reply_to` field (optional status URI string)
+- Extend the `statuses` database table:
+  - Add `in_reply_to_uri` column (TEXT, nullable)
+  - Add index on `in_reply_to_uri` for thread lookups
+- Update `publish_status` in the User Canister:
+  - If `in_reply_to` is provided, validate the URI format
+  - Store the `in_reply_to_uri` in the statuses table
+  - Include `inReplyTo` in the `Create(Note)` activity sent via the
+    Federation Canister
+  - Send the activity to both the original author and the caller's followers
+- Implement `get_thread(GetThreadArgs)` query:
+  - Accept a status ID
+  - Return the status and all replies (statuses where `in_reply_to_uri`
+    matches), sorted chronologically
+  - Support pagination
+- Update `receive_activity` handler for `Create(Note)`:
+  - Parse and store the `inReplyTo` field from incoming notes
+- Define `GetThreadArgs`, `GetThreadResponse` in the `did` crate
+
+**Acceptance Criteria:**
+
+- A reply status is created with a valid `in_reply_to` reference
+- The reply appears in the author's outbox and followers' inboxes
+- The original status author receives the reply in their inbox
+- `get_thread` returns the original status and all its replies in order
+- Replying to a non-existent status URI still succeeds (the URI is stored
+  as-is for federation compatibility)
+- The `Create(Note)` activity includes the `inReplyTo` field
+- Incoming `Create(Note)` activities with `inReplyTo` are stored correctly
+
+### WI-1.16: Implement User Canister - media attachments (UC21)
+
+**Description:** Allow users to attach media files (images, video, audio) to
+statuses. Media is stored as blobs in the User Canister's `media` table,
+linked to a status via foreign key.
+
+**What should be done:**
+
+- Define types in the `did` crate:
+  - `MediaAttachment`: id, media_type, description (alt text), blurhash
+  - Add `media` field (Vec of media bytes + metadata) to `PublishStatusArgs`
+  - Add `media` field (Vec of `MediaAttachment`) to `Status`
+- Update `publish_status` in the User Canister:
+  - For each attachment: generate an ID, store the blob and metadata in the
+    `media` table with the status ID as foreign key
+  - Include attachment metadata in the `Create(Note)` activity (as
+    ActivityPub `Attachment` objects with media type, name/description, and
+    a URL pointing to the media retrieval endpoint)
+- Implement `get_media(GetMediaArgs)` query:
+  - Accept a media ID
+  - Return the raw media blob and its content type
+  - Allow any caller (public query, needed for federation)
+- Implement `get_status_media(GetStatusMediaArgs)` query:
+  - Accept a status ID
+  - Return the list of `MediaAttachment` metadata for that status
+- Update `receive_activity` handler for `Create(Note)`:
+  - Parse attachment metadata from incoming notes and store references
+    (remote media is referenced by URL, not downloaded)
+- Define `GetMediaArgs`, `GetMediaResponse`, `GetStatusMediaArgs`,
+  `GetStatusMediaResponse` in the `did` crate
+- When a status is deleted (`delete_status`), cascade-delete its media rows
+
+**Acceptance Criteria:**
+
+- A status can be published with one or more media attachments
+- Media blobs are stored in the `media` table linked to the status
+- `get_media` returns the correct blob and content type
+- `get_status_media` returns metadata for all attachments on a status
+- The `Create(Note)` activity includes attachment objects
+- Deleting a status also deletes its associated media
+- Incoming notes with attachments store the remote attachment metadata
+- A status without attachments works as before (no regression)
+
 ### WI-1.11: Integration tests for Milestone 1 flows
 
 **Description:** Write end-to-end integration tests for all Milestone 1 user
@@ -435,6 +526,13 @@ stories.
   rejection; sign up with cycles, verify success
 - **Test UC19 (Rate Limit):** Perform 20 rapid actions, verify 21st is
   rejected
+- **Test UC20 (Reply):** Alice publishes a status, Bob replies, verify
+  reply has `in_reply_to` set, verify `get_thread` returns both statuses in
+  order, verify Alice receives the reply in her inbox
+- **Test UC21 (Media):** Alice publishes a status with a media attachment,
+  verify `get_status_media` returns the attachment metadata, verify
+  `get_media` returns the blob, delete the status and verify the media is
+  also deleted
 
 **Acceptance Criteria:**
 

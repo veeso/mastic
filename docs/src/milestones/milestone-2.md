@@ -10,7 +10,7 @@ After this milestone, users can interact with the Mastic node entirely through
 a browser.
 
 **User Stories:** UC1, UC2, UC3, UC4, UC5, UC6, UC7, UC8, UC9, UC10, UC11,
-UC12, UC15, UC16
+UC12, UC15, UC16, UC20, UC21
 
 **Prerequisites:** Milestone 1 completed.
 
@@ -206,3 +206,54 @@ command workflow and CI pipeline.
 - The deployed frontend is accessible at the asset canister URL
 - CI can build and deploy the frontend
 - Frontend unit tests run via `just test_frontend`
+
+### WI-2.8: Frontend end-to-end tests
+
+**Description:** Write end-to-end tests that exercise the full user journey
+through the frontend against real canisters deployed on a local dfx replica.
+
+**What should be done:**
+
+- Set up a Playwright (or Cypress) test harness:
+  - Install test dependencies and configure the test runner
+  - Add `just test_frontend_e2e` command
+  - Tests start a local dfx replica, deploy all canisters, and run against
+    the deployed frontend
+- Implement e2e test flows:
+  - **Sign-up & sign-in:** Navigate to sign-up page, create account with a
+    handle, verify redirect to home feed
+  - **Publish status:** Compose and publish a text status, verify it appears
+    in the feed
+  - **View profile:** Navigate to own profile, verify handle, display name,
+    and status list are shown
+  - **Update profile:** Edit display name and bio, verify changes persist
+    after reload
+  - **Follow user:** Navigate to another user's profile, click follow,
+    verify follower count updates and statuses appear in feed
+  - **Unfollow user:** Unfollow a followed user, verify follower count
+    decreases
+  - **Like & boost:** Like and boost a status, verify count updates; undo
+    both, verify counts revert
+  - **Reply to status:** Reply to a status, verify the reply appears in the
+    thread view
+  - **Media attachment:** Publish a status with an image attachment, verify
+    it renders in the feed
+  - **Search:** Search for a user by handle prefix, verify results link to
+    the correct profile
+  - **Delete status:** Delete own status, verify it disappears from feed
+  - **Delete account:** Delete account, verify redirect to landing page and
+    sign-in fails
+  - **Moderation (moderator role):** As a moderator, delete another user's
+    status and suspend a user, verify the actions take effect
+  - **Block user:** Block a user, verify their content is hidden
+- CI integration: add e2e tests to the CI pipeline (may run as a separate
+  job due to replica startup time)
+
+**Acceptance Criteria:**
+
+- All e2e test flows pass against a local dfx replica
+- Tests run via `just test_frontend_e2e`
+- Tests are independent and idempotent (each test sets up its own state)
+- CI runs e2e tests (or they can be triggered manually)
+- Tests cover both happy paths and key error cases (e.g., duplicate handle
+  on sign-up)

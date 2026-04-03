@@ -319,8 +319,9 @@ WI-0.10).
 
 ### WI-0.8: Implement User Canister - follow user
 
-**Description:** Implement the `follow_user`, `accept_follow`, and
-`reject_follow` methods for managing follow relationships.
+**Description:** Implement follow management methods (`follow_user`,
+`accept_follow`, `reject_follow`), follower/following queries
+(`get_followers`, `get_following`), and the `receive_activity` inbox handler.
 
 **What should be done:**
 
@@ -337,21 +338,34 @@ WI-0.10).
   - Called by the Federation Canister when the target rejects
   - Remove the pending follow request
   - Send a `Reject(Follow)` activity back via the Federation Canister
+- Implement `get_followers(GetFollowersArgs)` query:
+  - Allow any caller (public query)
+  - Return paginated list of followers from the followers table
+  - Support cursor-based or offset-based pagination
+- Implement `get_following(GetFollowingArgs)` query:
+  - Allow any caller (public query)
+  - Return paginated list of followed actors from the following table
+  - Support cursor-based or offset-based pagination
 - Implement `receive_activity(ReceiveActivityArgs)`:
   - Authorize the caller (federation canister only)
   - Handle incoming `Follow` activities: auto-accept (for M0) and add to
     followers
   - Handle incoming `Accept(Follow)`: add to following list
+  - Handle incoming `Reject(Follow)`: remove pending follow request from
+    following list
   - Handle incoming `Create(Note)`: store in inbox
 
 **Acceptance Criteria:**
 
 - `follow_user` sends a Follow activity and records a pending request
 - When an Accept is received, the target is added to the following list
+- When a Reject is received, the pending request is removed from the
+  following list
 - When a Follow is received, the requester is added to the followers list
-- `get_followers` returns the correct follower list
-- `get_following` returns the correct following list
+- `get_followers` returns the correct paginated follower list
+- `get_following` returns the correct paginated following list
 - Only the Federation Canister can call `receive_activity`
+- Only the owner can call `follow_user`
 
 ### WI-0.9: Implement User Canister - read feed
 
@@ -368,6 +382,12 @@ inbox and outbox into a chronological, paginated feed.
   - Apply pagination (cursor-based or offset-based as defined in
     `ReadFeedArgs`)
   - Return `ReadFeedResponse` with the page of `FeedItem` records
+- Visibility filtering in `read_feed`:
+  - `Public` and `Unlisted` inbox items: always shown
+  - `FollowersOnly` inbox items: shown (the user is a follower by
+    definition, since the item is in their inbox)
+  - `Direct` inbox items: only shown if the owner is in the `to`/`cc` list
+    (mentioned)
 
 **Acceptance Criteria:**
 
@@ -377,6 +397,38 @@ inbox and outbox into a chronological, paginated feed.
   cursor/offset for the next page)
 - An empty feed returns an empty list (no error)
 - Only the owner can read their own feed
+- Direct messages only appear for mentioned recipients
+
+### WI-0.9-2: Implement User Canister - get statuses (public outbox)
+
+**Description:** Implement a public query to retrieve a user's published
+statuses, with visibility filtering. This is the read-side complement to
+`publish_status` and is needed for profile views and federation outbox
+collections.
+
+**What should be done:**
+
+- Implement `get_statuses(GetStatusesArgs)` query:
+  - Allow any caller (public query)
+  - Return paginated statuses from the `statuses` table, sorted by
+    timestamp descending
+  - Apply visibility filtering based on the caller's relationship to the
+    owner:
+    - Owner: see all statuses (including `Direct` and `FollowersOnly`)
+    - Follower: see `Public`, `Unlisted`, and `FollowersOnly` statuses
+    - Anyone else: see only `Public` and `Unlisted` statuses
+    - `Direct` statuses are never returned via this endpoint (they are
+      only visible in `read_feed` for mentioned users)
+  - Support cursor-based or offset-based pagination
+- Define `GetStatusesArgs` and `GetStatusesResponse` in the `did` crate
+
+**Acceptance Criteria:**
+
+- Any caller can query a user's public statuses
+- Followers see `FollowersOnly` statuses; non-followers do not
+- `Direct` statuses are excluded for all callers except the owner
+- Pagination works correctly
+- Results are sorted by timestamp descending
 
 ### WI-0.10: Implement Federation Canister - activity routing
 
@@ -396,6 +448,12 @@ Canister. Remote HTTP delivery is out of scope for Milestone 0.
 - Implement `send_activity(SendActivityArgs)`:
   - Authorize the caller (must be a registered User Canister)
   - Parse the activity to determine the target actor(s)
+  - Apply visibility-aware delivery rules:
+    - `Public` / `Unlisted`: deliver to all specified targets
+    - `FollowersOnly`: deliver only to the sender's followers (ignore
+      non-follower targets)
+    - `Direct`: deliver only to explicitly mentioned actors (from the
+      activity's `to`/`cc` fields)
   - For local targets: resolve the target User Canister via the Directory
     Canister, then call `receive_activity` on it
   - For remote targets: log/skip (federation is Milestone 2)
@@ -407,6 +465,8 @@ Canister. Remote HTTP delivery is out of scope for Milestone 0.
 - Local activities are correctly routed to the target User Canister
 - The Federation Canister resolves local handles via the Directory Canister
 - Remote targets are gracefully skipped (no crash)
+- `FollowersOnly` activities are only delivered to followers
+- `Direct` activities are only delivered to mentioned actors
 - Integration test: Alice follows Bob (both local), Bob sees Alice in
   followers
 
@@ -429,10 +489,13 @@ exercise the complete Milestone 0 user flows.
   author's outbox and is delivered to followers' inboxes
 - **Test UC12 (Read Feed):** Publish multiple statuses from different users,
   verify the feed is correctly aggregated and paginated
+- **Test Get Statuses:** Alice publishes public and followers-only statuses,
+  Bob (follower) calls `get_statuses` and sees both, Charlie (non-follower)
+  calls `get_statuses` and sees only public statuses
 
 **Acceptance Criteria:**
 
-- All six user story flows pass as integration tests
+- All user story flows pass as integration tests
 - Tests run in CI via `just integration_test`
 - Tests use pocket-ic with realistic canister deployment
 - Each test is independent and can run in isolation

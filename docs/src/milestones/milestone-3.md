@@ -226,6 +226,11 @@ HTTP POST requests.
   remote actor:
   - Resolve the remote actor's inbox URL (fetch actor profile if not cached)
   - Serialize the activity as JSON-LD
+  - Set ActivityPub `to`/`cc` addressing based on visibility:
+    - `Public`: `to: [as:Public]`, `cc: [followers collection]`
+    - `Unlisted`: `to: [followers collection]`, `cc: [as:Public]`
+    - `FollowersOnly`: `to: [followers collection]`, no `as:Public`
+    - `Direct`: `to: [mentioned actors only]`, no `cc`
   - Sign the request using the sender's RSA key (WI-3.5)
   - Send the HTTP POST via `ic_cdk::api::management_canister::http_request`
   - Handle retries for transient failures (e.g., 5xx responses)
@@ -240,6 +245,7 @@ HTTP POST requests.
 - Transient failures are retried (up to a configurable limit)
 - Permanent failures (4xx) are not retried
 - The caller is not blocked by slow remote deliveries
+- `to`/`cc` fields correctly reflect the status visibility level
 
 ### WI-3.9: Implement remote actor resolution and caching
 

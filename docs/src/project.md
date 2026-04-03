@@ -423,6 +423,26 @@ update\_profile : (*UpdateProfileArgs*) -> (*UpdateProfileResponse*)
 - If Alice exceeds the limit, the call is rejected with a *RateLimitExceeded* error
 - The rate limit resets on canister upgrade
 
+### UC20: As a User, I should be able to reply to a Status
+
+- **Alice** views a **Status** in her feed or on another user's profile
+- Alice composes a reply, specifying the status she is replying to
+- The **User Canister** creates a new status with an `in_reply_to` reference to the original
+- A `Create(Note)` activity with `inReplyTo` is sent to the Federation Canister
+- The original author and Alice's followers receive the reply in their inboxes
+- Anyone viewing the original status can see the reply thread
+
+### UC21: As a User, I should be able to attach media to a Status
+
+- **Alice** composes a new status and attaches one or more media files
+  (images, videos, or audio)
+- The **User Canister** stores each media file as a blob in the `media`
+  table, linked to the status via a foreign key
+- The status is published with attachment metadata (media type, description,
+  blurhash)
+- Followers receive the status with attachment references in their inboxes
+- Anyone viewing the status can retrieve the attached media
+
 ## Milestones
 
 These are the milestones we plan to achieve during the first year of Mastic's development cycle.
@@ -467,6 +487,8 @@ These stories must be implemented during this phase:
 - UC17
 - UC18
 - UC19
+- UC20
+- UC21
 
 ### Milestone 2 - Frontend
 
@@ -491,6 +513,8 @@ These stories must be implemented during this phase:
 - UC12
 - UC15
 - UC16
+- UC20
+- UC21
 
 ### Milestone 3 - Integrating the Fediverse
 
