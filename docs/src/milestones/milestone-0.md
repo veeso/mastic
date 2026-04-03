@@ -287,29 +287,35 @@ Ed25519 signing via IC threshold Schnorr, and profile query method.
 
 ### WI-0.7: Implement User Canister - publish status
 
-**Description:** Implement the `publish_status` method, which stores a status
-in the user's outbox and sends Create activities to followers via the
-Federation Canister.
+**Description:** Implement the `publish_status` method on the User Canister,
+which stores a status in the user's outbox (`statuses` table) and sends Create
+activities to followers via the Federation Canister. Also expose `send_activity`
+on the Federation Canister as a no-op stub (actual routing logic comes in
+WI-0.10).
 
 **What should be done:**
 
-- Define status storage: a collection of `Status` records in the `statuses`
-  table, keyed by a unique status ID (e.g., ULID or timestamp-based)
-- Implement `publish_status(PublishStatusArgs)`:
+- **Federation Canister:** expose
+  `send_activity(SendActivityArgs) -> SendActivityResponse` as a no-op — accept
+  the call, return success, do nothing (actual routing is WI-0.10)
+- **User Canister:** implement `publish_status(PublishStatusArgs)`:
   - Authorize the caller (owner only)
-  - Create a `Status` record with unique ID, content, timestamp, visibility
-  - Store the status in the outbox
-  - For each follower, build a `Create(Note)` activity
-  - Send activities to the Federation Canister via `send_activity`
-- Return `PublishStatusResponse` with the new status ID
+  - Generate a Snowflake ID for the status
+  - Create and insert a `Status` record (id, content, visibility, created\_at)
+    into the `statuses` table
+  - Query the `followers` table
+  - For each follower, build a `Create(Note)` activity and call
+    `send_activity` on the Federation Canister
+  - Return `PublishStatusResponse` with the new status ID
 
 **Acceptance Criteria:**
 
 - Only the owner can publish a status
-- The status is stored in the outbox with a unique ID
-- A `Create(Note)` activity is sent for each follower
+- The status is stored in the `statuses` table with a unique Snowflake ID
+- A `Create(Note)` activity is sent for each follower via `send_activity`
 - The status ID is returned to the caller
 - Statuses persist across upgrades
+- `send_activity` is exposed on the Federation Canister (no-op for now)
 
 ### WI-0.8: Implement User Canister - follow user
 
