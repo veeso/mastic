@@ -1,7 +1,9 @@
+mod adapters;
 mod api;
+mod domain;
 mod error;
+mod inspect;
 mod schema;
-#[cfg_attr(not(test), expect(dead_code))]
 mod settings;
 #[cfg(test)]
 mod test_utils;
@@ -16,6 +18,11 @@ fn init(args: UserInstallArgs) {
 #[ic_cdk::post_upgrade]
 fn post_upgrade(args: UserInstallArgs) {
     api::post_upgrade(args);
+}
+
+#[ic_cdk::inspect_message]
+fn inspect_message() {
+    inspect::inspect();
 }
 
 ic_cdk::export_candid!();

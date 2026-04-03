@@ -182,8 +182,8 @@ The Federation Canister does not use `wasm-dbms` and uses
     `created_at` (INTEGER NOT NULL)
   - `following` table: `actor_uri` (TEXT PK), `status` (TEXT NOT NULL
     DEFAULT 'pending'), `created_at` (INTEGER NOT NULL)
-  - `keypair` table (single-row): `public_key_pem` (TEXT NOT NULL),
-    `private_key_pem` (TEXT NOT NULL)
+  - Ed25519 public key is derived at runtime via the IC threshold
+    Schnorr API (`schnorr_public_key`) and cached in memory
   - Indexes on `statuses.created_at`, `inbox.created_at` for feed ordering
 - Initialize the schema in each canister's `init` function and persist init
   args into the `settings` table
@@ -256,22 +256,31 @@ Canister that allow users to discover their canister and look up other users.
 ### WI-0.6: Implement User Canister - profile and state management
 
 **Description:** Implement the User Canister's internal state, initialization,
-and profile query method.
+Ed25519 signing via IC threshold Schnorr, and profile query method.
 
 **What should be done:**
 
 - Use the database schema from WI-0.3 (`settings`, `profile`, `statuses`,
-  `inbox`, `followers`, `following`, `keypair` tables)
+  `inbox`, `followers`, `following` tables)
 - Implement `init` to accept `UserInstallArgs`, create the schema, and
   persist init args into the `settings` table
-- Generate an RSA keypair for HTTP Signatures (store in `keypair` table)
+- Implement Ed25519 key retrieval and signing via the IC management
+  canister's threshold Schnorr API (`schnorr_public_key`,
+  `sign_with_schnorr` with `SchnorrAlgorithm::Ed25519`):
+  - The public key is fetched once and cached in a thread-local
+  - Signing is performed on demand for HTTP Signatures
+  - An adapter trait (`SchnorrCanister`) abstracts the management canister
+    calls for testability
 - Implement `get_profile()` query: return the user's profile (handle,
   display name, bio, avatar, created at)
 - Implement authorization guard: reject calls from non-owner principals for
   owner-only methods
+
 **Acceptance Criteria:**
 
 - The User Canister initializes correctly with the provided args
+- The Ed25519 public key is retrievable via the Schnorr adapter
+- Signing produces a valid Ed25519 signature via the Schnorr adapter
 - `get_profile` returns the profile for any caller (public data)
 - Owner-only methods reject unauthorized callers
 - State survives canister upgrades

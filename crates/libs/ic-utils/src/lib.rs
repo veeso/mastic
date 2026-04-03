@@ -15,6 +15,18 @@ pub fn caller() -> Principal {
     }
 }
 
+/// Returns whether the given principal is a controller of the canister.
+pub fn is_controller(_principal: &Principal) -> bool {
+    #[cfg(target_family = "wasm")]
+    {
+        ic_cdk::api::is_controller(_principal)
+    }
+    #[cfg(not(target_family = "wasm"))]
+    {
+        true
+    }
+}
+
 /// Returns the current time in milliseconds since the UNIX epoch.
 pub fn now() -> u64 {
     #[cfg(target_family = "wasm")]
