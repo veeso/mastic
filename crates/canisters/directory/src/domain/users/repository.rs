@@ -18,6 +18,10 @@ impl UserRepository {
     ///
     /// The user canister is set to Null and the creation state is marked to pending.
     pub fn sign_up(user_principal: Principal, handle: String) -> CanisterResult<()> {
+        ic_utils::log!(
+            "UserRepository::sign_up: inserting user {user_principal} with handle {handle:?}"
+        );
+
         let insert = UserInsertRequest {
             principal: ic_dbms_canister::prelude::Principal(user_principal),
             handle: handle.into(),
@@ -33,6 +37,8 @@ impl UserRepository {
             dbms.insert::<User>(insert)
         })?;
 
+        ic_utils::log!("UserRepository::sign_up: user {user_principal} inserted successfully");
+
         Ok(())
     }
 
@@ -41,6 +47,9 @@ impl UserRepository {
         user_principal: Principal,
         canister_id: Principal,
     ) -> CanisterResult<()> {
+        ic_utils::log!(
+            "UserRepository::set_user_canister: setting canister {canister_id} for user {user_principal}"
+        );
         let update = UserUpdateRequest {
             principal: None,
             handle: None,
@@ -63,16 +72,26 @@ impl UserRepository {
         })?;
 
         if rows == 0 {
+            ic_utils::log!(
+                "UserRepository::set_user_canister: no rows updated for user {user_principal}"
+            );
             return Err(CanisterError::SignUpFailed(format!(
                 "failed to set user canister id for user {user_principal}"
             )));
         }
+
+        ic_utils::log!(
+            "UserRepository::set_user_canister: canister {canister_id} set for user {user_principal}"
+        );
 
         Ok(())
     }
 
     /// Sets the user canister status to creation failed if the canister creation process fails for a user.
     pub fn set_failed_user_canister_create(user_principal: Principal) -> CanisterResult<()> {
+        ic_utils::log!(
+            "UserRepository::set_failed_user_canister_create: marking user {user_principal} as failed"
+        );
         let update = UserUpdateRequest {
             principal: None,
             handle: None,
@@ -93,16 +112,26 @@ impl UserRepository {
         })?;
 
         if rows == 0 {
+            ic_utils::log!(
+                "UserRepository::set_failed_user_canister_create: no rows updated for user {user_principal}"
+            );
             return Err(CanisterError::SignUpFailed(format!(
                 "failed to set user canister creation failed for user {user_principal}"
             )));
         }
+
+        ic_utils::log!(
+            "UserRepository::set_failed_user_canister_create: user {user_principal} marked as failed"
+        );
 
         Ok(())
     }
 
     /// Sets the user canister status to creation failed if the canister creation process fails for a user.
     pub fn retry_user_canister_creation(user_principal: Principal) -> CanisterResult<()> {
+        ic_utils::log!(
+            "UserRepository::retry_user_canister_creation: retrying for user {user_principal}"
+        );
         let update = UserUpdateRequest {
             principal: None,
             handle: None,
@@ -123,16 +152,24 @@ impl UserRepository {
         })?;
 
         if rows == 0 {
+            ic_utils::log!(
+                "UserRepository::retry_user_canister_creation: no rows updated for user {user_principal}"
+            );
             return Err(CanisterError::SignUpFailed(format!(
                 "failed to retry user canister creation for user {user_principal}"
             )));
         }
+
+        ic_utils::log!(
+            "UserRepository::retry_user_canister_creation: user {user_principal} status reset to pending"
+        );
 
         Ok(())
     }
 
     /// Retrieves a user's information from the database by their principal.
     pub fn get_user_by_principal(user_principal: Principal) -> CanisterResult<Option<User>> {
+        ic_utils::log!("UserRepository::get_user_by_principal: querying user {user_principal}");
         let rows = DBMS_CONTEXT.with(|ctx| {
             let dbms = WasmDbmsDatabase::oneshot(ctx, Schema);
             dbms.select::<User>(
@@ -157,6 +194,7 @@ impl UserRepository {
 
     /// Retrieves a user's information from the database by their handle.
     pub fn get_user_by_handle(handle: &str) -> CanisterResult<Option<User>> {
+        ic_utils::log!("UserRepository::get_user_by_handle: querying handle {handle:?}");
         let rows = DBMS_CONTEXT.with(|ctx| {
             let dbms = WasmDbmsDatabase::oneshot(ctx, Schema);
             dbms.select::<User>(

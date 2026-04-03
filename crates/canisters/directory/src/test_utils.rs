@@ -1,7 +1,7 @@
 //! Shared test utilities for the directory canister.
 
 use candid::Principal;
-use did::directory::DirectoryInstallArgs;
+use did::directory::{DirectoryInstallArgs, SignUpRequest, SignUpResponse};
 
 pub fn admin() -> Principal {
     Principal::from_text("be2us-64aaa-aaaaa-qaabq-cai").unwrap()
@@ -24,4 +24,38 @@ pub fn setup() {
         initial_moderator: admin(),
         federation_canister: federation(),
     });
+}
+
+/// Registers a user with the given principal and handle.
+///
+/// The user will have canister status [`did::directory::UserCanisterStatus::CreationPending`]
+/// and no canister ID assigned.
+///
+/// # Panics
+///
+/// Panics if the sign-up fails.
+pub fn setup_registered_user(principal: Principal, handle: &str) {
+    let response = crate::domain::users::sign_up(
+        principal,
+        SignUpRequest {
+            handle: handle.to_string(),
+        },
+    );
+    assert_eq!(response, SignUpResponse::Ok, "setup_registered_user failed");
+}
+
+/// Registers a user with the given principal and handle, then assigns a canister ID
+/// and sets the canister status to [`did::directory::UserCanisterStatus::Active`].
+///
+/// # Panics
+///
+/// Panics if sign-up or canister assignment fails.
+pub fn setup_registered_user_with_canister(
+    principal: Principal,
+    handle: &str,
+    canister_id: Principal,
+) {
+    setup_registered_user(principal, handle);
+    crate::domain::users::repository::UserRepository::set_user_canister(principal, canister_id)
+        .expect("setup_registered_user_with_canister: failed to set user canister");
 }

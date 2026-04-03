@@ -57,7 +57,7 @@ fn test_should_roundtrip_sign_up_response_err() {
 fn test_should_roundtrip_who_am_i_response_ok() {
     let resp = WhoAmIResponse::Ok(WhoAmI {
         handle: "alice".to_string(),
-        user_canister: candid::Principal::anonymous(),
+        user_canister: Some(candid::Principal::anonymous()),
         canister_status: UserCanisterStatus::Active,
     });
     let bytes = Encode!(&resp).unwrap();
@@ -103,7 +103,8 @@ fn test_should_roundtrip_get_user_args() {
 fn test_should_roundtrip_get_user_response_ok() {
     let resp = GetUserResponse::Ok(GetUser {
         handle: "alice".to_string(),
-        canister_id: candid::Principal::anonymous(),
+        canister_id: Some(candid::Principal::anonymous()),
+        canister_status: UserCanisterStatus::Active,
     });
     let bytes = Encode!(&resp).unwrap();
     let decoded = Decode!(&bytes, GetUserResponse).unwrap();

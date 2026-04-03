@@ -13,6 +13,7 @@ pub struct ModeratorsRepository;
 impl ModeratorsRepository {
     /// Adds a moderator to the directory canister.
     pub fn add_moderator(principal: Principal) -> CanisterResult<()> {
+        ic_utils::log!("ModeratorsRepository::add_moderator: inserting {principal}");
         DBMS_CONTEXT
             .with(|ctx| {
                 let db = WasmDbmsDatabase::oneshot(ctx, Schema);
@@ -41,6 +42,7 @@ impl ModeratorsRepository {
 
     /// Removes a moderator from the directory canister.
     pub fn remove_moderator(principal: Principal) -> CanisterResult<()> {
+        ic_utils::log!("ModeratorsRepository::remove_moderator: removing {principal}");
         let principal = ic_dbms_canister::prelude::Principal(principal);
         DBMS_CONTEXT
             .with(|ctx| {

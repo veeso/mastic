@@ -1,5 +1,7 @@
 use candid::{Encode, Principal};
-use did::directory::{RetrySignUpResponse, SignUpRequest, SignUpResponse};
+use did::directory::{
+    RetrySignUpResponse, SignUpRequest, SignUpResponse, UserCanisterResponse, WhoAmIResponse,
+};
 use pocket_ic_harness::PocketIcTestEnv;
 
 use crate::{MasticCanister, MasticCanisterSetup};
@@ -34,6 +36,29 @@ impl DirectoryClient<'_> {
             .update(self.canister_id(), user, "retry_sign_up", vec![])
             .await
             .expect("Failed to call retry_sign_up")
+    }
+
+    pub async fn user_canister(
+        &self,
+        caller: Principal,
+        principal: Option<Principal>,
+    ) -> UserCanisterResponse {
+        self.env
+            .query(
+                self.canister_id(),
+                caller,
+                "user_canister",
+                Encode!(&principal).expect("Failed to encode user_canister args"),
+            )
+            .await
+            .expect("Failed to call user_canister")
+    }
+
+    pub async fn whoami(&self, user: Principal) -> WhoAmIResponse {
+        self.env
+            .query(self.canister_id(), user, "whoami", vec![])
+            .await
+            .expect("Failed to call whoami")
     }
 
     fn canister_id(&self) -> Principal {
