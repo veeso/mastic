@@ -81,8 +81,6 @@ for the full specification.
 | :-- | :---------------------------- | :--------- | :----------------------------------- |
 | `0` | `SETTING_FEDERATION_CANISTER` | `BLOB`     | Principal of the Federation canister |
 | `1` | `SETTING_OWNER_PRINCIPAL`     | `BLOB`     | Principal of the canister owner      |
-| `2` | `SETTING_USER_PUBLIC_KEY_PEM` | `TEXT`     | RSA public key in PEM format         |
-| `3` | `SETTING_USER_PRIVATE_KEY_PEM`| `TEXT`     | RSA private key in PEM format        |
 
 ### `profiles` Table
 

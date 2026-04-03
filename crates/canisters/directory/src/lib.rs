@@ -2,6 +2,7 @@ mod adapters;
 mod api;
 mod domain;
 mod error;
+mod inspect;
 
 mod schema;
 mod settings;
@@ -22,6 +23,11 @@ fn init(args: DirectoryInstallArgs) {
 #[ic_cdk::post_upgrade]
 fn post_upgrade(args: DirectoryInstallArgs) {
     api::post_upgrade(args);
+}
+
+#[ic_cdk::inspect_message]
+fn inspect_message() {
+    inspect::inspect();
 }
 
 #[ic_cdk::query]
