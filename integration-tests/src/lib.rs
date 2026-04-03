@@ -1,4 +1,5 @@
 mod directory_client;
+pub mod helpers;
 mod user_client;
 
 use std::path::Path;

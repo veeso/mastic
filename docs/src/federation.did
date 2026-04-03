@@ -10,4 +10,31 @@ type FederationInstallArgs = variant {
     directory_canister : principal;
   };
 };
-service : (FederationInstallArgs) -> {}
+// Arguments for the `send_activity` method of the Federation canister, supporting both single and batch activities.
+type SendActivityArgs = variant {
+  // Send a single activity.
+  One : SendActivityArgsObject;
+  // Send a batch of activities.
+  Batch : vec SendActivityArgsObject;
+};
+// An object sent to the `send_activity` inside of [`SendActivityArgs`] for a single activity.
+type SendActivityArgsObject = record {
+  // JSON-encoded ActivityPub activity object to send.
+  activity_json : text;
+  // URL of the remote actor's inbox to deliver the activity to.
+  target_inbox : text;
+};
+// Error type returned by the `send_activity` method of the Federation canister.
+type SendActivityError = variant {
+  // the caller is not a registered User Canister.
+  Unauthorized;
+  // the JSON could not be parsed as a valid ActivityPub activity.
+  InvalidActivity;
+  // the HTTP request to the target inbox failed.
+  DeliveryFailed;
+};
+// Response type for the `send_activity` method of the Federation canister.
+type SendActivityResponse = variant { Ok; Err : SendActivityError };
+service : (FederationInstallArgs) -> {
+  send_activity : (SendActivityArgs) -> (SendActivityResponse);
+}

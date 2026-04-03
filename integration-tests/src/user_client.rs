@@ -1,5 +1,6 @@
-use candid::Principal;
-use did::user::GetProfileResponse;
+use candid::{Encode, Principal};
+use did::common::Visibility;
+use did::user::{GetProfileResponse, PublishStatusArgs, PublishStatusResponse};
 use pocket_ic_harness::PocketIcTestEnv;
 
 use crate::MasticCanisterSetup;
@@ -21,5 +22,27 @@ impl UserClient<'_> {
             .query(self.canister_id, user, "get_profile", vec![])
             .await
             .expect("Failed to call get_profile")
+    }
+
+    pub async fn publish_status(
+        &self,
+        caller: Principal,
+        content: String,
+        visibility: Visibility,
+    ) -> PublishStatusResponse {
+        let args = PublishStatusArgs {
+            content,
+            visibility,
+        };
+
+        self.env
+            .update(
+                self.canister_id,
+                caller,
+                "publish_status",
+                Encode!(&args).expect("Failed to encode publish_status arguments"),
+            )
+            .await
+            .expect("Failed to call publish_status")
     }
 }

@@ -49,7 +49,7 @@ fn test_should_roundtrip_user_profile_with_none_fields() {
 #[test]
 fn test_should_roundtrip_status() {
     let status = Status {
-        id: "550e8400-e29b-41d4-a716-446655440000".to_string(),
+        id: 4,
         content: "Hello, world!".to_string(),
         author: candid::Principal::anonymous(),
         created_at: 1_000_000_000,
@@ -64,7 +64,7 @@ fn test_should_roundtrip_status() {
 fn test_should_roundtrip_feed_item() {
     let item = FeedItem {
         status: Status {
-            id: "test-id".to_string(),
+            id: 4,
             content: "A post".to_string(),
             author: candid::Principal::anonymous(),
             created_at: 42,
@@ -81,7 +81,7 @@ fn test_should_roundtrip_feed_item() {
 fn test_should_roundtrip_feed_item_without_boost() {
     let item = FeedItem {
         status: Status {
-            id: "test-id".to_string(),
+            id: 4,
             content: "A post".to_string(),
             author: candid::Principal::anonymous(),
             created_at: 42,

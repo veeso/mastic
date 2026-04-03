@@ -952,6 +952,7 @@ dependencies = [
  "ic-stable-structures",
  "ic-utils",
  "serde",
+ "serde_json",
 ]
 
 [[package]]

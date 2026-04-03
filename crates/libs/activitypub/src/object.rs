@@ -48,9 +48,10 @@ pub struct Source {
 }
 
 /// The ActivityStreams object family of type discriminators.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ObjectType {
     /// A short textual post.
+    #[default]
     Note,
     /// A poll or question object.
     Question,
@@ -188,6 +189,48 @@ pub struct BaseObject<T> {
     /// Compatibility field used by Misskey quote posts.
     #[serde(rename = "_misskey_quote", skip_serializing_if = "Option::is_none")]
     pub misskey_quote: Option<String>,
+}
+
+impl<T: Default> Default for BaseObject<T> {
+    fn default() -> Self {
+        Self {
+            context: None,
+            id: None,
+            kind: T::default(),
+            content: None,
+            name: None,
+            summary: None,
+            published: None,
+            updated: None,
+            url: None,
+            to: None,
+            cc: None,
+            bto: None,
+            bcc: None,
+            audience: None,
+            attributed_to: None,
+            in_reply_to: None,
+            source: None,
+            tag: None,
+            attachment: None,
+            replies: None,
+            likes: None,
+            shares: None,
+            sensitive: None,
+            media_type: None,
+            deleted: None,
+            end_time: None,
+            closed: None,
+            voters_count: None,
+            one_of: None,
+            any_of: None,
+            blurhash: None,
+            focal_point: None,
+            quote_uri: None,
+            quote_url: None,
+            misskey_quote: None,
+        }
+    }
 }
 
 /// The canonical ActivityStreams object representation used by the crate.

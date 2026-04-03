@@ -2,6 +2,7 @@
 
 mod activity;
 mod follow_status;
+mod status;
 mod visibility;
 
 use db_utils::handle::{HandleSanitizer, HandleValidator};
@@ -11,6 +12,7 @@ use wasm_dbms_api::prelude::*;
 
 pub use self::activity::ActivityType;
 pub use self::follow_status::FollowStatus;
+pub use self::status::{StatusContentSanitizer, StatusContentValidator};
 pub use self::visibility::Visibility;
 
 /// Profile of the user in the canister.
@@ -51,6 +53,8 @@ pub struct Status {
     #[primary_key]
     pub id: Uint64,
     /// Status content.
+    #[sanitizer(StatusContentSanitizer)]
+    #[validate(StatusContentValidator)]
     pub content: Text,
     /// Visibility of the status.
     /// See [`Visibility`](did::common::Visibility) enum for more details.

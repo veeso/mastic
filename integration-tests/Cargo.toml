@@ -10,6 +10,6 @@ rust-version = { workspace = true }
 
 [dependencies]
 candid = { workspace = true }
-did = { path = "../crates/libs/did" }
+did = { workspace = true }
 pocket-ic-harness = { workspace = true }
 tokio = { workspace = true }

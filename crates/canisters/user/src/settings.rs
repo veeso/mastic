@@ -14,7 +14,7 @@ const SETTING_OWNER_PRINCIPAL: u16 = 1;
 
 /// Gets the principal of the federation canister.
 #[cfg_attr(
-    not(test),
+    not(any(test, target_family = "wasm")),
     expect(
         dead_code,
         reason = "settings will be used by upcoming canister methods"
@@ -48,13 +48,6 @@ pub fn set_federation_canister(principal: Principal) -> CanisterResult<()> {
 }
 
 /// Gets the principal of the owner.
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "settings will be used by upcoming canister methods"
-    )
-)]
 pub fn get_owner_principal() -> CanisterResult<Principal> {
     DBMS_CONTEXT
         .with(|ctx| {

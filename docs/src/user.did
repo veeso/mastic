@@ -7,6 +7,41 @@ type GetProfileError = variant {
 };
 // Response type for the `get_profile` method.
 type GetProfileResponse = variant { Ok : UserProfile; Err : GetProfileError };
+// Request arguments for the `publish_status` method.
+type PublishStatusArgs = record {
+  // The text content of the new post.
+  content : text;
+  // Audience control for this status.
+  visibility : Visibility;
+};
+// Error types for the `publish_status` method.
+type PublishStatusError = variant {
+  // Internal error occurred while publishing the status.
+  Internal : text;
+  // The content is empty or contains only whitespace.
+  ContentEmpty;
+  // The content exceeds the maximum allowed length.
+  ContentTooLong;
+  // The caller is not the canister owner.
+  Unauthorized;
+};
+// Response type for the `publish_status` method.
+// On success, returns the created [`Status`] with its assigned ID and timestamp.
+type PublishStatusResponse = variant { Ok : Status; Err : PublishStatusError };
+// A single post authored by a user. Each status has a unique ID, content body,
+// author principal, creation timestamp, and visibility setting.
+type Status = record {
+  // Unique identifier for this status, assigned by the User Canister. (Snowflake id)
+  id : nat64;
+  // The text content of the status.
+  content : text;
+  // Timestamp (milliseconds since epoch) of when the status was created.
+  created_at : nat64;
+  // The principal of the User Canister that authored this status.
+  author : principal;
+  // The visibility setting of the status, controlling its audience.
+  visibility : Visibility;
+};
 // Install arguments for the User Canister.
 type UserInstallArgs = variant {
   // Upgrade argument, provided on `upgrade`.
@@ -26,7 +61,7 @@ type UserInstallArgs = variant {
 type UserProfile = record {
   // Optional free-text biography.
   bio : opt text;
-  // Timestamp (nanoseconds since epoch) of account creation.
+  // Timestamp (milliseconds since epoch) of account creation.
   created_at : nat64;
   // Optional human-readable name shown in the UI.
   display_name : opt text;
@@ -37,6 +72,18 @@ type UserProfile = record {
   // Optional header image data for the user's profile. Can be empty if no header is set.
   header : opt blob;
 };
+// Controls the audience of a status post. Maps to ActivityPub addressing
+type Visibility = variant {
+  // visible only to the author's followers
+  FollowersOnly;
+  // visible to everyone and included in public timelines
+  Public;
+  // visible to everyone via direct link, but excluded from public timelines
+  Unlisted;
+  // visible only to explicitly mentioned users
+  Direct;
+};
 service : (UserInstallArgs) -> {
   get_profile : () -> (GetProfileResponse) query;
+  publish_status : (PublishStatusArgs) -> (PublishStatusResponse);
 }

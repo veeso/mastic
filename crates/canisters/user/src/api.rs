@@ -1,6 +1,8 @@
 //! Canister API
 
-use did::user::{GetProfileResponse, UserInstallArgs};
+pub mod inspect;
+
+use did::user::{GetProfileResponse, PublishStatusArgs, PublishStatusResponse, UserInstallArgs};
 use ic_dbms_canister::prelude::DBMS_CONTEXT;
 
 /// Initializes the canister with the given arguments.
@@ -59,6 +61,15 @@ pub fn post_upgrade(args: UserInstallArgs) {
 /// Gets the user profile.
 pub fn get_profile() -> GetProfileResponse {
     crate::domain::profile::get_profile()
+}
+
+/// Publishes a new status.
+pub async fn publish_status(args: PublishStatusArgs) -> PublishStatusResponse {
+    if !inspect::is_owner(ic_utils::caller()) {
+        ic_utils::trap!("Only the owner can publish status updates");
+    }
+
+    crate::domain::status::publish_status(args).await
 }
 
 #[cfg(test)]

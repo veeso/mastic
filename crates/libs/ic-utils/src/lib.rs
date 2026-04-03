@@ -31,7 +31,7 @@ pub fn is_controller(_principal: &Principal) -> bool {
 pub fn now() -> u64 {
     #[cfg(target_family = "wasm")]
     {
-        ic_cdk::api::time()
+        ic_cdk::api::time() / 1_000_000 // convert nanoseconds to milliseconds
     }
     #[cfg(not(target_family = "wasm"))]
     {
