@@ -107,6 +107,14 @@ just dfx_deploy_local       # Deploy all canisters locally
 
 Requires: `dfx` >= 0.30.2, `ic-wasm`, `candid-extractor`, Rust nightly (for formatting).
 
+## GitHub Issues
+
+- Use issue templates from `.github/ISSUE_TEMPLATE/`:
+  - **milestone-task.md** — for planned work items that are part of a project milestone. Label: `milestone`.
+  - **bug-report.md** — for bug reports. Label: `bug`.
+- When creating new milestone tasks, use `gh issue create --template milestone-task.md --label milestone`.
+- When filing bugs, use `gh issue create --template bug-report.md --label bug`.
+
 ## After Making Changes to Rust Code
 
 Always run `just fmt_nightly` and `just clippy -- -D warnings` after making changes to Rust code.
