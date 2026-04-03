@@ -1,11 +1,116 @@
+// Install arguments for the Directory canister.
+type DirectoryInstallArgs = variant {
+  // Upgrade argument, provided on `upgrade`
+  Upgrade : record {};
+  // Initial installation argument, provided on `init`
+  Init : record {
+    // Principal of the Federation canister
+    federation_canister : principal;
+    // The principal of the initial moderator who has permission to manage the directory.
+    initial_moderator : principal;
+  };
+};
+// Data returned by the `get_user` method on success.
+type GetUser = record {
+  // Principal of the looked-up user's canister.
+  canister_id : opt principal;
+  // The status of the looked-up user's canister.
+  canister_status : UserCanisterStatus;
+  // The matched user's handle.
+  handle : text;
+};
+// Error types for the `get_user` method.
+type GetUserError = variant {
+  // The provided handle is invalid (e.g. empty or contains disallowed characters).
+  InvalidHandle;
+  // No user exists with the given handle.
+  NotFound;
+  // Internal error occurred while retrieving user information.
+  InternalError : text;
+};
+// Response type for the `get_user` method.
+type GetUserResponse = variant { Ok : GetUser; Err : GetUserError };
+// Response error types for the `retry_sign_up` method.
+// Retries the canister creation for a user that failed to create their canister during the sign up process.
+type RetrySignUpError = variant {
+  // The caller has no account to retry
+  NotRegistered;
+  // The caller's canister is not in a failed state, so retrying is not allowed
+  CanisterNotInFailedState;
+  // Internal error
+  InternalError : text;
+};
+// Response result type for the `retry_sign_up` method.
+type RetrySignUpResponse = variant { Ok; Err : RetrySignUpError };
+// Response error types for the `sign_up` method. Registers a new user in the
+// directory, creating a User Canister and mapping the caller's principal to the
+// chosen handle.
+type SignUpError = variant {
+  // The chosen handle is invalid (e.g. empty or contains disallowed characters)
+  InvalidHandle;
+  // The caller has already an account
+  AlreadyRegistered;
+  // Anonymous users are not allowed to sign up
+  AnonymousPrincipal;
+  // The chosen handle is already taken by another user
+  HandleTaken;
+  // Internal error
+  InternalError : text;
+};
+// Request arguments for the `sign_up` method. Registers a new user in the
+// directory, creating a User Canister and mapping the caller's principal to the
+// chosen handle.
+type SignUpRequest = record {
+  // The desired unique username (handle) for the new user.
+  handle : text;
+};
+// Response result type for the `sign_up` method.
+type SignUpResponse = variant { Ok; Err : SignUpError };
+// Error types for the `user_canister` method.
+// Resolves the caller's principal to their User Canister ID.
+type UserCanisterError = variant {
+  // The caller has no account in the directory.
+  NotRegistered;
+  // The caller's canister is not active (e.g. pending creation or failed).
+  CanisterNotActive;
+  // Internal error occurred while retrieving the User Canister.
+  InternalError : text;
+};
+// Response type for the `user_canister` method.
+type UserCanisterResponse = variant { Ok : principal; Err : UserCanisterError };
+// The status of a user's canister, used in the `who_am_i` method to indicate whether
+// the user's canister is active, pending creation, or failed to create.
+type UserCanisterStatus = variant {
+  // Creation failed
+  CreationFailed;
+  // Active and created
+  Active;
+  // Creation pending
+  CreationPending;
+};
+// `who_am_i` method data to be returned in case the caller is registered in the directory.
+type WhoAmI = record {
+  // The status of the caller's User Canister.
+  canister_status : UserCanisterStatus;
+  // The unique username (handle) of the caller.
+  handle : text;
+  // The principal of the caller's User Canister.
+  user_canister : opt principal;
+};
+// Error types for the `who_am_i` method.
+type WhoAmIError = variant {
+  // The caller has no account in the directory.
+  NotRegistered;
+  // Internal error occurred while retrieving user information.
+  InternalError : text;
+};
+// Response type for the `who_am_i` method, returning either the caller's identity
+// information or an error if they are not registered.
+type WhoAmIResponse = variant { Ok : WhoAmI; Err : WhoAmIError };
 service : (DirectoryInstallArgs) -> {
-  add_moderator : (AddModeratorArgs) -> (AddModeratorResponse);
-  delete_profile : () -> (DeleteProfileResponse);
-  get_user : (GetUserArgs) -> (GetUserResponse) query;
-  remove_moderator : (RemoveModeratorArgs) -> (RemoveModeratorResponse);
-  search_profiles : (SearchProfilesArgs) -> (SearchProfilesResponse) query;
-  sign_up : (text) -> (SignUpResponse);
-  suspend : (SuspendArgs) -> (SuspendResponse);
-  user_canister : (opt Principal) -> (UserCanisterResponse) query;
-  whoami : () -> (WhoAmIResponse) query
+  get_user : (text) -> (GetUserResponse) query;
+  retry_sign_up : () -> (RetrySignUpResponse);
+  sign_up : (SignUpRequest) -> (SignUpResponse);
+  user_canister : (opt principal) -> (UserCanisterResponse) query;
+  whoami : () -> (WhoAmIResponse) query;
 }

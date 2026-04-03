@@ -1,5 +1,13 @@
-service : (FederationInstallArgs) -> {
-  http_request : (HttpRequest) -> (HttpResponse) query;
-  http_request_update : (HttpRequest) -> (HttpResponse);
-  send_activity : (SendActivityArgs) -> (SendActivityResponse)
-}
+// Install arguments for the Federation canister.
+type FederationInstallArgs = variant {
+  // Upgrade argument, provided on `upgrade`
+  Upgrade : record {};
+  // Initial installation argument, provided on `init`
+  Init : record {
+    // The URL of this server's public endpoint (e.g. `https://example.com`)
+    public_url : text;
+    // Principal of the Directory canister
+    directory_canister : principal;
+  };
+};
+service : (FederationInstallArgs) -> {}

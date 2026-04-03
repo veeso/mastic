@@ -232,7 +232,7 @@ their own identity and check canister readiness.
 | Field              | Description                                                                              |
 | :----------------- | :--------------------------------------------------------------------------------------- |
 | `handle`           | The caller's registered handle.                                                          |
-| `user_canister`    | Principal of the caller's User Canister.                                                 |
+| `user_canister`    | Principal of the caller's User Canister. (Optional)                                      |
 | `canister_status`  | Status of the caller's User Canister (see [UserCanisterStatus](#usercanisterstatus)).    |
 
 - **NotRegistered**: the caller has no account in the directory.

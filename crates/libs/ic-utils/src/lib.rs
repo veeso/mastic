@@ -90,6 +90,31 @@ macro_rules! trap {
     });
 }
 
+#[macro_export]
+macro_rules! log {
+    ($($key:tt $(:$capture:tt)? $(= $value:expr)?),+; $($arg:tt)+) => ({
+        #[cfg(target_family = "wasm")]
+        {
+            ic_cdk::println!("{}", format!($($arg)+));
+        }
+        #[cfg(not(target_family = "wasm"))]
+        {
+            println!("[DEBUG] {}", format!($($arg)+));
+        }
+    });
+
+    ( $($arg:tt)+) => ({
+        #[cfg(target_family = "wasm")]
+        {
+            ic_cdk::println!("{}", format!($($arg)+));
+        }
+        #[cfg(not(target_family = "wasm"))]
+        {
+            println!("[DEBUG] {}", format!($($arg)+));
+        }
+    });
+}
+
 #[cfg(test)]
 mod tests {
 

@@ -11,18 +11,23 @@ use std::future::Future;
 use candid::Principal;
 use ic_management_canister_types::CanisterSettings;
 
+#[cfg(target_family = "wasm")]
+/// Minimum cycles to attach for canister creation to ensure it succeeds.
+const CREATE_CANISTER_FEE: u128 = 500_000_000_000;
+
 /// Abstraction over the IC management canister API.
 ///
 /// The two operations exposed — canister creation and WASM installation — are
 /// the only management-canister interactions required by the sign-up state
 /// machine today. Extend this trait if additional calls become necessary.
 pub trait ManagementCanister: Send + Sync + Sized {
-    /// Creates a new canister with the given optional settings.
+    /// Creates a new canister with the given optional settings and amount of cycles.
     ///
     /// Returns the [`Principal`] of the newly created canister on success.
     fn create_canister(
         &self,
         settings: Option<CanisterSettings>,
+        cycles: u128,
     ) -> impl Future<Output = Result<Principal, ManagementCanisterError>>;
 
     /// Installs WASM code on an existing canister.
@@ -62,22 +67,43 @@ impl ManagementCanister for IcManagementCanisterClient {
     async fn create_canister(
         &self,
         settings: Option<CanisterSettings>,
+        cycles: u128,
     ) -> Result<Principal, ManagementCanisterError> {
+        ic_utils::log!(
+            "IcManagementCanisterClient::create_canister: sending create_canister request"
+        );
         let canister_version = self.canister_version();
-        let request = ic_management_canister_types::CreateCanisterArgs {
+        let request = ic_management_canister_types::ProvisionalCreateCanisterWithCyclesArgs {
             sender_canister_version: Some(canister_version),
             settings,
+            amount: Some(cycles.into()),
+            specified_id: None,
         };
 
-        let response =
-            ic_cdk::call::Call::bounded_wait(Principal::management_canister(), "create_canister")
-                .with_arg(request)
-                .await
-                .map_err(|e| ManagementCanisterError::CallFailed(format!("{e:?}")))?;
+        let response = ic_cdk::call::Call::bounded_wait(
+            Principal::management_canister(),
+            "provisional_create_canister_with_cycles",
+        )
+        .with_arg(request)
+        .with_cycles(CREATE_CANISTER_FEE)
+        .await
+        .map_err(|e| {
+            ic_utils::log!("IcManagementCanisterClient::create_canister: call failed: {e:?}");
+            ManagementCanisterError::CallFailed(format!("{e:?}"))
+        })?;
 
-        let response =
-            candid::decode_one::<ic_management_canister_types::CreateCanisterResult>(&response)
-                .map_err(|e| ManagementCanisterError::DecodeFailed(e.to_string()))?;
+        let response = candid::decode_one::<
+            ic_management_canister_types::ProvisionalCreateCanisterWithCyclesResult,
+        >(&response)
+        .map_err(|e| {
+            ic_utils::log!("IcManagementCanisterClient::create_canister: decode failed: {e}");
+            ManagementCanisterError::DecodeFailed(e.to_string())
+        })?;
+
+        ic_utils::log!(
+            "IcManagementCanisterClient::create_canister: created canister {}",
+            response.canister_id
+        );
 
         Ok(response.canister_id)
     }
@@ -88,6 +114,10 @@ impl ManagementCanister for IcManagementCanisterClient {
         wasm_module: &[u8],
         arg: Vec<u8>,
     ) -> Result<(), ManagementCanisterError> {
+        ic_utils::log!(
+            "IcManagementCanisterClient::install_code: installing code on canister {canister_id} (wasm size: {} bytes)",
+            wasm_module.len()
+        );
         let canister_version = self.canister_version();
         let install_args = ic_management_canister_types::InstallCodeArgs {
             mode: ic_management_canister_types::CanisterInstallMode::Install,
@@ -100,7 +130,14 @@ impl ManagementCanister for IcManagementCanisterClient {
         ic_cdk::call::Call::bounded_wait(Principal::management_canister(), "install_code")
             .with_arg(install_args)
             .await
-            .map_err(|e| ManagementCanisterError::CallFailed(format!("{e:?}")))?;
+            .map_err(|e| {
+                ic_utils::log!("IcManagementCanisterClient::install_code: call failed for canister {canister_id}: {e:?}");
+                ManagementCanisterError::CallFailed(format!("{e:?}"))
+            })?;
+
+        ic_utils::log!(
+            "IcManagementCanisterClient::install_code: code installed on canister {canister_id}"
+        );
 
         Ok(())
     }

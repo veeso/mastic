@@ -9,18 +9,21 @@ use crate::error::CanisterResult;
 
 /// Adds a moderator to the directory canister.
 pub fn add_moderator(principal: Principal) -> CanisterResult<()> {
+    ic_utils::log!("add_moderator: adding {principal}");
     ModeratorsRepository::add_moderator(principal)
 }
 
 /// Returns true if the given principal is a moderator, false otherwise.
 #[cfg_attr(not(test), expect(dead_code))]
 pub fn is_moderator(principal: Principal) -> CanisterResult<bool> {
+    ic_utils::log!("is_moderator: checking {principal}");
     ModeratorsRepository::is_moderator(principal)
 }
 
 /// Removes a moderator from the directory canister.
 #[cfg_attr(not(test), expect(dead_code))]
 pub fn remove_moderator(principal: Principal) -> CanisterResult<()> {
+    ic_utils::log!("remove_moderator: removing {principal}");
     ModeratorsRepository::remove_moderator(principal)
 }
 

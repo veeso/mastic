@@ -15,8 +15,10 @@ thread_local! {
     static USER_SIGN_UP_STATES: RefCell<HashMap<Principal, SignUpStateStep>> = RefCell::new(HashMap::new());
 }
 
+/// Initial amount of cycles to attach to the user canister during creation.
+const INITIAL_USER_CANISTER_CYCLES: u128 = 1_000_000_000_000;
 /// Minimum interval between two sign up operations to prevent abuse.
-const OPERATION_INTERVAL: Duration = Duration::from_secs(5);
+const OPERATION_INTERVAL: Duration = Duration::from_secs(1);
 /// Maximum number of retries for each step in the sign up process before giving up.
 const MAX_RETRIES: u8 = 5;
 /// User canister wasm bytes.
@@ -94,6 +96,7 @@ where
 {
     /// Start a new sign up process for a user by initializing their state in the `USER_SIGN_UP_STATES` thread-local storage.
     pub fn start(user_id: Principal, client: C) {
+        ic_utils::log!("Starting sign up process for user {user_id}",);
         // if there is already an entry for the user, return early to prevent starting multiple sign up processes for the same user
         let already_exists =
             USER_SIGN_UP_STATES.with_borrow(|states| states.contains_key(&user_id));
@@ -110,7 +113,11 @@ where
 
     /// Tick the state machine to progress the sign up process for the user.
     fn tick(self) {
-        ic_utils::set_timer(OPERATION_INTERVAL, self.run());
+        ic_utils::log!("Ticking sign up process for user {}", self.user_id);
+        ic_utils::set_timer(OPERATION_INTERVAL, async move {
+            ic_utils::log!("Timer fired for user {}", self.user_id);
+            self.run().await;
+        });
     }
 
     /// Run a step of the sign up process for the user based on their current state in the `USER_SIGN_UP_STATES` thread-local storage.
@@ -138,6 +145,12 @@ where
     /// scheduling and thread-local storage so it can be unit-tested.
     async fn step(&self, current: SignUpStateStep) -> StepResult {
         let SignUpStateStep { state, retries } = current;
+        ic_utils::log!(
+            "Running sign up step for user {}: state={:?}, retries={}",
+            self.user_id,
+            state,
+            retries
+        );
         let current_discriminant = std::mem::discriminant(&state);
 
         // check retries
@@ -199,7 +212,11 @@ where
         });
 
         #[allow(irrefutable_let_patterns)]
-        let Ok(canister_id) = self.client.create_canister(settings).await else {
+        let Ok(canister_id) = self
+            .client
+            .create_canister(settings, INITIAL_USER_CANISTER_CYCLES)
+            .await
+        else {
             // failed, return same state to retry
             return SignUpState::CreateCanister;
         };
@@ -294,6 +311,7 @@ mod tests {
         async fn create_canister(
             &self,
             _settings: Option<CanisterSettings>,
+            _cycles: u128,
         ) -> Result<Principal, ManagementCanisterError> {
             self.create_result.clone()
         }

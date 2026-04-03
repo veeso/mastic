@@ -5,6 +5,8 @@ use ic_dbms_canister::prelude::DBMS_CONTEXT;
 
 /// Initializes the canister with the given arguments.
 pub fn init(args: UserInstallArgs) {
+    ic_utils::log!("Initializing user canister");
+
     let UserInstallArgs::Init {
         owner,
         federation_canister,
@@ -14,6 +16,7 @@ pub fn init(args: UserInstallArgs) {
     };
 
     // register database schema
+    ic_utils::log!("Registering database schema");
     DBMS_CONTEXT.with(|ctx| {
         if let Err(err) = crate::schema::Schema::register_tables(ctx) {
             ic_utils::trap!("Failed to register database schema: {err}");
@@ -21,21 +24,29 @@ pub fn init(args: UserInstallArgs) {
     });
 
     // set owner
+    ic_utils::log!("Setting owner principal to {owner}");
     if let Err(err) = crate::settings::set_owner_principal(owner) {
         ic_utils::trap!("Failed to set owner principal: {:?}", err);
     }
 
     // set federation canister
+    ic_utils::log!("Setting federation canister to {federation_canister}");
     if let Err(err) = crate::settings::set_federation_canister(federation_canister) {
         ic_utils::trap!("Failed to set federation canister: {:?}", err);
     }
+
+    ic_utils::log!("User canister initialized successfully for owner {owner}");
 }
 
 /// Post-upgrade function for the canister.
 pub fn post_upgrade(args: UserInstallArgs) {
+    ic_utils::log!("Post-upgrade user canister");
+
     let UserInstallArgs::Upgrade { .. } = args else {
         ic_utils::trap!("Invalid post-upgrade arguments");
     };
+
+    ic_utils::log!("User canister post-upgrade completed successfully");
 }
 
 #[cfg(test)]

@@ -24,47 +24,70 @@ mod state;
 ///
 /// Any internal error is returned as [`SignUpError::InternalError`] with a message describing the error.
 pub fn sign_up(user_id: Principal, request: SignUpRequest) -> SignUpResponse {
+    ic_utils::log!(
+        "sign_up: starting for user {user_id} with handle {:?}",
+        request.handle
+    );
+
     // 0. Check if the caller's principal is anonymous, if it is, return [`SignUpError::AnonymousPrincipal`].
     if user_id == Principal::anonymous() {
+        ic_utils::log!("sign_up: rejected anonymous principal");
         return SignUpResponse::Err(SignUpError::AnonymousPrincipal);
     }
 
     // 1. Check whether there is already a user with the given `user_id` in the database, if there is, return [`SignUpError::AlreadyRegistered`].
     match UserRepository::get_user_by_principal(user_id) {
         Err(err) => {
+            ic_utils::log!("sign_up: internal error checking principal {user_id}: {err}");
             return SignUpResponse::Err(SignUpError::InternalError(format!(
                 "Failed to check existing user by principal: {err}"
             )));
         }
-        Ok(Some(_)) => return SignUpResponse::Err(SignUpError::AlreadyRegistered),
+        Ok(Some(_)) => {
+            ic_utils::log!("sign_up: user {user_id} is already registered");
+            return SignUpResponse::Err(SignUpError::AlreadyRegistered);
+        }
         Ok(None) => (),
     };
 
     // 2. Sanitize and validate the handle. See `handles.md` document for specs.
     let handle = HandleSanitizer::sanitize_handle(&request.handle);
+    ic_utils::log!(
+        "sign_up: sanitized handle {:?} -> {handle:?}",
+        request.handle
+    );
     if HandleValidator::check_handle(&handle).is_err() {
+        ic_utils::log!("sign_up: handle {handle:?} is invalid");
         return SignUpResponse::Err(SignUpError::InvalidHandle);
     }
 
     // 3. Check if the handle is already taken by another user in the database, if it is, return [`SignUpError::HandleTaken`].
     match UserRepository::get_user_by_handle(&handle) {
         Err(err) => {
+            ic_utils::log!("sign_up: internal error checking handle {handle:?}: {err}");
             return SignUpResponse::Err(SignUpError::InternalError(format!(
                 "Failed to check existing user by handle: {err}"
             )));
         }
-        Ok(Some(_)) => return SignUpResponse::Err(SignUpError::HandleTaken),
+        Ok(Some(_)) => {
+            ic_utils::log!("sign_up: handle {handle:?} is already taken");
+            return SignUpResponse::Err(SignUpError::HandleTaken);
+        }
         Ok(None) => (),
     };
 
     // 4. Insert the new user in the database with the canister status set to [`did::directory::UserCanisterStatus::CreationPending`].
-    if let Err(err) = UserRepository::sign_up(user_id, handle) {
+    if let Err(err) = UserRepository::sign_up(user_id, handle.clone()) {
+        ic_utils::log!("sign_up: failed to insert user {user_id} in the database: {err}");
         return SignUpResponse::Err(SignUpError::InternalError(format!(
             "Failed to insert new user in the database: {err}"
         )));
     }
 
     // 5. Spawn the state machine that will drive the user canister creation process, and return [`SignUpResponse::Ok`].
+    ic_utils::log!(
+        "sign_up: user {user_id} registered with handle {handle:?}, starting canister creation"
+    );
     start_sign_up_state_machine(user_id);
 
     SignUpResponse::Ok
@@ -82,7 +105,10 @@ pub fn sign_up(user_id: Principal, request: SignUpRequest) -> SignUpResponse {
 /// 3. Update the user's canister status in the database to [`did::directory::UserCanisterStatus::CreationPending`]
 /// 4. Spawn the state machine that will drive the user canister creation process, then return [`RetrySignUpResponse::Ok`].
 pub fn retry_sign_up(user_id: Principal) -> RetrySignUpResponse {
+    ic_utils::log!("retry_sign_up: starting for user {user_id}");
+
     if user_id == Principal::anonymous() {
+        ic_utils::log!("retry_sign_up: rejected anonymous principal");
         return RetrySignUpResponse::Err(RetrySignUpError::NotRegistered);
     }
 
@@ -90,14 +116,22 @@ pub fn retry_sign_up(user_id: Principal) -> RetrySignUpResponse {
     // 2. Check if the user's canister is in a failed state, if it isn't, return [`RetrySignUpError::CanisterNotInFailedState`].
     match UserRepository::get_user_by_principal(user_id) {
         Err(err) => {
+            ic_utils::log!("retry_sign_up: internal error checking principal {user_id}: {err}");
             return RetrySignUpResponse::Err(RetrySignUpError::InternalError(format!(
                 "Failed to check existing user by principal: {err}"
             )));
         }
-        Ok(None) => return RetrySignUpResponse::Err(RetrySignUpError::NotRegistered),
+        Ok(None) => {
+            ic_utils::log!("retry_sign_up: user {user_id} is not registered");
+            return RetrySignUpResponse::Err(RetrySignUpError::NotRegistered);
+        }
         Ok(Some(user))
             if user.canister_status.0 != did::directory::UserCanisterStatus::CreationFailed =>
         {
+            ic_utils::log!(
+                "retry_sign_up: user {user_id} canister is not in failed state (status: {:?})",
+                user.canister_status.0
+            );
             return RetrySignUpResponse::Err(RetrySignUpError::CanisterNotInFailedState);
         }
         Ok(Some(_)) => (),
@@ -105,12 +139,14 @@ pub fn retry_sign_up(user_id: Principal) -> RetrySignUpResponse {
 
     // 3. Update the user's canister status in the database to [`did::directory::UserCanisterStatus::CreationPending`]
     if let Err(err) = UserRepository::retry_user_canister_creation(user_id) {
+        ic_utils::log!("retry_sign_up: failed to update canister status for user {user_id}: {err}");
         return RetrySignUpResponse::Err(RetrySignUpError::InternalError(format!(
             "Failed to update user canister status in the database: {err}"
         )));
     }
 
     // 4. Spawn the state machine that will drive the user canister creation process, then return [`RetrySignUpResponse::Ok`].
+    ic_utils::log!("retry_sign_up: restarting canister creation for user {user_id}");
     start_sign_up_state_machine(user_id);
 
     RetrySignUpResponse::Ok

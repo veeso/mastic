@@ -92,16 +92,18 @@ pub struct WhoAmI {
     /// The unique username (handle) of the caller.
     pub handle: String,
     /// The principal of the caller's User Canister.
-    pub user_canister: candid::Principal,
+    pub user_canister: Option<candid::Principal>,
     /// The status of the caller's User Canister.
     pub canister_status: UserCanisterStatus,
 }
 
 /// Error types for the `who_am_i` method.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, CandidType, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, CandidType, Serialize, Deserialize)]
 pub enum WhoAmIError {
     /// The caller has no account in the directory.
     NotRegistered,
+    /// Internal error occurred while retrieving user information.
+    InternalError(String),
 }
 
 /// Response type for the `who_am_i` method, returning either the caller's identity
@@ -114,14 +116,18 @@ pub enum WhoAmIResponse {
 
 /// Error types for the `user_canister` method.
 /// Resolves the caller's principal to their User Canister ID.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, CandidType, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, CandidType, Serialize, Deserialize)]
 pub enum UserCanisterError {
     /// The caller has no account in the directory.
     NotRegistered,
+    /// The caller's canister is not active (e.g. pending creation or failed).
+    CanisterNotActive,
+    /// Internal error occurred while retrieving the User Canister.
+    InternalError(String),
 }
 
 /// Response type for the `user_canister` method.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, CandidType, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, CandidType, Serialize, Deserialize)]
 pub enum UserCanisterResponse {
     Ok(candid::Principal),
     Err(UserCanisterError),
@@ -140,14 +146,20 @@ pub struct GetUser {
     /// The matched user's handle.
     pub handle: String,
     /// Principal of the looked-up user's canister.
-    pub canister_id: candid::Principal,
+    pub canister_id: Option<candid::Principal>,
+    /// The status of the looked-up user's canister.
+    pub canister_status: UserCanisterStatus,
 }
 
 /// Error types for the `get_user` method.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, CandidType, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, CandidType, Serialize, Deserialize)]
 pub enum GetUserError {
     /// No user exists with the given handle.
     NotFound,
+    /// The provided handle is invalid (e.g. empty or contains disallowed characters).
+    InvalidHandle,
+    /// Internal error occurred while retrieving user information.
+    InternalError(String),
 }
 
 /// Response type for the `get_user` method.

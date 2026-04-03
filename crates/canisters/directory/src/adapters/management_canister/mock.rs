@@ -18,6 +18,7 @@ impl ManagementCanister for MockManagementCanisterClient {
     async fn create_canister(
         &self,
         _settings: Option<CanisterSettings>,
+        _cycles: u128,
     ) -> Result<Principal, ManagementCanisterError> {
         Ok(self.created_canister_id)
     }
