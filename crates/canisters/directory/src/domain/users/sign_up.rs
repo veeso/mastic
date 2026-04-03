@@ -88,7 +88,7 @@ pub fn sign_up(user_id: Principal, request: SignUpRequest) -> SignUpResponse {
     ic_utils::log!(
         "sign_up: user {user_id} registered with handle {handle:?}, starting canister creation"
     );
-    start_sign_up_state_machine(user_id);
+    start_sign_up_state_machine(user_id, handle);
 
     SignUpResponse::Ok
 }
@@ -114,7 +114,7 @@ pub fn retry_sign_up(user_id: Principal) -> RetrySignUpResponse {
 
     // 1. Check whether there is a user with the given `user_id` in the database, if there isn't, return [`RetrySignUpError::NotRegistered`].
     // 2. Check if the user's canister is in a failed state, if it isn't, return [`RetrySignUpError::CanisterNotInFailedState`].
-    match UserRepository::get_user_by_principal(user_id) {
+    let handle = match UserRepository::get_user_by_principal(user_id) {
         Err(err) => {
             ic_utils::log!("retry_sign_up: internal error checking principal {user_id}: {err}");
             return RetrySignUpResponse::Err(RetrySignUpError::InternalError(format!(
@@ -134,7 +134,7 @@ pub fn retry_sign_up(user_id: Principal) -> RetrySignUpResponse {
             );
             return RetrySignUpResponse::Err(RetrySignUpError::CanisterNotInFailedState);
         }
-        Ok(Some(_)) => (),
+        Ok(Some(user)) => user.handle.0,
     };
 
     // 3. Update the user's canister status in the database to [`did::directory::UserCanisterStatus::CreationPending`]
@@ -147,7 +147,7 @@ pub fn retry_sign_up(user_id: Principal) -> RetrySignUpResponse {
 
     // 4. Spawn the state machine that will drive the user canister creation process, then return [`RetrySignUpResponse::Ok`].
     ic_utils::log!("retry_sign_up: restarting canister creation for user {user_id}");
-    start_sign_up_state_machine(user_id);
+    start_sign_up_state_machine(user_id, handle);
 
     RetrySignUpResponse::Ok
 }
@@ -158,11 +158,12 @@ fn alice() -> Principal {
     Principal::from_text("b77ix-eeaaa-aaaaa-qaada-cai").unwrap()
 }
 
-fn start_sign_up_state_machine(_user_id: Principal) {
+fn start_sign_up_state_machine(_user_id: Principal, handle: String) {
     #[cfg(target_family = "wasm")]
     {
         state::SignUpStateMachine::start(
             _user_id,
+            handle,
             crate::adapters::management_canister::IcManagementCanisterClient,
         );
     }
@@ -170,6 +171,7 @@ fn start_sign_up_state_machine(_user_id: Principal) {
     {
         state::SignUpStateMachine::start(
             _user_id,
+            handle,
             crate::adapters::management_canister::mock::MockManagementCanisterClient {
                 canister_self: Principal::from_text("br5f7-7uaaa-aaaaa-qaaca-cai").unwrap(),
                 created_canister_id: Principal::from_text("bkyz2-fmaaa-aaaaa-qaaaq-cai").unwrap(),

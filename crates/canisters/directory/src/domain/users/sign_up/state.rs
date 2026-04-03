@@ -86,6 +86,8 @@ where
 {
     /// The user for which the sign up process is being executed.
     user_id: Principal,
+    /// User handle
+    handle: String,
     /// Adapter for management canister calls.
     client: C,
 }
@@ -95,7 +97,7 @@ where
     C: ManagementCanister + 'static,
 {
     /// Start a new sign up process for a user by initializing their state in the `USER_SIGN_UP_STATES` thread-local storage.
-    pub fn start(user_id: Principal, client: C) {
+    pub fn start(user_id: Principal, handle: String, client: C) {
         ic_utils::log!("Starting sign up process for user {user_id}",);
         // if there is already an entry for the user, return early to prevent starting multiple sign up processes for the same user
         let already_exists =
@@ -108,7 +110,12 @@ where
         USER_SIGN_UP_STATES
             .with_borrow_mut(|states| states.insert(user_id, SignUpStateStep::default()));
 
-        Self { user_id, client }.tick();
+        Self {
+            user_id,
+            handle,
+            client,
+        }
+        .tick();
     }
 
     /// Tick the state machine to progress the sign up process for the user.
@@ -235,6 +242,7 @@ where
         let init_args = UserInstallArgs::Init {
             owner: self.user_id,
             federation_canister,
+            handle: self.handle.clone(),
         };
         let Ok(init_args) = candid::encode_one(init_args) else {
             // failed to encode, return same state to retry
@@ -342,6 +350,7 @@ mod tests {
         SignUpStateMachine {
             user_id: rey_canisteryo(),
             client,
+            handle: "rey_canisteryo".to_string(),
         }
     }
 

@@ -34,8 +34,10 @@ pub struct UserProfile {
     pub display_name: Option<String>,
     /// Optional free-text biography.
     pub bio: Option<String>,
-    /// Optional URL pointing to the user's avatar image.
-    pub avatar_url: Option<String>,
+    /// Optional image data for the user's avatar. Can be empty if no avatar is set.
+    pub avatar: Option<Vec<u8>>,
+    /// Optional header image data for the user's profile. Can be empty if no header is set.
+    pub header: Option<Vec<u8>>,
     /// Timestamp (nanoseconds since epoch) of account creation.
     pub created_at: u64,
 }

@@ -22,7 +22,8 @@ fn test_should_roundtrip_user_profile() {
         handle: "alice".to_string(),
         display_name: Some("Alice".to_string()),
         bio: Some("Hello world".to_string()),
-        avatar_url: Some("https://example.com/avatar.png".to_string()),
+        avatar: Some(vec![1, 2, 3]),
+        header: Some(vec![4, 5, 6]),
         created_at: 1_000_000_000,
     };
     let bytes = Encode!(&profile).unwrap();
@@ -36,7 +37,8 @@ fn test_should_roundtrip_user_profile_with_none_fields() {
         handle: "bob".to_string(),
         display_name: None,
         bio: None,
-        avatar_url: None,
+        avatar: None,
+        header: None,
         created_at: 0,
     };
     let bytes = Encode!(&profile).unwrap();

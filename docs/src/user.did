@@ -1,3 +1,12 @@
+// Error types for the `get_profile` method.
+type GetProfileError = variant {
+  // Internal error occurred while fetching the profile.
+  Internal : text;
+  // The profile has not been initialized yet.
+  NotFound;
+};
+// Response type for the `get_profile` method.
+type GetProfileResponse = variant { Ok : UserProfile; Err : GetProfileError };
 // Install arguments for the User Canister.
 type UserInstallArgs = variant {
   // Upgrade argument, provided on `upgrade`.
@@ -8,6 +17,26 @@ type UserInstallArgs = variant {
     federation_canister : principal;
     // The owner principal (the user's Internet Identity).
     owner : principal;
+    // User handle
+    handle : text;
   };
 };
-service : (UserInstallArgs) -> {}
+// A user's public profile information. Stored in the User Canister and returned
+// by profile queries.
+type UserProfile = record {
+  // Optional free-text biography.
+  bio : opt text;
+  // Timestamp (nanoseconds since epoch) of account creation.
+  created_at : nat64;
+  // Optional human-readable name shown in the UI.
+  display_name : opt text;
+  // Unique username chosen at sign-up (e.g. `alice`).
+  handle : text;
+  // Optional image data for the user's avatar. Can be empty if no avatar is set.
+  avatar : opt blob;
+  // Optional header image data for the user's profile. Can be empty if no header is set.
+  header : opt blob;
+};
+service : (UserInstallArgs) -> {
+  get_profile : () -> (GetProfileResponse) query;
+}
