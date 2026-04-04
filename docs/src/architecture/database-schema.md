@@ -118,6 +118,13 @@ Stores inbound ActivityPub activities.
 | `object_data`   | `JSON`         |             | Activity object payload                          |
 | `created_at`    | `UINT64`       | INDEX       | Reception timestamp (indexed for feed ordering)  |
 
+### `follow_requests` Table
+
+| Column       | Type     | Constraint  | Description                              |
+| :----------- | :------- | :---------- | :--------------------------------------- |
+| `actor_uri`  | `TEXT`   | PRIMARY KEY | Requester's actor URI                    |
+| `created_at` | `UINT64` |             | Timestamp when follow request received   |
+
 ### `followers` Table
 
 | Column       | Type     | Constraint  | Description                    |

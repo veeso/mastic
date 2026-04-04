@@ -87,7 +87,12 @@ sequenceDiagram
 
 ## Follow User
 
-### Local follow (both users on Mastic)
+The follow lifecycle has three phases: **request**, **pending**, and
+**accept/reject**. Alice sends a follow request; Bob's canister stores
+it as a pending follow request; Bob reviews pending requests and
+accepts or rejects each one.
+
+### Send follow request (local)
 
 ```mermaid
 sequenceDiagram
@@ -100,18 +105,15 @@ sequenceDiagram
     A->>DIR: Get Alice's User Canister (candid)
     DIR->>A: User Canister Principal
     A->>UC: follow_user (candid)
+    UC->>UC: Store pending follow (status: Pending)
     UC->>FED: Send Follow Activity
     FED->>DIR: Resolve Bob's User Canister
     DIR->>FED: Bob's User Canister Principal
-    FED->>BUC: Deliver Follow activity
-    BUC->>BUC: Record follower (Alice)
-    BUC->>FED: Send Accept Activity
-    FED->>DIR: Resolve Alice's User Canister
-    FED->>UC: Deliver Accept activity
-    UC->>UC: Record following (Bob)
+    FED->>BUC: receive_activity (Follow)
+    BUC->>BUC: Store follow request in follow_requests table
 ```
 
-### Remote follow (target on external Fediverse instance)
+### Send follow request (remote)
 
 ```mermaid
 sequenceDiagram
@@ -124,13 +126,84 @@ sequenceDiagram
     A->>DIR: Get Alice's User Canister (candid)
     DIR->>A: User Canister Principal
     A->>UC: follow_user (candid)
+    UC->>UC: Store pending follow (status: Pending)
     UC->>FED: Send Follow Activity
     FED->>M: Forward Follow Activity (ActivityPub / HTTP Signature)
-    M->>M: Record follower (Alice)
-    M->>FED: Send Accept Activity (ActivityPub)
+```
+
+### Accept follow request (local)
+
+```mermaid
+sequenceDiagram
+    actor B as Bob
+    participant BUC as Bob's User Canister
+    participant FED as Federation Canister
+    participant DIR as Directory Canister
+    participant UC as Alice's User Canister
+
+    B->>BUC: get_follow_requests (candid)
+    BUC->>B: List of pending follow requests
+    B->>BUC: accept_follow (candid, Alice's actor URI)
+    BUC->>BUC: Add Alice to followers table
+    BUC->>BUC: Remove request from follow_requests table
+    BUC->>FED: Send Accept(Follow) Activity
     FED->>DIR: Resolve Alice's User Canister
-    FED->>UC: Deliver Accept activity
-    UC->>UC: Record following (remote user)
+    DIR->>FED: Alice's User Canister Principal
+    FED->>UC: receive_activity (Accept(Follow))
+    UC->>UC: Update following status: Accepted
+```
+
+### Accept follow request (remote target accepts)
+
+```mermaid
+sequenceDiagram
+    participant M as Mastodon Web2
+    participant FED as Federation Canister
+    participant DIR as Directory Canister
+    participant UC as Alice's User Canister
+
+    M->>FED: Send Accept(Follow) Activity (ActivityPub)
+    FED->>DIR: Resolve Alice's User Canister
+    DIR->>FED: Alice's User Canister Principal
+    FED->>UC: receive_activity (Accept(Follow))
+    UC->>UC: Update following status: Accepted
+```
+
+### Reject follow request (local)
+
+```mermaid
+sequenceDiagram
+    actor B as Bob
+    participant BUC as Bob's User Canister
+    participant FED as Federation Canister
+    participant DIR as Directory Canister
+    participant UC as Alice's User Canister
+
+    B->>BUC: get_follow_requests (candid)
+    BUC->>B: List of pending follow requests
+    B->>BUC: reject_follow (candid, Alice's actor URI)
+    BUC->>BUC: Remove request from follow_requests table
+    BUC->>FED: Send Reject(Follow) Activity
+    FED->>DIR: Resolve Alice's User Canister
+    DIR->>FED: Alice's User Canister Principal
+    FED->>UC: receive_activity (Reject(Follow))
+    UC->>UC: Update following status: Rejected
+```
+
+### Reject follow request (remote target rejects)
+
+```mermaid
+sequenceDiagram
+    participant M as Mastodon Web2
+    participant FED as Federation Canister
+    participant DIR as Directory Canister
+    participant UC as Alice's User Canister
+
+    M->>FED: Send Reject(Follow) Activity (ActivityPub)
+    FED->>DIR: Resolve Alice's User Canister
+    DIR->>FED: Alice's User Canister Principal
+    FED->>UC: receive_activity (Reject(Follow))
+    UC->>UC: Update following status: Rejected
 ```
 
 ## Unfollow User

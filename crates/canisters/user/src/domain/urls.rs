@@ -47,6 +47,14 @@ pub fn following_url(handle: &str) -> CanisterResult<String> {
     Ok(format!("{public_url}/users/{handle}/following"))
 }
 
+/// Derive the inbox URL from a full actor URI by appending `/inbox`.
+///
+/// For M0 all users are local, so the inbox is always `{actor_uri}/inbox`.
+/// For remote actors (future), this would require a WebFinger lookup.
+pub fn inbox_url_from_actor_uri(actor_uri: &str) -> String {
+    format!("{actor_uri}/inbox")
+}
+
 #[cfg(test)]
 mod tests {
 
@@ -86,6 +94,14 @@ mod tests {
         assert_eq!(
             followers_url("alice").unwrap(),
             "https://mastic.social/users/alice/followers"
+        );
+    }
+
+    #[test]
+    fn test_inbox_url_from_actor_uri() {
+        assert_eq!(
+            inbox_url_from_actor_uri("https://mastic.social/users/alice"),
+            "https://mastic.social/users/alice/inbox"
         );
     }
 

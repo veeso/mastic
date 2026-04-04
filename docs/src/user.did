@@ -1,3 +1,19 @@
+// Request arguments for the `accept_follow` method.
+type AcceptFollowArgs = record {
+  // Actor URI of the user whose follow request to accept.
+  actor_uri : text;
+};
+// Error types for the `accept_follow` method.
+type AcceptFollowError = variant {
+  // Internal error occurred while processing the accept request.
+  Internal : text;
+  // The caller is not the canister owner.
+  Unauthorized;
+  // No pending follow request exists from the given actor URI.
+  RequestNotFound;
+};
+// Response type for the `accept_follow` method.
+type AcceptFollowResponse = variant { Ok; Err : AcceptFollowError };
 // Request arguments for the `follow_user` method.
 type FollowUserArgs = record {
   // Handle of the user to follow.
@@ -104,7 +120,9 @@ type Visibility = variant {
   Direct;
 };
 service : (UserInstallArgs) -> {
+  accept_follow : (AcceptFollowArgs) -> (AcceptFollowResponse);
   follow_user : (FollowUserArgs) -> (FollowUserResponse);
   get_profile : () -> (GetProfileResponse) query;
   publish_status : (PublishStatusArgs) -> (PublishStatusResponse);
+  reject_follow : (AcceptFollowArgs) -> (AcceptFollowResponse);
 }

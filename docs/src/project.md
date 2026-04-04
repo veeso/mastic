@@ -240,6 +240,8 @@ delete\_status : (*DeleteStatusArgs*) -> (*DeleteStatusResponse*);
 
 follow\_user : (*FollowUserArgs*) -> (*FollowUserResponse*);
 
+get\_follow\_requests : (*GetFollowRequestsArgs*) -> (*GetFollowRequestsResponse*) query;
+
 get\_followers : (*GetFollowersArgs*) -> (*GetFollowersResponse*) query;
 
 get\_following : (*GetFollowingArgs*) -> (*GetFollowingResponse*) query;
@@ -314,6 +316,8 @@ update\_profile : (*UpdateProfileArgs*) -> (*UpdateProfileResponse*)
 - **Alice** calls *follow\_user* on her **User Canister** with the target user’s handle
 - If the target is **local**: the **User Canister** resolves the handle via the **Directory Canister**, then sends a *Follow* activity to the target **User Canister** through the **Federation Canister**
 - If the target is **remote**: the **User Canister** sends a *Follow* activity to the **Federation Canister**, which forwards it to the remote instance via HTTP
+- The target user’s **User Canister** stores the incoming *Follow* as a pending follow request
+- The target user can view pending requests via *get\_follow\_requests* and call *accept\_follow* or *reject\_follow*
 - When the target accepts, an *Accept* activity is delivered back, and Alice’s **User Canister** records the follow relationship
 
 ### UC6: As a User, I should be able to remove a Following

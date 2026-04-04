@@ -3,8 +3,9 @@
 pub mod inspect;
 
 use did::user::{
-    FollowUserArgs, FollowUserResponse, GetProfileResponse, PublishStatusArgs,
-    PublishStatusResponse, UserInstallArgs,
+    AcceptFollowArgs, AcceptFollowResponse, FollowUserArgs, FollowUserResponse, GetProfileResponse,
+    PublishStatusArgs, PublishStatusResponse, RejectFollowArgs, RejectFollowResponse,
+    UserInstallArgs,
 };
 use ic_dbms_canister::prelude::DBMS_CONTEXT;
 
@@ -68,6 +69,17 @@ pub fn post_upgrade(args: UserInstallArgs) {
     ic_utils::log!("User canister post-upgrade completed successfully");
 }
 
+/// Accepts a pending follow request.
+///
+/// This function can only be called by the owner of the canister.
+pub async fn accept_follow(args: AcceptFollowArgs) -> AcceptFollowResponse {
+    if !inspect::is_owner(ic_utils::caller()) {
+        ic_utils::trap!("Only the owner can accept follow requests");
+    }
+
+    crate::domain::follower::accept_follow(args).await
+}
+
 /// Follows another user.
 ///
 /// This function can only be called by the owner of the canister.
@@ -82,6 +94,17 @@ pub async fn follow_user(args: FollowUserArgs) -> FollowUserResponse {
 /// Gets the user profile.
 pub fn get_profile() -> GetProfileResponse {
     crate::domain::profile::get_profile()
+}
+
+/// Rejects a pending follow request.
+///
+/// This function can only be called by the owner of the canister.
+pub async fn reject_follow(args: RejectFollowArgs) -> RejectFollowResponse {
+    if !inspect::is_owner(ic_utils::caller()) {
+        ic_utils::trap!("Only the owner can reject follow requests");
+    }
+
+    crate::domain::follower::reject_follow(args).await
 }
 
 /// Publishes a new status.

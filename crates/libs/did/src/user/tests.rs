@@ -109,7 +109,7 @@ fn test_should_roundtrip_follow_user_response_err() {
 #[test]
 fn test_should_roundtrip_accept_follow_args() {
     let args = AcceptFollowArgs {
-        follower: candid::Principal::anonymous(),
+        actor_uri: "https://mastic.social/users/alice".to_string(),
     };
     let bytes = Encode!(&args).unwrap();
     let decoded = Decode!(&bytes, AcceptFollowArgs).unwrap();
@@ -129,6 +129,7 @@ fn test_should_roundtrip_accept_follow_response_err() {
     for error in [
         AcceptFollowError::Unauthorized,
         AcceptFollowError::RequestNotFound,
+        AcceptFollowError::Internal("db error".to_string()),
     ] {
         let resp = AcceptFollowResponse::Err(error);
         let bytes = Encode!(&resp).unwrap();
@@ -140,7 +141,7 @@ fn test_should_roundtrip_accept_follow_response_err() {
 #[test]
 fn test_should_roundtrip_reject_follow_args() {
     let args = RejectFollowArgs {
-        follower: candid::Principal::anonymous(),
+        actor_uri: "https://mastic.social/users/alice".to_string(),
     };
     let bytes = Encode!(&args).unwrap();
     let decoded = Decode!(&bytes, RejectFollowArgs).unwrap();
@@ -160,6 +161,7 @@ fn test_should_roundtrip_reject_follow_response_err() {
     for error in [
         RejectFollowError::Unauthorized,
         RejectFollowError::RequestNotFound,
+        RejectFollowError::Internal("db error".to_string()),
     ] {
         let resp = RejectFollowResponse::Err(error);
         let bytes = Encode!(&resp).unwrap();
@@ -171,7 +173,7 @@ fn test_should_roundtrip_reject_follow_response_err() {
 #[test]
 fn test_should_roundtrip_unfollow_user_args() {
     let args = UnfollowUserArgs {
-        canister_id: candid::Principal::anonymous(),
+        actor_uri: "https://mastic.social/users/alice".to_string(),
     };
     let bytes = Encode!(&args).unwrap();
     let decoded = Decode!(&bytes, UnfollowUserArgs).unwrap();
@@ -191,6 +193,7 @@ fn test_should_roundtrip_unfollow_user_response_err() {
     for error in [
         UnfollowUserError::Unauthorized,
         UnfollowUserError::NotFollowing,
+        UnfollowUserError::Internal("db error".to_string()),
     ] {
         let resp = UnfollowUserResponse::Err(error);
         let bytes = Encode!(&resp).unwrap();
@@ -202,7 +205,7 @@ fn test_should_roundtrip_unfollow_user_response_err() {
 #[test]
 fn test_should_roundtrip_block_user_args() {
     let args = BlockUserArgs {
-        canister_id: candid::Principal::anonymous(),
+        actor_uri: "https://mastic.social/users/alice".to_string(),
     };
     let bytes = Encode!(&args).unwrap();
     let decoded = Decode!(&bytes, BlockUserArgs).unwrap();
@@ -219,10 +222,47 @@ fn test_should_roundtrip_block_user_response_ok() {
 
 #[test]
 fn test_should_roundtrip_block_user_response_err() {
-    let resp = BlockUserResponse::Err(BlockUserError::Unauthorized);
+    for error in [
+        BlockUserError::Unauthorized,
+        BlockUserError::Internal("db error".to_string()),
+    ] {
+        let resp = BlockUserResponse::Err(error);
+        let bytes = Encode!(&resp).unwrap();
+        let decoded = Decode!(&bytes, BlockUserResponse).unwrap();
+        assert_eq!(resp, decoded);
+    }
+}
+
+#[test]
+fn test_should_roundtrip_get_follow_requests_args() {
+    let args = GetFollowRequestsArgs {
+        offset: 0,
+        limit: 20,
+    };
+    let bytes = Encode!(&args).unwrap();
+    let decoded = Decode!(&bytes, GetFollowRequestsArgs).unwrap();
+    assert_eq!(args, decoded);
+}
+
+#[test]
+fn test_should_roundtrip_get_follow_requests_response_ok() {
+    let resp = GetFollowRequestsResponse::Ok(vec!["https://mastic.social/users/alice".to_string()]);
     let bytes = Encode!(&resp).unwrap();
-    let decoded = Decode!(&bytes, BlockUserResponse).unwrap();
+    let decoded = Decode!(&bytes, GetFollowRequestsResponse).unwrap();
     assert_eq!(resp, decoded);
+}
+
+#[test]
+fn test_should_roundtrip_get_follow_requests_response_err() {
+    for error in [
+        GetFollowRequestsError::Unauthorized,
+        GetFollowRequestsError::Internal("db error".to_string()),
+    ] {
+        let resp = GetFollowRequestsResponse::Err(error);
+        let bytes = Encode!(&resp).unwrap();
+        let decoded = Decode!(&bytes, GetFollowRequestsResponse).unwrap();
+        assert_eq!(resp, decoded);
+    }
 }
 
 #[test]
@@ -238,7 +278,7 @@ fn test_should_roundtrip_get_followers_args() {
 
 #[test]
 fn test_should_roundtrip_get_followers_response_ok() {
-    let resp = GetFollowersResponse::Ok(vec![candid::Principal::anonymous()]);
+    let resp = GetFollowersResponse::Ok(vec!["https://mastic.social/users/alice".to_string()]);
     let bytes = Encode!(&resp).unwrap();
     let decoded = Decode!(&bytes, GetFollowersResponse).unwrap();
     assert_eq!(resp, decoded);
@@ -246,10 +286,15 @@ fn test_should_roundtrip_get_followers_response_ok() {
 
 #[test]
 fn test_should_roundtrip_get_followers_response_err() {
-    let resp = GetFollowersResponse::Err(GetFollowersError::Unauthorized);
-    let bytes = Encode!(&resp).unwrap();
-    let decoded = Decode!(&bytes, GetFollowersResponse).unwrap();
-    assert_eq!(resp, decoded);
+    for error in [
+        GetFollowersError::Unauthorized,
+        GetFollowersError::Internal("db error".to_string()),
+    ] {
+        let resp = GetFollowersResponse::Err(error);
+        let bytes = Encode!(&resp).unwrap();
+        let decoded = Decode!(&bytes, GetFollowersResponse).unwrap();
+        assert_eq!(resp, decoded);
+    }
 }
 
 #[test]
@@ -265,7 +310,7 @@ fn test_should_roundtrip_get_following_args() {
 
 #[test]
 fn test_should_roundtrip_get_following_response_ok() {
-    let resp = GetFollowingResponse::Ok(vec![candid::Principal::anonymous()]);
+    let resp = GetFollowingResponse::Ok(vec!["https://mastic.social/users/alice".to_string()]);
     let bytes = Encode!(&resp).unwrap();
     let decoded = Decode!(&bytes, GetFollowingResponse).unwrap();
     assert_eq!(resp, decoded);
@@ -273,10 +318,15 @@ fn test_should_roundtrip_get_following_response_ok() {
 
 #[test]
 fn test_should_roundtrip_get_following_response_err() {
-    let resp = GetFollowingResponse::Err(GetFollowingError::Unauthorized);
-    let bytes = Encode!(&resp).unwrap();
-    let decoded = Decode!(&bytes, GetFollowingResponse).unwrap();
-    assert_eq!(resp, decoded);
+    for error in [
+        GetFollowingError::Unauthorized,
+        GetFollowingError::Internal("db error".to_string()),
+    ] {
+        let resp = GetFollowingResponse::Err(error);
+        let bytes = Encode!(&resp).unwrap();
+        let decoded = Decode!(&bytes, GetFollowingResponse).unwrap();
+        assert_eq!(resp, decoded);
+    }
 }
 
 #[test]
