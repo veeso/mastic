@@ -3,10 +3,35 @@
 #[cfg(test)]
 pub mod mock;
 
-#[cfg(any(target_family = "wasm", test))]
 use did::federation::SendActivityArgs;
-#[cfg(target_family = "wasm")]
-use did::federation::SendActivityResponse;
+
+use crate::error::CanisterResult;
+
+/// Send an activity to the Federation Canister.
+///
+/// Dispatches to the mock client in tests and to the real
+/// inter-canister client on wasm targets.
+pub async fn send_activity(_args: SendActivityArgs) -> CanisterResult<()> {
+    #[cfg(test)]
+    {
+        mock::FederationCanisterMockClient
+            .send_activity(_args)
+            .await
+            .map_err(crate::error::CanisterError::from)
+    }
+    #[cfg(target_family = "wasm")]
+    {
+        let federation_canister = crate::settings::get_federation_canister()?;
+        IcFederationCanisterClient::from(federation_canister)
+            .send_activity(_args)
+            .await
+            .map_err(crate::error::CanisterError::from)
+    }
+    #[cfg(not(any(target_family = "wasm", test)))]
+    {
+        panic!("send_activity is not implemented for non-wasm, non-test targets");
+    }
+}
 
 /// Abstraction over the federation canister API.
 #[cfg(any(target_family = "wasm", test))]
@@ -51,6 +76,8 @@ impl FederationCanister for IcFederationCanisterClient {
         &self,
         args: SendActivityArgs,
     ) -> Result<(), FederationCanisterClientError> {
+        use did::federation::SendActivityResponse;
+
         ic_utils::log!("IcFederationCanisterClient::send_activity: sending send_activity request");
 
         let raw = ic_cdk::call::Call::bounded_wait(self.canister_id, "send_activity")

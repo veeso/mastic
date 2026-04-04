@@ -83,22 +83,8 @@ async fn save_status_and_publish_to_federation(
     );
 
     // publish to federation
-    let _args = SendActivityArgs::Batch(activities);
-    #[cfg(test)]
-    {
-        use crate::adapters::federation::FederationCanister as _;
-        crate::adapters::federation::mock::FederationCanisterMockClient
-            .send_activity(_args)
-            .await?;
-    }
-    #[cfg(target_family = "wasm")]
-    {
-        use crate::adapters::federation::FederationCanister as _;
-        let federation_canister = crate::settings::get_federation_canister()?;
-        crate::adapters::federation::IcFederationCanisterClient::from(federation_canister)
-            .send_activity(_args)
-            .await?;
-    }
+    let args = SendActivityArgs::Batch(activities);
+    crate::adapters::federation::send_activity(args).await?;
 
     Ok(status)
 }

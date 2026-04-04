@@ -13,6 +13,8 @@ use pocket_ic_harness::{Canister, CanisterSetup, PocketIcTestEnv, alice};
 pub use self::directory_client::DirectoryClient;
 pub use self::user_client::UserClient;
 
+const PUBLIC_URL: &str = "https://mastic.social";
+
 pub fn rey_canisteryo() -> Principal {
     Principal::from_text("duo63-t5gbk-nptmp-gq7dy-saoed-ni2jl-5uuzr-ikrjk-o6vhp-2c3p5-pqe")
         .expect("Failed to parse Rey canister ID")
@@ -52,6 +54,7 @@ impl CanisterSetup for MasticCanisterSetup {
         let directory_init_args = DirectoryInstallArgs::Init {
             initial_moderator: alice(),
             federation_canister,
+            public_url: PUBLIC_URL.to_string(),
         };
         let directory_init_args =
             Encode!(&directory_init_args).expect("Failed to encode directory init args");
@@ -61,7 +64,7 @@ impl CanisterSetup for MasticCanisterSetup {
         // install the Federation canister with the Directory canister's ID as an argument
         let federation_init_args = FederationInstallArgs::Init {
             directory_canister,
-            public_url: "https://mastic.social".to_string(),
+            public_url: PUBLIC_URL.to_string(),
         };
         let federation_init_args =
             Encode!(&federation_init_args).expect("Failed to encode federation init args");
@@ -73,6 +76,7 @@ impl CanisterSetup for MasticCanisterSetup {
             owner: rey_canisteryo(),
             federation_canister,
             handle: "rey_canisteryo".to_string(),
+            public_url: PUBLIC_URL.to_string(),
         })
         .expect("Failed to encode user init args");
         env.install_canister(MasticCanister::User, user_init_args)

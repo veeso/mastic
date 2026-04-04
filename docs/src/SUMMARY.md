@@ -11,6 +11,7 @@
   - [Handle Validation](./specs/handles.md)
   - [Snowflake IDs](./specs/snowflake.md)
   - [Status Content](./specs/status.md)
+  - [URL Patterns](./specs/urls.md)
 - [Candid Interfaces](./interface.md)
   - [Candid Types](./interface/types.md)
 - [Project Specification](./project.md)

@@ -135,8 +135,9 @@ type FeedItem = record {
 Install arguments for the Directory Canister. Uses the `Init`/`Upgrade`
 variant pattern required by IC canister lifecycle.
 
-- **Init**: provided on first install. Sets the initial moderator and the
-  principal of the Federation Canister this directory cooperates with.
+- **Init**: provided on first install. Sets the initial moderator, the
+  principal of the Federation Canister this directory cooperates with,
+  and the public URL of the instance.
 - **Upgrade**: provided on subsequent upgrades (currently empty).
 
 ```candid
@@ -144,6 +145,7 @@ type DirectoryInstallArgs = variant {
   Init : record {
     initial_moderator : principal;
     federation_canister : principal;
+    public_url : text;
   };
   Upgrade : record {};
 };
@@ -456,8 +458,8 @@ Install arguments for the User Canister. Uses the `Init`/`Upgrade` variant
 pattern required by IC canister lifecycle.
 
 - **Init**: provided on first install. Sets the owner principal (the user's
-  Internet Identity) and the Federation Canister principal used for outbound
-  ActivityPub delivery.
+  Internet Identity), the Federation Canister principal used for outbound
+  ActivityPub delivery, the user handle, and the instance public URL.
 - **Upgrade**: provided on subsequent upgrades (currently empty).
 
 ```candid
@@ -465,6 +467,8 @@ type UserInstallArgs = variant {
   Init : record {
     owner : principal;
     federation_canister : principal;
+    handle : text;
+    public_url : text;
   };
   Upgrade : record {};
 };
@@ -522,19 +526,20 @@ type UpdateProfileError = variant {
 ### FollowUser
 
 Request, response, and error types for the `follow_user` method. Sends a
-follow request to another User Canister.
+follow request to another user by handle.
 
-| Field         | Description                                |
-| ------------- | ------------------------------------------ |
-| `canister_id` | Principal of the User Canister to follow.  |
+| Field    | Description                    |
+| -------- | ------------------------------ |
+| `handle` | Handle of the user to follow.  |
 
 - **Unauthorized**: the caller is not the canister owner.
 - **AlreadyFollowing**: the caller already follows the target user.
-- **CannotFollowSelf**: the caller attempted to follow their own canister.
+- **CannotFollowSelf**: the caller attempted to follow themselves.
+- **Internal**: an internal error occurred while processing the request.
 
 ```candid
 type FollowUserArgs = record {
-  canister_id : principal;
+  handle : text;
 };
 
 type FollowUserResponse = variant {
@@ -546,6 +551,7 @@ type FollowUserError = variant {
   Unauthorized;
   AlreadyFollowing;
   CannotFollowSelf;
+  Internal : text;
 };
 ```
 

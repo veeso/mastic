@@ -6,6 +6,8 @@ type DirectoryInstallArgs = variant {
   Init : record {
     // Principal of the Federation canister
     federation_canister : principal;
+    // The public URL of the Mastic instance (e.g. `https://mastic.social`)
+    public_url : text;
     // The principal of the initial moderator who has permission to manage the directory.
     initial_moderator : principal;
   };

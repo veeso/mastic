@@ -110,9 +110,10 @@ definitions.
 
 Uses the `Init` / `Upgrade` enum variant pattern:
 
-- **Init** -- requires `initial_moderator` (Principal) and
-  `federation_canister` (Principal). Registers the database schema and
-  seeds the first moderator.
+- **Init** -- requires `initial_moderator` (Principal),
+  `federation_canister` (Principal), and `public_url` (String).
+  Registers the database schema, seeds the first moderator, and stores
+  the instance public URL.
 - **Upgrade** -- empty variant. Validates that the caller did not
   accidentally pass `Init` args on upgrade.
 
@@ -166,9 +167,9 @@ definitions.
 
 ### User Canister Install Arguments
 
-- **Init** -- requires `owner` (Principal) and `federation_canister`
-  (Principal). Registers the database schema and stores both principals
-  in settings.
+- **Init** -- requires `owner` (Principal), `federation_canister`
+  (Principal), `handle` (String), and `public_url` (String). Registers
+  the database schema and stores all values in settings.
 - **Upgrade** -- empty variant.
 
 ### Custom Data Types

@@ -9,6 +9,8 @@ use crate::schema::Schema;
 
 /// Setting key for the federation canister principal.
 const SETTING_FEDERATION_CANISTER: u16 = 0;
+/// Setting key for the public URL.
+const SETTING_PUBLIC_URL: u16 = 1;
 
 /// Gets the principal of the federation canister.
 pub fn get_federation_canister() -> CanisterResult<Principal> {
@@ -38,6 +40,27 @@ pub fn set_federation_canister(principal: Principal) -> CanisterResult<()> {
         .map_err(CanisterError::Settings)
 }
 
+/// Gets the public URL of the Mastic instance.
+pub fn get_public_url() -> CanisterResult<String> {
+    DBMS_CONTEXT
+        .with(|ctx| {
+            Settings::get_required_settings_value(
+                ctx,
+                Schema,
+                SETTING_PUBLIC_URL,
+                Settings::get_as_string,
+            )
+        })
+        .map_err(CanisterError::Settings)
+}
+
+/// Sets the public URL of the Mastic instance.
+pub fn set_public_url(url: String) -> CanisterResult<()> {
+    DBMS_CONTEXT
+        .with(|ctx| Settings::set_config_key(ctx, Schema, SETTING_PUBLIC_URL, url))
+        .map_err(CanisterError::Settings)
+}
+
 #[cfg(test)]
 mod tests {
 
@@ -45,6 +68,19 @@ mod tests {
 
     use super::*;
     use crate::test_utils::setup;
+
+    #[test]
+    fn test_should_overwrite_public_url_setting() {
+        setup();
+
+        let new_url = "https://new.mastic.social";
+        set_public_url(new_url.to_string()).expect("should set public url");
+
+        assert_eq!(
+            get_public_url().expect("should read public url after overwrite"),
+            new_url
+        );
+    }
 
     #[test]
     fn test_should_overwrite_federation_canister_setting() {

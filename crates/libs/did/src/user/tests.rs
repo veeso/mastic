@@ -8,6 +8,7 @@ fn test_should_roundtrip_user_install_args_init() {
         owner: candid::Principal::anonymous(),
         federation_canister: candid::Principal::anonymous(),
         handle: "rey_canisteryo".to_string(),
+        public_url: "https://mastic.social".to_string(),
     };
     let bytes = Encode!(&args).unwrap();
     let decoded = Decode!(&bytes, UserInstallArgs).unwrap();
@@ -76,7 +77,7 @@ fn test_should_roundtrip_update_profile_response_err() {
 #[test]
 fn test_should_roundtrip_follow_user_args() {
     let args = FollowUserArgs {
-        canister_id: candid::Principal::anonymous(),
+        handle: "alice".to_string(),
     };
     let bytes = Encode!(&args).unwrap();
     let decoded = Decode!(&bytes, FollowUserArgs).unwrap();

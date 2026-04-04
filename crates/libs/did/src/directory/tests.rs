@@ -7,6 +7,7 @@ fn test_should_roundtrip_directory_install_args_init() {
     let args = DirectoryInstallArgs::Init {
         initial_moderator: candid::Principal::anonymous(),
         federation_canister: candid::Principal::anonymous(),
+        public_url: "https://mastic.social".to_string(),
     };
     let bytes = Encode!(&args).unwrap();
     let decoded = Decode!(&bytes, DirectoryInstallArgs).unwrap();

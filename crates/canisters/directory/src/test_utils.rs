@@ -23,6 +23,7 @@ pub fn setup() {
     crate::api::init(DirectoryInstallArgs::Init {
         initial_moderator: admin(),
         federation_canister: federation(),
+        public_url: "https://mastic.social".to_string(),
     });
 }
 

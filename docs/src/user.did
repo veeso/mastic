@@ -1,3 +1,21 @@
+// Request arguments for the `follow_user` method.
+type FollowUserArgs = record {
+  // Handle of the user to follow.
+  handle : text;
+};
+// Error types for the `follow_user` method.
+type FollowUserError = variant {
+  // Internal error occurred while processing the follow request.
+  Internal : text;
+  // The caller already follows the target user.
+  AlreadyFollowing;
+  // The caller is not the canister owner.
+  Unauthorized;
+  // The caller attempted to follow their own canister.
+  CannotFollowSelf;
+};
+// Response type for the `follow_user` method.
+type FollowUserResponse = variant { Ok; Err : FollowUserError };
 // Error types for the `get_profile` method.
 type GetProfileError = variant {
   // Internal error occurred while fetching the profile.
@@ -50,6 +68,8 @@ type UserInstallArgs = variant {
   Init : record {
     // Principal of the Federation Canister used for outbound ActivityPub delivery.
     federation_canister : principal;
+    // The public URL of the Mastic instance (e.g. `https://mastic.social`)
+    public_url : text;
     // The owner principal (the user's Internet Identity).
     owner : principal;
     // User handle
@@ -84,6 +104,7 @@ type Visibility = variant {
   Direct;
 };
 service : (UserInstallArgs) -> {
+  follow_user : (FollowUserArgs) -> (FollowUserResponse);
   get_profile : () -> (GetProfileResponse) query;
   publish_status : (PublishStatusArgs) -> (PublishStatusResponse);
 }
