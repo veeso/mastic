@@ -669,14 +669,16 @@ type BlockUserError = variant {
 ### GetFollowers
 
 Request, response, and error types for the `get_followers` method. Returns a
-paginated list of principals that follow this user.
+paginated list of actor URIs that follow this user. The `limit` must not exceed
+**50** (the maximum page size).
 
-| Field    | Description                                 |
-| -------- | ------------------------------------------- |
-| `offset` | Number of results to skip (for pagination). |
-| `limit`  | Maximum number of results to return.        |
+| Field    | Description                                              |
+| -------- | -------------------------------------------------------- |
+| `offset` | Number of results to skip (for pagination).              |
+| `limit`  | Maximum number of results to return (max 50).            |
 
-- **Unauthorized**: the caller is not the canister owner.
+- **LimitExceeded**: the requested `limit` exceeds the maximum page size (50).
+- **Internal**: an internal error occurred while querying followers.
 
 ```candid
 type GetFollowersArgs = record {
@@ -685,26 +687,29 @@ type GetFollowersArgs = record {
 };
 
 type GetFollowersResponse = variant {
-  Ok : vec principal;
+  Ok : vec text;
   Err : GetFollowersError;
 };
 
 type GetFollowersError = variant {
-  Unauthorized;
+  LimitExceeded;
+  Internal : text;
 };
 ```
 
 ### GetFollowing
 
 Request, response, and error types for the `get_following` method. Returns a
-paginated list of principals that this user follows.
+paginated list of actor URIs that this user follows. The `limit` must not exceed
+**50** (the maximum page size).
 
-| Field    | Description                                 |
-| -------- | ------------------------------------------- |
-| `offset` | Number of results to skip (for pagination). |
-| `limit`  | Maximum number of results to return.        |
+| Field    | Description                                              |
+| -------- | -------------------------------------------------------- |
+| `offset` | Number of results to skip (for pagination).              |
+| `limit`  | Maximum number of results to return (max 50).            |
 
-- **Unauthorized**: the caller is not the canister owner.
+- **LimitExceeded**: the requested `limit` exceeds the maximum page size (50).
+- **Internal**: an internal error occurred while querying the following list.
 
 ```candid
 type GetFollowingArgs = record {
@@ -713,12 +718,13 @@ type GetFollowingArgs = record {
 };
 
 type GetFollowingResponse = variant {
-  Ok : vec principal;
+  Ok : vec text;
   Err : GetFollowingError;
 };
 
 type GetFollowingError = variant {
-  Unauthorized;
+  LimitExceeded;
+  Internal : text;
 };
 ```
 

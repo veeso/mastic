@@ -43,6 +43,17 @@ impl FollowingRepository {
         })
     }
 
+    /// Get the list of [`Following`]s of the user.
+    pub fn get_paginated(offset: usize, limit: usize) -> CanisterResult<Vec<Following>> {
+        DBMS_CONTEXT.with(|ctx| {
+            let db = WasmDbmsDatabase::oneshot(ctx, Schema);
+
+            db.select::<Following>(Query::builder().all().offset(offset).limit(limit).build())
+                .map(|records| records.into_iter().map(Self::record_to_following).collect())
+                .map_err(CanisterError::from)
+        })
+    }
+
     fn record_to_following(record: FollowingRecord) -> Following {
         Following {
             actor_uri: record.actor_uri.expect("must have field"),

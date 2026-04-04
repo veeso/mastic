@@ -10,7 +10,8 @@ mod test_utils;
 
 use did::user::{
     AcceptFollowArgs, AcceptFollowResponse, FollowUserArgs, FollowUserResponse,
-    GetFollowRequestsArgs, GetFollowRequestsResponse, GetProfileResponse, PublishStatusArgs,
+    GetFollowRequestsArgs, GetFollowRequestsResponse, GetFollowersArgs, GetFollowersResponse,
+    GetFollowingArgs, GetFollowingResponse, GetProfileResponse, PublishStatusArgs,
     PublishStatusResponse, RejectFollowArgs, RejectFollowResponse, UserInstallArgs,
 };
 
@@ -42,6 +43,16 @@ async fn follow_user(args: FollowUserArgs) -> FollowUserResponse {
 #[ic_cdk::query]
 fn get_follow_requests(args: GetFollowRequestsArgs) -> GetFollowRequestsResponse {
     api::get_follow_requests(args)
+}
+
+#[ic_cdk::query]
+fn get_followers(args: GetFollowersArgs) -> GetFollowersResponse {
+    api::get_followers(args)
+}
+
+#[ic_cdk::query]
+fn get_following(args: GetFollowingArgs) -> GetFollowingResponse {
+    api::get_following(args)
 }
 
 #[ic_cdk::query]
