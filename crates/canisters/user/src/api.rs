@@ -3,9 +3,9 @@
 pub mod inspect;
 
 use did::user::{
-    AcceptFollowArgs, AcceptFollowResponse, FollowUserArgs, FollowUserResponse, GetProfileResponse,
-    PublishStatusArgs, PublishStatusResponse, RejectFollowArgs, RejectFollowResponse,
-    UserInstallArgs,
+    AcceptFollowArgs, AcceptFollowResponse, FollowUserArgs, FollowUserResponse,
+    GetFollowRequestsArgs, GetFollowRequestsResponse, GetProfileResponse, PublishStatusArgs,
+    PublishStatusResponse, RejectFollowArgs, RejectFollowResponse, UserInstallArgs,
 };
 use ic_dbms_canister::prelude::DBMS_CONTEXT;
 
@@ -89,6 +89,15 @@ pub async fn follow_user(args: FollowUserArgs) -> FollowUserResponse {
     }
 
     crate::domain::following::follow_user(args).await
+}
+
+/// Gets a paginated list of pending follow requests.
+pub fn get_follow_requests(args: GetFollowRequestsArgs) -> GetFollowRequestsResponse {
+    if !inspect::is_owner(ic_utils::caller()) {
+        ic_utils::trap!("Only the owner can view follow requests");
+    }
+
+    crate::domain::follow_request::get_follow_requests(args)
 }
 
 /// Gets the user profile.
