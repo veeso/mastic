@@ -254,15 +254,11 @@ fn test_should_roundtrip_get_follow_requests_response_ok() {
 
 #[test]
 fn test_should_roundtrip_get_follow_requests_response_err() {
-    for error in [
-        GetFollowRequestsError::Unauthorized,
-        GetFollowRequestsError::Internal("db error".to_string()),
-    ] {
-        let resp = GetFollowRequestsResponse::Err(error);
-        let bytes = Encode!(&resp).unwrap();
-        let decoded = Decode!(&bytes, GetFollowRequestsResponse).unwrap();
-        assert_eq!(resp, decoded);
-    }
+    let error = GetFollowRequestsError::Internal("db error".to_string());
+    let resp = GetFollowRequestsResponse::Err(error);
+    let bytes = Encode!(&resp).unwrap();
+    let decoded = Decode!(&bytes, GetFollowRequestsResponse).unwrap();
+    assert_eq!(resp, decoded);
 }
 
 #[test]

@@ -32,6 +32,23 @@ type FollowUserError = variant {
 };
 // Response type for the `follow_user` method.
 type FollowUserResponse = variant { Ok; Err : FollowUserError };
+// Request arguments for the `get_follow_requests` method.
+type GetFollowRequestsArgs = record {
+  // Number of results to skip (for pagination).
+  offset : nat64;
+  // Maximum number of results to return.
+  limit : nat64;
+};
+// Error types for the `get_follow_requests` method.
+type GetFollowRequestsError = variant {
+  // Internal error occurred while querying follow requests.
+  Internal : text;
+};
+// Response type for the `get_follow_requests` method.
+type GetFollowRequestsResponse = variant {
+  Ok : vec text;
+  Err : GetFollowRequestsError;
+};
 // Error types for the `get_profile` method.
 type GetProfileError = variant {
   // Internal error occurred while fetching the profile.
@@ -122,6 +139,9 @@ type Visibility = variant {
 service : (UserInstallArgs) -> {
   accept_follow : (AcceptFollowArgs) -> (AcceptFollowResponse);
   follow_user : (FollowUserArgs) -> (FollowUserResponse);
+  get_follow_requests : (GetFollowRequestsArgs) -> (
+      GetFollowRequestsResponse,
+    ) query;
   get_profile : () -> (GetProfileResponse) query;
   publish_status : (PublishStatusArgs) -> (PublishStatusResponse);
   reject_follow : (AcceptFollowArgs) -> (AcceptFollowResponse);

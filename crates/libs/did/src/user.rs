@@ -205,8 +205,6 @@ pub struct GetFollowRequestsArgs {
 /// Error types for the `get_follow_requests` method.
 #[derive(Debug, Clone, PartialEq, Eq, CandidType, Serialize, Deserialize)]
 pub enum GetFollowRequestsError {
-    /// The caller is not the canister owner.
-    Unauthorized,
     /// Internal error occurred while querying follow requests.
     Internal(String),
 }

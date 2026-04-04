@@ -49,6 +49,22 @@ impl FollowRequestRepository {
         })
     }
 
+    /// Get a paginated list of [`FollowRequest`]s.
+    pub fn get_paginated(offset: usize, limit: usize) -> CanisterResult<Vec<FollowRequest>> {
+        DBMS_CONTEXT.with(|ctx| {
+            let db = WasmDbmsDatabase::oneshot(ctx, Schema);
+
+            let records = db
+                .select::<FollowRequest>(Query::builder().all().offset(offset).limit(limit).build())
+                .map_err(CanisterError::from)?;
+
+            Ok(records
+                .into_iter()
+                .map(Self::record_to_follow_request)
+                .collect())
+        })
+    }
+
     /// Delete a follow request by actor URI.
     pub fn delete_by_actor_uri(actor_uri: &str) -> CanisterResult<()> {
         DBMS_CONTEXT.with(|ctx| {

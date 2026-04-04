@@ -25,7 +25,8 @@ node_modules
 # mdBook output
 docs/book/
 
+.claude/plans/
 .claude/settings.local.json
-
+.claude/specs/
 
 docs/superpowers/
