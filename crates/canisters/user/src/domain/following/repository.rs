@@ -57,7 +57,7 @@ impl FollowingRepository {
     /// Delete a following entry by actor URI.
     #[cfg_attr(
         not(test),
-        expect(dead_code, reason = "will be used by receive_activity handler")
+        expect(dead_code, reason = "will be used by unfollow handler")
     )]
     pub fn delete_by_actor_uri(actor_uri: &str) -> CanisterResult<()> {
         DBMS_CONTEXT.with(|ctx| {
@@ -76,10 +76,6 @@ impl FollowingRepository {
     ///
     /// Implemented as delete + re-insert because wasm-dbms does not support
     /// in-place updates. Runs inside a transaction to maintain atomicity.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "will be used by receive_activity handler")
-    )]
     pub fn update_status(actor_uri: &str, new_status: FollowStatus) -> CanisterResult<()> {
         DBMS_CONTEXT.with(|ctx| {
             let tx_id =
