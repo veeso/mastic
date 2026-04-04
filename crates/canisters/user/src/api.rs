@@ -2,7 +2,10 @@
 
 pub mod inspect;
 
-use did::user::{GetProfileResponse, PublishStatusArgs, PublishStatusResponse, UserInstallArgs};
+use did::user::{
+    FollowUserArgs, FollowUserResponse, GetProfileResponse, PublishStatusArgs,
+    PublishStatusResponse, UserInstallArgs,
+};
 use ic_dbms_canister::prelude::DBMS_CONTEXT;
 
 /// Initializes the canister with the given arguments.
@@ -13,6 +16,7 @@ pub fn init(args: UserInstallArgs) {
         owner,
         federation_canister,
         handle,
+        public_url,
     } = args
     else {
         ic_utils::trap!("Invalid initialization arguments");
@@ -38,6 +42,12 @@ pub fn init(args: UserInstallArgs) {
         ic_utils::trap!("Failed to set federation canister: {:?}", err);
     }
 
+    // set public url
+    ic_utils::log!("Setting public URL to {public_url}");
+    if let Err(err) = crate::settings::set_public_url(public_url) {
+        ic_utils::trap!("Failed to set public URL: {:?}", err);
+    }
+
     // init profile
     ic_utils::log!("Creating user profile with handle {handle}");
     if let Err(err) = crate::domain::profile::create_profile(owner, &handle) {
@@ -58,12 +68,25 @@ pub fn post_upgrade(args: UserInstallArgs) {
     ic_utils::log!("User canister post-upgrade completed successfully");
 }
 
+/// Follows another user.
+///
+/// This function can only be called by the owner of the canister.
+pub async fn follow_user(args: FollowUserArgs) -> FollowUserResponse {
+    if !inspect::is_owner(ic_utils::caller()) {
+        ic_utils::trap!("Only the owner can follow other users");
+    }
+
+    crate::domain::following::follow_user(args).await
+}
+
 /// Gets the user profile.
 pub fn get_profile() -> GetProfileResponse {
     crate::domain::profile::get_profile()
 }
 
 /// Publishes a new status.
+///
+/// This function can only be called by the owner of the canister.
 pub async fn publish_status(args: PublishStatusArgs) -> PublishStatusResponse {
     if !inspect::is_owner(ic_utils::caller()) {
         ic_utils::trap!("Only the owner can publish status updates");
@@ -112,6 +135,7 @@ mod tests {
             owner: admin(),
             federation_canister: federation(),
             handle: "rey_canisteryo".to_string(),
+            public_url: "https://mastic.social".to_string(),
         });
     }
 

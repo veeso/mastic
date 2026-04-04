@@ -238,11 +238,16 @@ where
             // failed to get federation canister, return same state to retry
             return SignUpState::InstallWasm { canister_id };
         };
+        let Ok(public_url) = crate::settings::get_public_url() else {
+            // failed to get public url, return same state to retry
+            return SignUpState::InstallWasm { canister_id };
+        };
         // make init arguments and encode
         let init_args = UserInstallArgs::Init {
             owner: self.user_id,
             federation_canister,
             handle: self.handle.clone(),
+            public_url,
         };
         let Ok(init_args) = candid::encode_one(init_args) else {
             // failed to encode, return same state to retry

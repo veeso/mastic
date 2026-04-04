@@ -14,6 +14,7 @@ pub fn init(args: DirectoryInstallArgs) {
     let DirectoryInstallArgs::Init {
         initial_moderator,
         federation_canister,
+        public_url,
     } = args
     else {
         ic_utils::trap!("Invalid initialization arguments");
@@ -29,6 +30,11 @@ pub fn init(args: DirectoryInstallArgs) {
     ic_utils::log!("Setting federation canister to {federation_canister}");
     if let Err(err) = crate::settings::set_federation_canister(federation_canister) {
         ic_utils::trap!("Failed to set federation canister: {err}");
+    }
+
+    ic_utils::log!("Setting public URL to {public_url}");
+    if let Err(err) = crate::settings::set_public_url(public_url) {
+        ic_utils::trap!("Failed to set public URL: {err}");
     }
 
     ic_utils::log!("Adding initial moderator {initial_moderator}");
@@ -135,6 +141,7 @@ mod tests {
         post_upgrade(DirectoryInstallArgs::Init {
             initial_moderator: admin(),
             federation_canister: federation(),
+            public_url: "https://mastic.social".to_string(),
         });
     }
 

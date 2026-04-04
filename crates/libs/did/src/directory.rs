@@ -15,6 +15,8 @@ pub enum DirectoryInstallArgs {
         initial_moderator: candid::Principal,
         /// Principal of the Federation canister
         federation_canister: candid::Principal,
+        /// The public URL of the Mastic instance (e.g. `https://mastic.social`)
+        public_url: String,
     },
     /// Upgrade argument, provided on `upgrade`
     Upgrade {},

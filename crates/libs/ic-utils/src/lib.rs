@@ -2,6 +2,19 @@
 
 use candid::Principal;
 
+/// Returns this canister's own principal.
+pub fn canister_id() -> Principal {
+    #[cfg(target_family = "wasm")]
+    {
+        ic_cdk::api::canister_self()
+    }
+    #[cfg(not(target_family = "wasm"))]
+    {
+        // dummy canister principal for non-wasm targets (e.g., during unit tests)
+        Principal::from_text("aaaaa-aa").expect("it should be valid")
+    }
+}
+
 /// Returns the caller's principal.
 pub fn caller() -> Principal {
     #[cfg(target_family = "wasm")]

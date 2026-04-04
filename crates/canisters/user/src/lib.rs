@@ -8,7 +8,10 @@ mod settings;
 #[cfg(test)]
 mod test_utils;
 
-use did::user::{GetProfileResponse, PublishStatusArgs, PublishStatusResponse, UserInstallArgs};
+use did::user::{
+    FollowUserArgs, FollowUserResponse, GetProfileResponse, PublishStatusArgs,
+    PublishStatusResponse, UserInstallArgs,
+};
 
 #[ic_cdk::init]
 fn init(args: UserInstallArgs) {
@@ -23,6 +26,11 @@ fn post_upgrade(args: UserInstallArgs) {
 #[ic_cdk::inspect_message]
 fn inspect_message() {
     inspect::inspect();
+}
+
+#[ic_cdk::update]
+async fn follow_user(args: FollowUserArgs) -> FollowUserResponse {
+    api::follow_user(args).await
 }
 
 #[ic_cdk::query]

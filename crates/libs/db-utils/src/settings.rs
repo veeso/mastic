@@ -126,4 +126,33 @@ impl Settings {
             Err(SettingsError::BadConfig)
         }
     }
+
+    /// Converts a setting value to a [`String`].
+    pub fn get_as_string(value: &Value) -> SettingsResult<String> {
+        if let Value::Text(text) = value {
+            Ok(text.to_string())
+        } else {
+            Err(SettingsError::BadConfig)
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+
+    #[test]
+    fn test_get_as_string() {
+        let value = Value::from("https://mastic.social".to_string());
+        let result = Settings::get_as_string(&value).expect("should extract string");
+        assert_eq!(result, "https://mastic.social");
+    }
+
+    #[test]
+    fn test_get_as_string_wrong_type() {
+        let value = Value::from(42u64);
+        let result = Settings::get_as_string(&value);
+        assert!(result.is_err());
+    }
 }

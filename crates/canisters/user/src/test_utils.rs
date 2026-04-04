@@ -24,5 +24,6 @@ pub fn setup() {
         owner: admin(),
         federation_canister: federation(),
         handle: "rey_canisteryo".to_string(),
+        public_url: "https://mastic.social".to_string(),
     });
 }

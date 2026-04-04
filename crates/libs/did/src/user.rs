@@ -19,6 +19,8 @@ pub enum UserInstallArgs {
         federation_canister: candid::Principal,
         /// User handle
         handle: String,
+        /// The public URL of the Mastic instance (e.g. `https://mastic.social`)
+        public_url: String,
     },
     /// Upgrade argument, provided on `upgrade`.
     Upgrade {},
@@ -67,14 +69,14 @@ pub enum UpdateProfileResponse {
 }
 
 /// Request arguments for the `follow_user` method.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, CandidType, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, CandidType, Serialize, Deserialize)]
 pub struct FollowUserArgs {
-    /// Principal of the User Canister to follow.
-    pub canister_id: candid::Principal,
+    /// Handle of the user to follow.
+    pub handle: String,
 }
 
 /// Error types for the `follow_user` method.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, CandidType, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, CandidType, Serialize, Deserialize)]
 pub enum FollowUserError {
     /// The caller is not the canister owner.
     Unauthorized,
@@ -82,10 +84,12 @@ pub enum FollowUserError {
     AlreadyFollowing,
     /// The caller attempted to follow their own canister.
     CannotFollowSelf,
+    /// Internal error occurred while processing the follow request.
+    Internal(String),
 }
 
 /// Response type for the `follow_user` method.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, CandidType, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, CandidType, Serialize, Deserialize)]
 pub enum FollowUserResponse {
     Ok,
     Err(FollowUserError),
