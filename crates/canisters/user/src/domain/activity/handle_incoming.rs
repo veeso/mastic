@@ -40,6 +40,8 @@ pub fn handle_incoming(
 /// Handle an incoming `Follow` activity.
 ///
 /// Extracts the actor URI (the follower) and stores a pending follow request.
+/// If a follow request from the same actor already exists, the operation is
+/// treated as idempotent and succeeds without inserting a duplicate.
 fn handle_follow(activity: &Activity) -> Result<(), ReceiveActivityError> {
     let actor_uri = activity
         .actor
@@ -47,6 +49,17 @@ fn handle_follow(activity: &Activity) -> Result<(), ReceiveActivityError> {
         .ok_or(ReceiveActivityError::ProcessingFailed)?;
 
     ic_utils::log!("handle_incoming: Follow from {actor_uri}");
+
+    // Check for existing follow request to ensure idempotency (AP retries)
+    let existing = FollowRequestRepository::find_by_actor_uri(actor_uri).map_err(|e| {
+        ic_utils::log!("handle_incoming: failed to look up follow request: {e}");
+        ReceiveActivityError::Internal(e.to_string())
+    })?;
+
+    if existing.is_some() {
+        ic_utils::log!("handle_incoming: follow request from {actor_uri} already exists, skipping");
+        return Ok(());
+    }
 
     FollowRequestRepository::insert(actor_uri).map_err(|e| {
         ic_utils::log!("handle_incoming: failed to insert follow request: {e}");
@@ -300,6 +313,34 @@ mod tests {
             response,
             ReceiveActivityResponse::Err(ReceiveActivityError::ProcessingFailed)
         );
+    }
+
+    #[test]
+    fn test_should_handle_duplicate_follow_idempotently() {
+        setup();
+
+        let json = make_follow_json(
+            "https://mastic.social/users/alice",
+            "https://mastic.social/users/rey_canisteryo",
+        );
+
+        let first = handle_incoming(ReceiveActivityArgs {
+            activity_json: json.clone(),
+        });
+        assert_eq!(first, ReceiveActivityResponse::Ok);
+
+        // sending the same Follow again should succeed (idempotent)
+        let second = handle_incoming(ReceiveActivityArgs {
+            activity_json: json,
+        });
+        assert_eq!(second, ReceiveActivityResponse::Ok);
+
+        // only one follow request should exist
+        let request =
+            FollowRequestRepository::find_by_actor_uri("https://mastic.social/users/alice")
+                .expect("should query")
+                .expect("should find follow request");
+        assert_eq!(request.actor_uri.0, "https://mastic.social/users/alice");
     }
 
     #[test]

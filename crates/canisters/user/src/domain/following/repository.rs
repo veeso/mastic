@@ -43,14 +43,23 @@ impl FollowingRepository {
         })
     }
 
-    /// Get the list of [`Following`]s of the user.
-    pub fn get_paginated(offset: usize, limit: usize) -> CanisterResult<Vec<Following>> {
+    /// Get the list of accepted [`Following`]s of the user.
+    ///
+    /// Only returns entries with [`FollowStatus::Accepted`].
+    pub fn get_accepted_following(offset: usize, limit: usize) -> CanisterResult<Vec<Following>> {
         DBMS_CONTEXT.with(|ctx| {
             let db = WasmDbmsDatabase::oneshot(ctx, Schema);
 
-            db.select::<Following>(Query::builder().all().offset(offset).limit(limit).build())
-                .map(|records| records.into_iter().map(Self::record_to_following).collect())
-                .map_err(CanisterError::from)
+            db.select::<Following>(
+                Query::builder()
+                    .all()
+                    .and_where(Filter::eq("status", Value::from(FollowStatus::Accepted)))
+                    .offset(offset)
+                    .limit(limit)
+                    .build(),
+            )
+            .map(|records| records.into_iter().map(Self::record_to_following).collect())
+            .map_err(CanisterError::from)
         })
     }
 

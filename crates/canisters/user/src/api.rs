@@ -6,7 +6,8 @@ use did::user::{
     AcceptFollowArgs, AcceptFollowResponse, FollowUserArgs, FollowUserResponse,
     GetFollowRequestsArgs, GetFollowRequestsResponse, GetFollowersArgs, GetFollowersResponse,
     GetFollowingArgs, GetFollowingResponse, GetProfileResponse, PublishStatusArgs,
-    PublishStatusResponse, RejectFollowArgs, RejectFollowResponse, UserInstallArgs,
+    PublishStatusResponse, ReceiveActivityArgs, ReceiveActivityResponse, RejectFollowArgs,
+    RejectFollowResponse, UserInstallArgs,
 };
 use ic_dbms_canister::prelude::DBMS_CONTEXT;
 
@@ -116,17 +117,6 @@ pub fn get_profile() -> GetProfileResponse {
     crate::domain::profile::get_profile()
 }
 
-/// Rejects a pending follow request.
-///
-/// This function can only be called by the owner of the canister.
-pub async fn reject_follow(args: RejectFollowArgs) -> RejectFollowResponse {
-    if !inspect::is_owner(ic_utils::caller()) {
-        ic_utils::trap!("Only the owner can reject follow requests");
-    }
-
-    crate::domain::follower::reject_follow(args).await
-}
-
 /// Publishes a new status.
 ///
 /// This function can only be called by the owner of the canister.
@@ -136,6 +126,26 @@ pub async fn publish_status(args: PublishStatusArgs) -> PublishStatusResponse {
     }
 
     crate::domain::status::publish_status(args).await
+}
+
+/// Handles an incoming activity from the federation canister.
+pub fn receive_activity(args: ReceiveActivityArgs) -> ReceiveActivityResponse {
+    if !inspect::is_federation_canister(ic_utils::caller()) {
+        ic_utils::trap!("Only the federation canister can send activities");
+    }
+
+    crate::domain::activity::handle_incoming(args)
+}
+
+/// Rejects a pending follow request.
+///
+/// This function can only be called by the owner of the canister.
+pub async fn reject_follow(args: RejectFollowArgs) -> RejectFollowResponse {
+    if !inspect::is_owner(ic_utils::caller()) {
+        ic_utils::trap!("Only the owner can reject follow requests");
+    }
+
+    crate::domain::follower::reject_follow(args).await
 }
 
 #[cfg(test)]

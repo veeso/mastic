@@ -97,6 +97,23 @@ type PublishStatusError = variant {
 // Response type for the `publish_status` method.
 // On success, returns the created [`Status`] with its assigned ID and timestamp.
 type PublishStatusResponse = variant { Ok : Status; Err : PublishStatusError };
+// Request arguments for the `receive_activity` method.
+// Called by the Federation Canister to deliver an incoming ActivityPub activity.
+type ReceiveActivityArgs = record {
+  // JSON-encoded ActivityPub activity object.
+  activity_json : text;
+};
+// Error types for the `receive_activity` method.
+type ReceiveActivityError = variant {
+  // Internal error occurred while handling the activity.
+  Internal : text;
+  // The activity was valid but could not be processed (e.g. references a non-existent status).
+  ProcessingFailed;
+  // The JSON could not be parsed as a valid ActivityPub activity.
+  InvalidActivity;
+};
+// Response type for the `receive_activity` method.
+type ReceiveActivityResponse = variant { Ok; Err : ReceiveActivityError };
 // A single post authored by a user. Each status has a unique ID, content body,
 // author principal, creation timestamp, and visibility setting.
 type Status = record {
@@ -164,5 +181,6 @@ service : (UserInstallArgs) -> {
   get_following : (GetFollowersArgs) -> (GetFollowersResponse) query;
   get_profile : () -> (GetProfileResponse) query;
   publish_status : (PublishStatusArgs) -> (PublishStatusResponse);
+  receive_activity : (ReceiveActivityArgs) -> (ReceiveActivityResponse);
   reject_follow : (AcceptFollowArgs) -> (AcceptFollowResponse);
 }

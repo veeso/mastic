@@ -22,7 +22,7 @@ pub fn get_following(args: GetFollowingArgs) -> GetFollowingResponse {
 fn inner_get_following(
     GetFollowingArgs { offset, limit }: GetFollowingArgs,
 ) -> CanisterResult<Vec<String>> {
-    FollowingRepository::get_paginated(offset as usize, limit as usize)
+    FollowingRepository::get_accepted_following(offset as usize, limit as usize)
         .map(|following| following.into_iter().map(|f| f.actor_uri.0).collect())
 }
 
@@ -31,7 +31,15 @@ mod tests {
 
     use super::*;
     use crate::domain::following::FollowingRepository;
+    use crate::schema::FollowStatus;
     use crate::test_utils::setup;
+
+    /// Helper: insert a pending entry and accept it.
+    fn insert_accepted(actor_uri: &str) {
+        FollowingRepository::insert_pending(actor_uri).expect("should insert");
+        FollowingRepository::update_status(actor_uri, FollowStatus::Accepted)
+            .expect("should accept");
+    }
 
     #[test]
     fn test_should_reject_limit_exceeding_max_page_limit() {
@@ -82,10 +90,8 @@ mod tests {
     fn test_should_return_following() {
         setup();
 
-        FollowingRepository::insert_pending("https://mastic.social/users/alice")
-            .expect("should insert");
-        FollowingRepository::insert_pending("https://mastic.social/users/bob")
-            .expect("should insert");
+        insert_accepted("https://mastic.social/users/alice");
+        insert_accepted("https://mastic.social/users/bob");
 
         let response = get_following(GetFollowingArgs {
             offset: 0,
@@ -101,15 +107,43 @@ mod tests {
     }
 
     #[test]
+    fn test_should_only_return_accepted_following() {
+        setup();
+
+        // insert one accepted, one pending, one rejected
+        insert_accepted("https://mastic.social/users/alice");
+
+        FollowingRepository::insert_pending("https://mastic.social/users/bob")
+            .expect("should insert");
+        // bob stays pending
+
+        FollowingRepository::insert_pending("https://mastic.social/users/charlie")
+            .expect("should insert");
+        FollowingRepository::update_status(
+            "https://mastic.social/users/charlie",
+            FollowStatus::Rejected,
+        )
+        .expect("should reject");
+
+        let response = get_following(GetFollowingArgs {
+            offset: 0,
+            limit: 10,
+        });
+
+        let GetFollowingResponse::Ok(following) = response else {
+            panic!("expected Ok, got {response:?}");
+        };
+        assert_eq!(following.len(), 1);
+        assert_eq!(following[0], "https://mastic.social/users/alice");
+    }
+
+    #[test]
     fn test_should_paginate_following_with_limit() {
         setup();
 
-        FollowingRepository::insert_pending("https://mastic.social/users/alice")
-            .expect("should insert");
-        FollowingRepository::insert_pending("https://mastic.social/users/bob")
-            .expect("should insert");
-        FollowingRepository::insert_pending("https://mastic.social/users/charlie")
-            .expect("should insert");
+        insert_accepted("https://mastic.social/users/alice");
+        insert_accepted("https://mastic.social/users/bob");
+        insert_accepted("https://mastic.social/users/charlie");
 
         let response = get_following(GetFollowingArgs {
             offset: 0,
@@ -126,12 +160,9 @@ mod tests {
     fn test_should_paginate_following_with_offset() {
         setup();
 
-        FollowingRepository::insert_pending("https://mastic.social/users/alice")
-            .expect("should insert");
-        FollowingRepository::insert_pending("https://mastic.social/users/bob")
-            .expect("should insert");
-        FollowingRepository::insert_pending("https://mastic.social/users/charlie")
-            .expect("should insert");
+        insert_accepted("https://mastic.social/users/alice");
+        insert_accepted("https://mastic.social/users/bob");
+        insert_accepted("https://mastic.social/users/charlie");
 
         let response = get_following(GetFollowingArgs {
             offset: 2,
@@ -148,8 +179,7 @@ mod tests {
     fn test_should_return_empty_list_when_offset_exceeds_total() {
         setup();
 
-        FollowingRepository::insert_pending("https://mastic.social/users/alice")
-            .expect("should insert");
+        insert_accepted("https://mastic.social/users/alice");
 
         let response = get_following(GetFollowingArgs {
             offset: 10,

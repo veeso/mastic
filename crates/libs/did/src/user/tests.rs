@@ -599,7 +599,7 @@ fn test_should_roundtrip_receive_activity_response_ok() {
 #[test]
 fn test_should_roundtrip_receive_activity_response_err() {
     for error in [
-        ReceiveActivityError::Unauthorized,
+        ReceiveActivityError::Internal("Internal error".to_string()),
         ReceiveActivityError::InvalidActivity,
         ReceiveActivityError::ProcessingFailed,
     ] {
