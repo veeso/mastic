@@ -9,8 +9,9 @@ mod settings;
 mod test_utils;
 
 use did::user::{
-    FollowUserArgs, FollowUserResponse, GetProfileResponse, PublishStatusArgs,
-    PublishStatusResponse, UserInstallArgs,
+    AcceptFollowArgs, AcceptFollowResponse, FollowUserArgs, FollowUserResponse, GetProfileResponse,
+    PublishStatusArgs, PublishStatusResponse, RejectFollowArgs, RejectFollowResponse,
+    UserInstallArgs,
 };
 
 #[ic_cdk::init]
@@ -29,6 +30,11 @@ fn inspect_message() {
 }
 
 #[ic_cdk::update]
+async fn accept_follow(args: AcceptFollowArgs) -> AcceptFollowResponse {
+    api::accept_follow(args).await
+}
+
+#[ic_cdk::update]
 async fn follow_user(args: FollowUserArgs) -> FollowUserResponse {
     api::follow_user(args).await
 }
@@ -41,6 +47,11 @@ fn get_profile() -> GetProfileResponse {
 #[ic_cdk::update]
 async fn publish_status(args: PublishStatusArgs) -> PublishStatusResponse {
     api::publish_status(args).await
+}
+
+#[ic_cdk::update]
+async fn reject_follow(args: RejectFollowArgs) -> RejectFollowResponse {
+    api::reject_follow(args).await
 }
 
 ic_cdk::export_candid!();

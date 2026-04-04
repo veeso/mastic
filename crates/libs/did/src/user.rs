@@ -96,93 +96,126 @@ pub enum FollowUserResponse {
 }
 
 /// Request arguments for the `accept_follow` method.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, CandidType, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, CandidType, Serialize, Deserialize)]
 pub struct AcceptFollowArgs {
-    /// Principal of the User Canister whose follow request to accept.
-    pub follower: candid::Principal,
+    /// Actor URI of the user whose follow request to accept.
+    pub actor_uri: String,
 }
 
 /// Error types for the `accept_follow` method.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, CandidType, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, CandidType, Serialize, Deserialize)]
 pub enum AcceptFollowError {
     /// The caller is not the canister owner.
     Unauthorized,
-    /// No pending follow request exists from the given principal.
+    /// No pending follow request exists from the given actor URI.
     RequestNotFound,
+    /// Internal error occurred while processing the accept request.
+    Internal(String),
 }
 
 /// Response type for the `accept_follow` method.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, CandidType, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, CandidType, Serialize, Deserialize)]
 pub enum AcceptFollowResponse {
     Ok,
     Err(AcceptFollowError),
 }
 
 /// Request arguments for the `reject_follow` method.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, CandidType, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, CandidType, Serialize, Deserialize)]
 pub struct RejectFollowArgs {
-    /// Principal of the User Canister whose follow request to reject.
-    pub follower: candid::Principal,
+    /// Actor URI of the user whose follow request to reject.
+    pub actor_uri: String,
 }
 
 /// Error types for the `reject_follow` method.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, CandidType, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, CandidType, Serialize, Deserialize)]
 pub enum RejectFollowError {
     /// The caller is not the canister owner.
     Unauthorized,
-    /// No pending follow request exists from the given principal.
+    /// No pending follow request exists from the given actor URI.
     RequestNotFound,
+    /// Internal error occurred while processing the reject request.
+    Internal(String),
 }
 
 /// Response type for the `reject_follow` method.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, CandidType, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, CandidType, Serialize, Deserialize)]
 pub enum RejectFollowResponse {
     Ok,
     Err(RejectFollowError),
 }
 
 /// Request arguments for the `unfollow_user` method.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, CandidType, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, CandidType, Serialize, Deserialize)]
 pub struct UnfollowUserArgs {
-    /// Principal of the User Canister to unfollow.
-    pub canister_id: candid::Principal,
+    /// Actor URI of the user to unfollow.
+    pub actor_uri: String,
 }
 
 /// Error types for the `unfollow_user` method.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, CandidType, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, CandidType, Serialize, Deserialize)]
 pub enum UnfollowUserError {
     /// The caller is not the canister owner.
     Unauthorized,
     /// The caller does not currently follow the target user.
     NotFollowing,
+    /// Internal error occurred while processing the unfollow request.
+    Internal(String),
 }
 
 /// Response type for the `unfollow_user` method.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, CandidType, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, CandidType, Serialize, Deserialize)]
 pub enum UnfollowUserResponse {
     Ok,
     Err(UnfollowUserError),
 }
 
 /// Request arguments for the `block_user` method.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, CandidType, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, CandidType, Serialize, Deserialize)]
 pub struct BlockUserArgs {
-    /// Principal of the User Canister to block.
-    pub canister_id: candid::Principal,
+    /// Actor URI of the user to block.
+    pub actor_uri: String,
 }
 
 /// Error types for the `block_user` method.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, CandidType, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, CandidType, Serialize, Deserialize)]
 pub enum BlockUserError {
     /// The caller is not the canister owner.
     Unauthorized,
+    /// Internal error occurred while processing the block request.
+    Internal(String),
 }
 
 /// Response type for the `block_user` method.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, CandidType, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, CandidType, Serialize, Deserialize)]
 pub enum BlockUserResponse {
     Ok,
     Err(BlockUserError),
+}
+
+/// Request arguments for the `get_follow_requests` method.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, CandidType, Serialize, Deserialize)]
+pub struct GetFollowRequestsArgs {
+    /// Number of results to skip (for pagination).
+    pub offset: u64,
+    /// Maximum number of results to return.
+    pub limit: u64,
+}
+
+/// Error types for the `get_follow_requests` method.
+#[derive(Debug, Clone, PartialEq, Eq, CandidType, Serialize, Deserialize)]
+pub enum GetFollowRequestsError {
+    /// The caller is not the canister owner.
+    Unauthorized,
+    /// Internal error occurred while querying follow requests.
+    Internal(String),
+}
+
+/// Response type for the `get_follow_requests` method.
+#[derive(Debug, Clone, PartialEq, Eq, CandidType, Serialize, Deserialize)]
+pub enum GetFollowRequestsResponse {
+    Ok(Vec<String>),
+    Err(GetFollowRequestsError),
 }
 
 /// Request arguments for the `get_followers` method.
@@ -195,16 +228,18 @@ pub struct GetFollowersArgs {
 }
 
 /// Error types for the `get_followers` method.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, CandidType, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, CandidType, Serialize, Deserialize)]
 pub enum GetFollowersError {
     /// The caller is not the canister owner.
     Unauthorized,
+    /// Internal error occurred while querying followers.
+    Internal(String),
 }
 
 /// Response type for the `get_followers` method.
 #[derive(Debug, Clone, PartialEq, Eq, CandidType, Serialize, Deserialize)]
 pub enum GetFollowersResponse {
-    Ok(Vec<candid::Principal>),
+    Ok(Vec<String>),
     Err(GetFollowersError),
 }
 
@@ -218,16 +253,18 @@ pub struct GetFollowingArgs {
 }
 
 /// Error types for the `get_following` method.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, CandidType, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, CandidType, Serialize, Deserialize)]
 pub enum GetFollowingError {
     /// The caller is not the canister owner.
     Unauthorized,
+    /// Internal error occurred while querying following list.
+    Internal(String),
 }
 
 /// Response type for the `get_following` method.
 #[derive(Debug, Clone, PartialEq, Eq, CandidType, Serialize, Deserialize)]
 pub enum GetFollowingResponse {
-    Ok(Vec<candid::Principal>),
+    Ok(Vec<String>),
     Err(GetFollowingError),
 }
 

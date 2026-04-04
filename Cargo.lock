@@ -692,6 +692,7 @@ version = "0.1.0"
 dependencies = [
  "candid",
  "ic-dbms-canister",
+ "ic-utils",
  "serde",
  "thiserror 2.0.18",
  "wasm-dbms",

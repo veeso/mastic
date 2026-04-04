@@ -53,7 +53,7 @@ impl Settings {
         M: MemoryProvider,
         A: AccessControl,
     {
-        let tx_id = ctx.begin_transaction(vec![0x00]);
+        let tx_id = ctx.begin_transaction(crate::transaction::transaction_caller(ic_utils::now()));
         let mut db = WasmDbmsDatabase::from_transaction(ctx, schema, tx_id);
         // delete key if it already exists
         db.delete::<Settings>(

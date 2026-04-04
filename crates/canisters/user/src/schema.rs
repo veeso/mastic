@@ -116,6 +116,18 @@ pub struct Following {
     pub created_at: Uint64,
 }
 
+/// Follow requests
+#[derive(Debug, Table, Clone, PartialEq, Eq)]
+#[table = "follow_requests"]
+pub struct FollowRequest {
+    /// The followed actor's URI.
+    #[primary_key]
+    #[validate(UrlValidator)]
+    pub actor_uri: Text,
+    /// Created at timestamp.
+    pub created_at: Uint64,
+}
+
 #[derive(DatabaseSchema)]
 #[tables(
     Settings = "settings",
@@ -123,7 +135,8 @@ pub struct Following {
     Status = "statuses",
     InboxActivity = "inbox",
     Follower = "followers",
-    Following = "following"
+    Following = "following",
+    FollowRequest = "follow_requests"
 )]
 pub struct Schema;
 
