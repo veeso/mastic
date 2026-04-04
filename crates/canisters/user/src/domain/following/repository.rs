@@ -64,10 +64,6 @@ impl FollowingRepository {
     }
 
     /// Delete a following entry by actor URI.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "will be used by unfollow handler")
-    )]
     pub fn delete_by_actor_uri(actor_uri: &str) -> CanisterResult<()> {
         DBMS_CONTEXT.with(|ctx| {
             let db = WasmDbmsDatabase::oneshot(ctx, Schema);
@@ -173,25 +169,6 @@ mod tests {
             .expect("should query")
             .expect("should find entry");
         assert_eq!(entry.status, FollowStatus::Accepted);
-    }
-
-    #[test]
-    fn test_should_update_status_pending_to_rejected() {
-        setup();
-
-        FollowingRepository::insert_pending("https://mastic.social/users/alice")
-            .expect("should insert");
-
-        FollowingRepository::update_status(
-            "https://mastic.social/users/alice",
-            FollowStatus::Rejected,
-        )
-        .expect("should update");
-
-        let entry = FollowingRepository::find_by_actor_uri("https://mastic.social/users/alice")
-            .expect("should query")
-            .expect("should find entry");
-        assert_eq!(entry.status, FollowStatus::Rejected);
     }
 
     #[test]

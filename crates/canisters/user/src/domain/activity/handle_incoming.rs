@@ -23,8 +23,8 @@ pub fn handle_incoming(
 
     let result = match activity.base.kind {
         ActivityType::Follow => handle_follow(&activity),
-        ActivityType::Accept => handle_accept_or_reject(&activity, FollowStatus::Accepted),
-        ActivityType::Reject => handle_accept_or_reject(&activity, FollowStatus::Rejected),
+        ActivityType::Accept => handle_accept(&activity),
+        ActivityType::Reject => handle_reject(&activity),
         other => {
             ic_utils::log!("handle_incoming: unsupported activity type: {other:?}");
             Err(ReceiveActivityError::ProcessingFailed)
@@ -67,21 +67,14 @@ fn handle_follow(activity: &Activity) -> Result<(), ReceiveActivityError> {
     })
 }
 
-/// Handle an incoming `Accept(Follow)` or `Reject(Follow)` activity.
-///
-/// Extracts the actor URI of the remote user (from `activity.actor`) who accepted/rejected,
-/// finds the pending entry in the `following` table, and updates its status.
-fn handle_accept_or_reject(
-    activity: &Activity,
-    new_status: FollowStatus,
-) -> Result<(), ReceiveActivityError> {
-    // The actor who sent Accept/Reject is the user we were trying to follow
+/// Validate that the activity wraps an inner `Follow` activity and extract
+/// the remote actor URI (the user who accepted/rejected our follow request).
+fn validate_follow_response(activity: &Activity) -> Result<&str, ReceiveActivityError> {
     let remote_actor_uri = activity
         .actor
         .as_deref()
         .ok_or(ReceiveActivityError::ProcessingFailed)?;
 
-    // Validate that the inner object is a Follow activity
     let Some(ActivityObject::Activity(inner)) = &activity.object else {
         ic_utils::log!("handle_incoming: Accept/Reject missing inner Follow activity");
         return Err(ReceiveActivityError::ProcessingFailed);
@@ -95,12 +88,37 @@ fn handle_accept_or_reject(
         return Err(ReceiveActivityError::ProcessingFailed);
     }
 
-    ic_utils::log!(
-        "handle_incoming: updating following status for {remote_actor_uri} to {new_status}"
-    );
+    Ok(remote_actor_uri)
+}
 
-    FollowingRepository::update_status(remote_actor_uri, new_status).map_err(|e| {
+/// Handle an incoming `Accept(Follow)` activity.
+///
+/// Updates the pending entry in the `following` table to Accepted.
+fn handle_accept(activity: &Activity) -> Result<(), ReceiveActivityError> {
+    let remote_actor_uri = validate_follow_response(activity)?;
+
+    ic_utils::log!("handle_incoming: accepting following for {remote_actor_uri}");
+
+    FollowingRepository::update_status(remote_actor_uri, FollowStatus::Accepted).map_err(|e| {
         ic_utils::log!("handle_incoming: failed to update following status: {e}");
+        match e {
+            CanisterError::Database(_) => ReceiveActivityError::ProcessingFailed,
+            _ => ReceiveActivityError::Internal(e.to_string()),
+        }
+    })
+}
+
+/// Handle an incoming `Reject(Follow)` activity.
+///
+/// Deletes the pending entry from the `following` table so the user can
+/// re-issue a follow request in the future.
+fn handle_reject(activity: &Activity) -> Result<(), ReceiveActivityError> {
+    let remote_actor_uri = validate_follow_response(activity)?;
+
+    ic_utils::log!("handle_incoming: rejecting following for {remote_actor_uri}, removing entry");
+
+    FollowingRepository::delete_by_actor_uri(remote_actor_uri).map_err(|e| {
+        ic_utils::log!("handle_incoming: failed to delete following entry: {e}");
         match e {
             CanisterError::Database(_) => ReceiveActivityError::ProcessingFailed,
             _ => ReceiveActivityError::Internal(e.to_string()),
@@ -253,7 +271,7 @@ mod tests {
     }
 
     #[test]
-    fn test_should_update_following_to_rejected_on_reject() {
+    fn test_should_delete_following_on_reject() {
         setup();
 
         // first, create a pending following entry
@@ -271,10 +289,13 @@ mod tests {
 
         assert_eq!(response, ReceiveActivityResponse::Ok);
 
+        // entry should be deleted, not updated to rejected
         let entry = FollowingRepository::find_by_actor_uri("https://mastic.social/users/bob")
-            .expect("should query")
-            .expect("should find following entry");
-        assert_eq!(entry.status, FollowStatus::Rejected);
+            .expect("should query");
+        assert!(
+            entry.is_none(),
+            "following entry should be deleted on reject"
+        );
     }
 
     #[test]
@@ -297,9 +318,10 @@ mod tests {
     }
 
     #[test]
-    fn test_should_fail_reject_when_no_pending_following() {
+    fn test_should_succeed_reject_when_no_pending_following() {
         setup();
 
+        // Reject for a non-existent entry is idempotent (no-op delete)
         let json = make_reject_follow_json(
             "https://mastic.social/users/bob",
             "https://mastic.social/users/rey_canisteryo",
@@ -309,10 +331,7 @@ mod tests {
             activity_json: json,
         });
 
-        assert_eq!(
-            response,
-            ReceiveActivityResponse::Err(ReceiveActivityError::ProcessingFailed)
-        );
+        assert_eq!(response, ReceiveActivityResponse::Ok);
     }
 
     #[test]

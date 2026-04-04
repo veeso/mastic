@@ -866,7 +866,6 @@ mod tests {
             let entries = [
                 ("https://example.com/users/a", FollowStatus::Pending),
                 ("https://example.com/users/b", FollowStatus::Accepted),
-                ("https://example.com/users/c", FollowStatus::Rejected),
             ];
 
             for (uri, status) in entries {
@@ -882,7 +881,7 @@ mod tests {
                 .select::<Following>(Query::builder().build())
                 .expect("should select all following");
 
-            assert_eq!(rows.len(), 3);
+            assert_eq!(rows.len(), 2);
         });
     }
 }
