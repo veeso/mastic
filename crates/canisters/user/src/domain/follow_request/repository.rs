@@ -12,10 +12,6 @@ pub struct FollowRequestRepository;
 
 impl FollowRequestRepository {
     /// Insert a new follow request for the given actor URI.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "will be used by receive_activity handler")
-    )]
     pub fn insert(actor_uri: &str) -> CanisterResult<()> {
         DBMS_CONTEXT.with(|ctx| {
             let db = WasmDbmsDatabase::oneshot(ctx, Schema);
