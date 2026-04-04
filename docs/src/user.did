@@ -43,12 +43,30 @@ type GetFollowRequestsArgs = record {
 type GetFollowRequestsError = variant {
   // Internal error occurred while querying follow requests.
   Internal : text;
+  // The requested limit exceeds the maximum allowed page size.
+  LimitExceeded;
 };
 // Response type for the `get_follow_requests` method.
 type GetFollowRequestsResponse = variant {
   Ok : vec text;
   Err : GetFollowRequestsError;
 };
+// Request arguments for the `get_followers` method.
+type GetFollowersArgs = record {
+  // Number of results to skip (for pagination).
+  offset : nat64;
+  // Maximum number of results to return.
+  limit : nat64;
+};
+// Error types for the `get_followers` method.
+type GetFollowersError = variant {
+  // Internal error occurred while querying followers.
+  Internal : text;
+  // The requested limit exceeds the maximum allowed page size.
+  LimitExceeded;
+};
+// Response type for the `get_followers` method.
+type GetFollowersResponse = variant { Ok : vec text; Err : GetFollowersError };
 // Error types for the `get_profile` method.
 type GetProfileError = variant {
   // Internal error occurred while fetching the profile.
@@ -142,6 +160,8 @@ service : (UserInstallArgs) -> {
   get_follow_requests : (GetFollowRequestsArgs) -> (
       GetFollowRequestsResponse,
     ) query;
+  get_followers : (GetFollowersArgs) -> (GetFollowersResponse) query;
+  get_following : (GetFollowersArgs) -> (GetFollowersResponse) query;
   get_profile : () -> (GetProfileResponse) query;
   publish_status : (PublishStatusArgs) -> (PublishStatusResponse);
   reject_follow : (AcceptFollowArgs) -> (AcceptFollowResponse);

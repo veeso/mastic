@@ -4,7 +4,8 @@ pub mod inspect;
 
 use did::user::{
     AcceptFollowArgs, AcceptFollowResponse, FollowUserArgs, FollowUserResponse,
-    GetFollowRequestsArgs, GetFollowRequestsResponse, GetProfileResponse, PublishStatusArgs,
+    GetFollowRequestsArgs, GetFollowRequestsResponse, GetFollowersArgs, GetFollowersResponse,
+    GetFollowingArgs, GetFollowingResponse, GetProfileResponse, PublishStatusArgs,
     PublishStatusResponse, RejectFollowArgs, RejectFollowResponse, UserInstallArgs,
 };
 use ic_dbms_canister::prelude::DBMS_CONTEXT;
@@ -98,6 +99,16 @@ pub fn get_follow_requests(args: GetFollowRequestsArgs) -> GetFollowRequestsResp
     }
 
     crate::domain::follow_request::get_follow_requests(args)
+}
+
+/// Gets a paginated list of followers.
+pub fn get_followers(args: GetFollowersArgs) -> GetFollowersResponse {
+    crate::domain::follower::get_followers(args)
+}
+
+/// Gets a paginated list of following.
+pub fn get_following(args: GetFollowingArgs) -> GetFollowingResponse {
+    crate::domain::following::get_following(args)
 }
 
 /// Gets the user profile.

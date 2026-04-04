@@ -205,6 +205,8 @@ pub struct GetFollowRequestsArgs {
 /// Error types for the `get_follow_requests` method.
 #[derive(Debug, Clone, PartialEq, Eq, CandidType, Serialize, Deserialize)]
 pub enum GetFollowRequestsError {
+    /// The requested limit exceeds the maximum allowed page size.
+    LimitExceeded,
     /// Internal error occurred while querying follow requests.
     Internal(String),
 }
@@ -228,8 +230,8 @@ pub struct GetFollowersArgs {
 /// Error types for the `get_followers` method.
 #[derive(Debug, Clone, PartialEq, Eq, CandidType, Serialize, Deserialize)]
 pub enum GetFollowersError {
-    /// The caller is not the canister owner.
-    Unauthorized,
+    /// The requested limit exceeds the maximum allowed page size.
+    LimitExceeded,
     /// Internal error occurred while querying followers.
     Internal(String),
 }
@@ -253,8 +255,8 @@ pub struct GetFollowingArgs {
 /// Error types for the `get_following` method.
 #[derive(Debug, Clone, PartialEq, Eq, CandidType, Serialize, Deserialize)]
 pub enum GetFollowingError {
-    /// The caller is not the canister owner.
-    Unauthorized,
+    /// The requested limit exceeds the maximum allowed page size.
+    LimitExceeded,
     /// Internal error occurred while querying following list.
     Internal(String),
 }

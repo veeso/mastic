@@ -254,11 +254,15 @@ fn test_should_roundtrip_get_follow_requests_response_ok() {
 
 #[test]
 fn test_should_roundtrip_get_follow_requests_response_err() {
-    let error = GetFollowRequestsError::Internal("db error".to_string());
-    let resp = GetFollowRequestsResponse::Err(error);
-    let bytes = Encode!(&resp).unwrap();
-    let decoded = Decode!(&bytes, GetFollowRequestsResponse).unwrap();
-    assert_eq!(resp, decoded);
+    for error in [
+        GetFollowRequestsError::LimitExceeded,
+        GetFollowRequestsError::Internal("db error".to_string()),
+    ] {
+        let resp = GetFollowRequestsResponse::Err(error);
+        let bytes = Encode!(&resp).unwrap();
+        let decoded = Decode!(&bytes, GetFollowRequestsResponse).unwrap();
+        assert_eq!(resp, decoded);
+    }
 }
 
 #[test]
@@ -283,7 +287,7 @@ fn test_should_roundtrip_get_followers_response_ok() {
 #[test]
 fn test_should_roundtrip_get_followers_response_err() {
     for error in [
-        GetFollowersError::Unauthorized,
+        GetFollowersError::LimitExceeded,
         GetFollowersError::Internal("db error".to_string()),
     ] {
         let resp = GetFollowersResponse::Err(error);
@@ -315,7 +319,7 @@ fn test_should_roundtrip_get_following_response_ok() {
 #[test]
 fn test_should_roundtrip_get_following_response_err() {
     for error in [
-        GetFollowingError::Unauthorized,
+        GetFollowingError::LimitExceeded,
         GetFollowingError::Internal("db error".to_string()),
     ] {
         let resp = GetFollowingResponse::Err(error);
