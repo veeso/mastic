@@ -3,6 +3,7 @@
 /// Maximum number of items that can be requested in a single paginated query.
 pub const MAX_PAGE_LIMIT: u64 = 50;
 
+pub mod activity;
 pub mod ed25519;
 pub mod follow_request;
 pub mod follower;

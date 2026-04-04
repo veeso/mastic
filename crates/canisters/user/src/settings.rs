@@ -15,13 +15,6 @@ const SETTING_OWNER_PRINCIPAL: u16 = 1;
 const SETTING_PUBLIC_URL: u16 = 2;
 
 /// Gets the principal of the federation canister.
-#[cfg_attr(
-    not(any(test, target_family = "wasm")),
-    expect(
-        dead_code,
-        reason = "settings will be used by upcoming canister methods"
-    )
-)]
 pub fn get_federation_canister() -> CanisterResult<Principal> {
     DBMS_CONTEXT
         .with(|ctx| {

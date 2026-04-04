@@ -476,18 +476,18 @@ pub struct ReceiveActivityArgs {
 }
 
 /// Error types for the `receive_activity` method.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, CandidType, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, CandidType, Serialize, Deserialize)]
 pub enum ReceiveActivityError {
-    /// The caller is not the Federation Canister.
-    Unauthorized,
     /// The JSON could not be parsed as a valid ActivityPub activity.
     InvalidActivity,
     /// The activity was valid but could not be processed (e.g. references a non-existent status).
     ProcessingFailed,
+    /// Internal error occurred while handling the activity.
+    Internal(String),
 }
 
 /// Response type for the `receive_activity` method.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, CandidType, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, CandidType, Serialize, Deserialize)]
 pub enum ReceiveActivityResponse {
     Ok,
     Err(ReceiveActivityError),

@@ -11,7 +11,18 @@ pub fn inspect() {
         | "reject_follow" => {
             let caller = ic_utils::caller();
             if !crate::api::inspect::is_owner(caller) {
-                ic_cdk::api::msg_reject("Unauthorized caller");
+                ic_cdk::api::msg_reject(
+                    "Unauthorized caller. Only the owner can call this method.",
+                );
+                return;
+            }
+        }
+        "receive_activity" => {
+            let caller = ic_utils::caller();
+            if !crate::api::inspect::is_federation_canister(caller) {
+                ic_cdk::api::msg_reject(
+                    "Unauthorized caller. Only the federation canister can call this method.",
+                );
                 return;
             }
         }

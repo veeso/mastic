@@ -15,7 +15,7 @@ use did::user::{FollowUserArgs, FollowUserError, FollowUserResponse};
 
 use super::FollowingRepository;
 use crate::domain::profile::ProfileRepository;
-use crate::error::CanisterError;
+use crate::error::{CanisterError, CanisterResult};
 
 /// Execute the follow-user flow.
 pub async fn follow_user(args: FollowUserArgs) -> FollowUserResponse {
@@ -58,7 +58,8 @@ async fn follow_user_inner(handle: &str) -> Result<(), FollowUserDomainError> {
         return Err(FollowUserDomainError::CannotFollowSelf);
     }
 
-    // build actor URI using centralized URL module
+    // build actor URIs using centralized URL module
+    let own_actor_uri = crate::domain::urls::actor_uri(&own_profile.handle.0)?;
     let target_actor_uri = crate::domain::urls::actor_uri(handle)?;
 
     // check if already following
@@ -70,7 +71,7 @@ async fn follow_user_inner(handle: &str) -> Result<(), FollowUserDomainError> {
     // insert pending follow and send activity
     FollowingRepository::insert_pending(&target_actor_uri)?;
 
-    let activity = make_follow_activity(&target_actor_uri);
+    let activity = make_follow_activity(&own_actor_uri, &target_actor_uri)?;
     let args = SendActivityArgs::One(SendActivityArgsObject {
         activity_json: serde_json::to_string(&activity)
             .expect("Activity serialization must not fail"),
@@ -83,10 +84,8 @@ async fn follow_user_inner(handle: &str) -> Result<(), FollowUserDomainError> {
 }
 
 /// Build a `Follow` [`Activity`] targeting the given actor URI.
-fn make_follow_activity(target_actor_uri: &str) -> Activity {
-    let actor = ic_utils::canister_id().to_text();
-
-    Activity {
+fn make_follow_activity(own_actor_uri: &str, target_actor_uri: &str) -> CanisterResult<Activity> {
+    Ok(Activity {
         base: BaseObject {
             context: Some(activitypub::context::Context::Uri(
                 ACTIVITY_STREAMS_CONTEXT.to_string(),
@@ -95,7 +94,7 @@ fn make_follow_activity(target_actor_uri: &str) -> Activity {
             to: Some(OneOrMany::One(target_actor_uri.to_string())),
             ..Default::default()
         },
-        actor: Some(actor),
+        actor: Some(own_actor_uri.to_string()),
         object: Some(activitypub::activity::ActivityObject::Id(
             target_actor_uri.to_string(),
         )),
@@ -103,7 +102,7 @@ fn make_follow_activity(target_actor_uri: &str) -> Activity {
         result: None,
         origin: None,
         instrument: None,
-    }
+    })
 }
 
 #[cfg(test)]
@@ -171,14 +170,14 @@ mod tests {
 
     #[test]
     fn test_make_follow_activity_should_build_follow() {
+        setup();
+
+        let own = "https://mastic.social/users/rey_canisteryo";
         let target = "https://mastic.social/users/bob";
-        let activity = make_follow_activity(target);
+        let activity = make_follow_activity(own, target).expect("should build activity");
 
         assert_eq!(activity.base.kind, ActivityType::Follow);
-        assert_eq!(
-            activity.actor.as_deref(),
-            Some(ic_utils::canister_id().to_text().as_str())
-        );
+        assert_eq!(activity.actor.as_deref(), Some(own));
         assert_eq!(activity.base.to, Some(OneOrMany::One(target.to_string())));
 
         let activitypub::activity::ActivityObject::Id(obj_uri) =
