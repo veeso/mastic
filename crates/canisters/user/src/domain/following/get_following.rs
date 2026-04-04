@@ -110,20 +110,12 @@ mod tests {
     fn test_should_only_return_accepted_following() {
         setup();
 
-        // insert one accepted, one pending, one rejected
+        // insert one accepted, one pending
         insert_accepted("https://mastic.social/users/alice");
 
         FollowingRepository::insert_pending("https://mastic.social/users/bob")
             .expect("should insert");
         // bob stays pending
-
-        FollowingRepository::insert_pending("https://mastic.social/users/charlie")
-            .expect("should insert");
-        FollowingRepository::update_status(
-            "https://mastic.social/users/charlie",
-            FollowStatus::Rejected,
-        )
-        .expect("should reject");
 
         let response = get_following(GetFollowingArgs {
             offset: 0,

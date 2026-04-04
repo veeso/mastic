@@ -10,8 +10,9 @@ use wasm_dbms_api::prelude::*;
 ///
 /// Tracks the lifecycle of a follow request: a `Follow` activity
 /// starts in [`Pending`](FollowStatus::Pending), then transitions
-/// to [`Accepted`](FollowStatus::Accepted) on `Accept(Follow)` or
-/// [`Rejected`](FollowStatus::Rejected) on `Reject(Follow)`.
+/// to [`Accepted`](FollowStatus::Accepted) on `Accept(Follow)`.
+/// On `Reject(Follow)` the entry is deleted from the table so the
+/// user can re-issue the follow request.
 #[derive(
     Debug,
     Default,
@@ -33,8 +34,6 @@ pub enum FollowStatus {
     Pending,
     /// Follow request accepted by the remote actor.
     Accepted,
-    /// Follow request rejected by the remote actor.
-    Rejected,
 }
 
 impl fmt::Display for FollowStatus {
@@ -42,7 +41,6 @@ impl fmt::Display for FollowStatus {
         let status_str = match self {
             Self::Pending => "pending",
             Self::Accepted => "accepted",
-            Self::Rejected => "rejected",
         };
         write!(f, "{}", status_str)
     }
@@ -57,7 +55,6 @@ impl Encode for FollowStatus {
         std::borrow::Cow::Owned(vec![match self {
             Self::Pending => 0,
             Self::Accepted => 1,
-            Self::Rejected => 2,
         }])
     }
 
@@ -73,7 +70,6 @@ impl Encode for FollowStatus {
         match byte {
             0 => Ok(Self::Pending),
             1 => Ok(Self::Accepted),
-            2 => Ok(Self::Rejected),
             _ => Err(MemoryError::DecodeError(DecodeError::InvalidDiscriminant(
                 byte,
             ))),
@@ -103,16 +99,11 @@ mod tests {
     fn test_display() {
         assert_eq!(FollowStatus::Pending.to_string(), "pending");
         assert_eq!(FollowStatus::Accepted.to_string(), "accepted");
-        assert_eq!(FollowStatus::Rejected.to_string(), "rejected");
     }
 
     #[test]
     fn test_encode_decode_roundtrip() {
-        let cases = [
-            FollowStatus::Pending,
-            FollowStatus::Accepted,
-            FollowStatus::Rejected,
-        ];
+        let cases = [FollowStatus::Pending, FollowStatus::Accepted];
 
         for status in cases {
             let encoded = status.encode();
@@ -125,7 +116,6 @@ mod tests {
     fn test_encode_values() {
         assert_eq!(FollowStatus::Pending.encode().as_ref(), &[0]);
         assert_eq!(FollowStatus::Accepted.encode().as_ref(), &[1]);
-        assert_eq!(FollowStatus::Rejected.encode().as_ref(), &[2]);
     }
 
     #[test]
@@ -136,7 +126,7 @@ mod tests {
 
     #[test]
     fn test_decode_invalid_discriminant_returns_error() {
-        for byte in [3u8, 4, 10, 255] {
+        for byte in [2u8, 3, 4, 10, 255] {
             let result = FollowStatus::decode(Cow::Borrowed(&[byte]));
             assert!(result.is_err(), "expected error for discriminant {byte}");
         }
@@ -161,7 +151,6 @@ mod tests {
     #[test]
     fn test_ord() {
         assert!(FollowStatus::Pending < FollowStatus::Accepted);
-        assert!(FollowStatus::Accepted < FollowStatus::Rejected);
     }
 
     #[test]

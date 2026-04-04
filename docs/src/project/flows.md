@@ -187,7 +187,7 @@ sequenceDiagram
     FED->>DIR: Resolve Alice's User Canister
     DIR->>FED: Alice's User Canister Principal
     FED->>UC: receive_activity (Reject(Follow))
-    UC->>UC: Update following status: Rejected
+    UC->>UC: Remove pending follow entry
 ```
 
 ### Reject follow request (remote target rejects)
@@ -203,7 +203,7 @@ sequenceDiagram
     FED->>DIR: Resolve Alice's User Canister
     DIR->>FED: Alice's User Canister Principal
     FED->>UC: receive_activity (Reject(Follow))
-    UC->>UC: Update following status: Rejected
+    UC->>UC: Remove pending follow entry
 ```
 
 ## Unfollow User

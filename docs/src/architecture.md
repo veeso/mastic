@@ -137,7 +137,7 @@ identity.
   chronologically-sorted feed.
 - **Social graph** -- `followers` and `following` tables track the
   user's relationships. Follow requests go through
-  Pending/Accepted/Rejected states.
+  Pending/Accepted states. Rejected follows are deleted so the user can re-follow.
 - **Inbox** -- `receive_activity` (called only by the Federation
   Canister) writes inbound ActivityPub activities into the `inbox` table.
 - **Outbound activities** -- `follow_user`, `like_status`,
@@ -182,8 +182,8 @@ database storage:
 - **ActivityType** -- 14 variants (`Create`, `Update`, `Delete`,
   `Follow`, `Accept`, `Reject`, `Like`, `Announce`, `Undo`, `Block`,
   `Add`, `Remove`, `Flag`, `Move`). Discriminates inbox activities.
-- **FollowStatus** -- `Pending` (0), `Accepted` (1), `Rejected` (2).
-  Tracks the lifecycle of follow requests.
+- **FollowStatus** -- `Pending` (0), `Accepted` (1).
+  Tracks the lifecycle of follow requests. Rejected follows are deleted.
 
 ## Federation Canister
 

@@ -137,7 +137,7 @@ Stores inbound ActivityPub activities.
 | Column       | Type           | Constraint  | Description                          |
 | :----------- | :------------- | :---------- | :----------------------------------- |
 | `actor_uri`  | `TEXT`         | PRIMARY KEY | Followed actor's URI                 |
-| `status`     | `FollowStatus` |             | `Pending`, `Accepted`, or `Rejected` |
+| `status`     | `FollowStatus` |             | `Pending` or `Accepted` (rejected entries are deleted) |
 | `created_at` | `UINT64`       |             | Timestamp when follow was requested  |
 
 ## Custom Data Types
@@ -183,7 +183,6 @@ Maps to `activitypub::ActivityType`.
 | :---- | :--------- |
 | `0`   | `Pending`  |
 | `1`   | `Accepted` |
-| `2`   | `Rejected` |
 
 ## Persistence
 
