@@ -454,10 +454,12 @@ pub struct ReadFeedArgs {
 }
 
 /// Error types for the `read_feed` method.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, CandidType, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, CandidType, Serialize, Deserialize)]
 pub enum ReadFeedError {
-    /// The caller is not the canister owner.
-    Unauthorized,
+    /// Limit exceeds maximum allowed page size.
+    LimitExceeded,
+    /// Internal error occurred while reading the feed.
+    Internal(String),
 }
 
 /// Response type for the `read_feed` method.

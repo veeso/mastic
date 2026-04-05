@@ -6,8 +6,8 @@ use did::user::{
     AcceptFollowArgs, AcceptFollowResponse, FollowUserArgs, FollowUserResponse,
     GetFollowRequestsArgs, GetFollowRequestsResponse, GetFollowersArgs, GetFollowersResponse,
     GetFollowingArgs, GetFollowingResponse, GetProfileResponse, PublishStatusArgs,
-    PublishStatusResponse, ReceiveActivityArgs, ReceiveActivityResponse, RejectFollowArgs,
-    RejectFollowResponse, UserInstallArgs,
+    PublishStatusResponse, ReadFeedArgs, ReadFeedResponse, ReceiveActivityArgs,
+    ReceiveActivityResponse, RejectFollowArgs, RejectFollowResponse, UserInstallArgs,
 };
 use ic_dbms_canister::prelude::DBMS_CONTEXT;
 
@@ -126,6 +126,15 @@ pub async fn publish_status(args: PublishStatusArgs) -> PublishStatusResponse {
     }
 
     crate::domain::status::publish_status(args).await
+}
+
+/// Reads the user's feed, which includes status updates from followed users.
+pub fn read_feed(args: ReadFeedArgs) -> ReadFeedResponse {
+    if !inspect::is_owner(ic_utils::caller()) {
+        ic_utils::trap!("Only the owner can read their own feed");
+    }
+
+    crate::domain::feed::read_feed(args)
 }
 
 /// Handles an incoming activity from the federation canister.

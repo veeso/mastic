@@ -1,0 +1,597 @@
+//! Read feed flow logic
+
+use activitypub::Activity;
+use activitypub::activity::{ActivityObject, ActivityType as ApActivityType};
+use activitypub::object::{BaseObject, ObjectType, OneOrMany};
+use did::common::{FeedItem, Status, Visibility};
+use did::user::{ReadFeedArgs, ReadFeedError, ReadFeedResponse};
+use ic_dbms_canister::prelude::DBMS_CONTEXT;
+use wasm_dbms::WasmDbmsDatabase;
+use wasm_dbms_api::prelude::{ColumnDef, Database, Filter, Query, Value};
+
+use crate::error::CanisterResult;
+use crate::schema::{FeedSource, Schema, Visibility as DbVisibility};
+
+/// The ActivityStreams public addressing constant.
+const AS_PUBLIC: &str = "https://www.w3.org/ns/activitystreams#Public";
+
+/// Reads the user's feed, which includes status updates from followed users.
+///
+/// The user's feed is read from the denormalized `feed` table which indexes
+/// both outbox and inbox entries under a single sorted timeline.
+pub fn read_feed(ReadFeedArgs { limit, offset }: ReadFeedArgs) -> ReadFeedResponse {
+    ic_utils::log!("Reading user's feed with limit {limit} and offset {offset}");
+
+    if limit > crate::domain::MAX_PAGE_LIMIT {
+        ic_utils::log!(
+            "Requested feed page limit {limit} exceeds maximum of {MAX}",
+            MAX = crate::domain::MAX_PAGE_LIMIT
+        );
+        return ReadFeedResponse::Err(ReadFeedError::LimitExceeded);
+    }
+
+    match read_feed_inner(limit, offset) {
+        Ok(items) => ReadFeedResponse::Ok(items),
+        Err(e) => {
+            ic_utils::log!("Error reading feed: {e}");
+            ReadFeedResponse::Err(ReadFeedError::Internal(e.to_string()))
+        }
+    }
+}
+
+/// Internal helper that queries the aggregated `feed` table and hydrates
+/// each entry into a [`FeedItem`] by joining back to `statuses` or `inbox`.
+///
+/// Sorting, offset and limit are fully handled at the database level,
+/// keeping memory usage bounded regardless of feed size.
+fn read_feed_inner(limit: u64, offset: u64) -> CanisterResult<Vec<FeedItem>> {
+    let owner = crate::settings::get_owner_principal()?;
+    let own_profile = crate::domain::profile::ProfileRepository::get_profile()?;
+    let owner_actor_uri = crate::domain::urls::actor_uri(&own_profile.handle.0)?;
+
+    DBMS_CONTEXT.with(|ctx| {
+        let db = WasmDbmsDatabase::oneshot(ctx, Schema);
+
+        // Single query on the aggregated feed table
+        let feed_query = Query::builder()
+            .all()
+            .order_by_desc("created_at")
+            .limit(limit as usize)
+            .offset(offset as usize)
+            .build();
+        let feed_rows = db.select_raw("feed", feed_query)?;
+
+        let mut items = Vec::with_capacity(feed_rows.len());
+
+        for row in &feed_rows {
+            let Some(id) = find_value(row, "id")
+                .and_then(|v| v.as_uint64())
+                .map(|u| u.0)
+            else {
+                continue;
+            };
+            let Some(source) =
+                find_value(row, "source").and_then(|v| v.as_custom_type::<FeedSource>())
+            else {
+                continue;
+            };
+
+            let item = match source {
+                FeedSource::Outbox => hydrate_outbox(&db, id, owner),
+                FeedSource::Inbox => hydrate_inbox(&db, id, &owner_actor_uri),
+            };
+
+            if let Some(feed_item) = item {
+                items.push(feed_item);
+            }
+        }
+
+        Ok(items)
+    })
+}
+
+/// Loads a status from the `statuses` table and wraps it as a [`FeedItem`].
+fn hydrate_outbox(db: &impl Database, id: u64, owner: candid::Principal) -> Option<FeedItem> {
+    let query = Query::builder()
+        .all()
+        .and_where(Filter::eq("id", Value::from(id)))
+        .limit(1)
+        .build();
+    let rows = db.select_raw("statuses", query).ok()?;
+    let row = rows.first()?;
+
+    let content = find_value(row, "content")?.as_text()?.0.clone();
+    let db_vis: DbVisibility = find_value(row, "visibility")?.as_custom_type()?;
+    let created_at = find_value(row, "created_at")?.as_uint64()?.0;
+
+    Some(FeedItem {
+        status: Status {
+            id,
+            content,
+            author: owner,
+            created_at,
+            visibility: db_vis.into(),
+        },
+        boosted_by: None, // FIXME: eventually support boosts in M1
+    })
+}
+
+/// Loads an inbox activity and extracts its `Create(Note)` content as a [`FeedItem`].
+///
+/// Visibility filtering:
+/// - `Public` / `Unlisted` / `FollowersOnly`: always shown (the user is a
+///   follower by definition since the item landed in their inbox).
+/// - `Direct`: only shown if the owner's actor URI appears in `to` or `cc`.
+fn hydrate_inbox(db: &impl Database, id: u64, owner_actor_uri: &str) -> Option<FeedItem> {
+    let query = Query::builder()
+        .all()
+        .and_where(Filter::eq("id", Value::from(id)))
+        .limit(1)
+        .build();
+    let rows = db.select_raw("inbox", query).ok()?;
+    let row = rows.first()?;
+
+    let created_at = find_value(row, "created_at")?.as_uint64()?.0;
+    let json_val = find_value(row, "object_data")?.as_json()?;
+    let activity: Activity = serde_json::from_value(json_val.value().clone()).ok()?;
+    let (content, visibility) = extract_note_from_activity(&activity)?;
+
+    // Direct messages must only appear when the owner is explicitly addressed.
+    if visibility == Visibility::Direct && !is_addressed_to(&activity.base, owner_actor_uri) {
+        return None;
+    }
+
+    Some(FeedItem {
+        status: Status {
+            id,
+            content,
+            // Remote authors do not have an IC principal; use anonymous as a
+            // placeholder until directory-based resolution is implemented.
+            author: candid::Principal::anonymous(),
+            created_at,
+            visibility,
+        },
+        boosted_by: None, // FIXME: eventually support boosts in M1
+    })
+}
+
+/// Extracts the text content and inferred [`Visibility`] from a `Create(Note)` activity.
+fn extract_note_from_activity(activity: &Activity) -> Option<(String, Visibility)> {
+    let ActivityObject::Object(note) = activity.object.as_ref()? else {
+        return None;
+    };
+
+    if note.kind != ObjectType::Note {
+        return None;
+    }
+
+    let content = note.content.clone()?;
+    let visibility = infer_visibility(&activity.base);
+
+    Some((content, visibility))
+}
+
+/// Infers [`Visibility`] from ActivityPub `to`/`cc` addressing conventions
+/// (same rules used by Mastodon):
+///
+/// - `to` contains `as:Public` → `Public`
+/// - `cc` contains `as:Public` → `Unlisted`
+/// - `to`/`cc` contains a `/followers` collection URL → `FollowersOnly`
+/// - Otherwise → `Direct`
+fn infer_visibility(base: &BaseObject<ApActivityType>) -> Visibility {
+    let has_public_to = base
+        .to
+        .as_ref()
+        .is_some_and(|t| one_or_many_contains(t, AS_PUBLIC));
+    let has_public_cc = base
+        .cc
+        .as_ref()
+        .is_some_and(|c| one_or_many_contains(c, AS_PUBLIC));
+
+    if has_public_to {
+        Visibility::Public
+    } else if has_public_cc {
+        Visibility::Unlisted
+    } else if has_followers_collection(base) {
+        Visibility::FollowersOnly
+    } else {
+        Visibility::Direct
+    }
+}
+
+/// Returns `true` if any `to` or `cc` entry looks like a followers collection
+/// URL (ends with `/followers`).
+fn has_followers_collection(base: &BaseObject<ApActivityType>) -> bool {
+    let check = |col: &Option<OneOrMany<String>>| {
+        col.as_ref().is_some_and(|c| match c {
+            OneOrMany::One(s) => s.ends_with("/followers"),
+            OneOrMany::Many(v) => v.iter().any(|s| s.ends_with("/followers")),
+        })
+    };
+
+    check(&base.to) || check(&base.cc)
+}
+
+/// Returns `true` if the given `actor_uri` appears in the activity's `to` or
+/// `cc` fields.
+fn is_addressed_to(base: &BaseObject<ApActivityType>, actor_uri: &str) -> bool {
+    let in_to = base
+        .to
+        .as_ref()
+        .is_some_and(|t| one_or_many_contains(t, actor_uri));
+    let in_cc = base
+        .cc
+        .as_ref()
+        .is_some_and(|c| one_or_many_contains(c, actor_uri));
+
+    in_to || in_cc
+}
+
+/// Returns `true` if a [`OneOrMany`] contains the given value.
+fn one_or_many_contains(collection: &OneOrMany<String>, value: &str) -> bool {
+    match collection {
+        OneOrMany::One(s) => s == value,
+        OneOrMany::Many(v) => v.iter().any(|s| s == value),
+    }
+}
+
+/// Finds the first non-null column with the given `name` in a raw row.
+fn find_value<'a>(row: &'a [(ColumnDef, Value)], name: &str) -> Option<&'a Value> {
+    row.iter()
+        .find(|(col, _)| col.name == name)
+        .map(|(_, v)| v)
+        .filter(|v| !matches!(v, Value::Null))
+}
+
+#[cfg(test)]
+mod tests {
+
+    use activitypub::activity::{Activity, ActivityObject, ActivityType as ApActivityType};
+    use activitypub::context::ACTIVITY_STREAMS_CONTEXT;
+    use activitypub::object::{BaseObject, ObjectType, OneOrMany};
+    use did::common::{FeedItem, Visibility};
+    use did::user::{ReadFeedArgs, ReadFeedError, ReadFeedResponse};
+    use ic_dbms_canister::prelude::DBMS_CONTEXT;
+    use wasm_dbms::WasmDbmsDatabase;
+    use wasm_dbms_api::prelude::Database;
+
+    use super::read_feed;
+    use crate::schema::{
+        ActivityType as DbActivityType, FeedEntry, FeedEntryInsertRequest, FeedSource,
+        InboxActivity, InboxActivityInsertRequest, Schema, Status, StatusInsertRequest,
+        Visibility as DbVisibility,
+    };
+    use crate::test_utils::setup;
+
+    fn insert_status(id: u64, content: &str, visibility: Visibility, created_at: u64) {
+        DBMS_CONTEXT.with(|ctx| {
+            let tx_id =
+                ctx.begin_transaction(db_utils::transaction::transaction_caller(ic_utils::now()));
+            let mut db = WasmDbmsDatabase::from_transaction(ctx, Schema, tx_id);
+            db.insert::<Status>(StatusInsertRequest {
+                id: id.into(),
+                content: content.into(),
+                visibility: DbVisibility::from(visibility),
+                created_at: created_at.into(),
+            })
+            .expect("should insert status");
+            db.insert::<FeedEntry>(FeedEntryInsertRequest {
+                id: id.into(),
+                source: FeedSource::Outbox,
+                created_at: created_at.into(),
+            })
+            .expect("should insert feed entry");
+            db.commit().expect("should commit");
+        });
+    }
+
+    fn make_create_note_json(content: &str, visibility: Visibility) -> serde_json::Value {
+        make_create_note_json_addressed(content, visibility, &[])
+    }
+
+    fn make_create_note_json_addressed(
+        content: &str,
+        visibility: Visibility,
+        extra_to: &[&str],
+    ) -> serde_json::Value {
+        let (mut to, cc) = match visibility {
+            Visibility::Public => (
+                Some(OneOrMany::One(
+                    "https://www.w3.org/ns/activitystreams#Public".to_string(),
+                )),
+                None,
+            ),
+            Visibility::Unlisted => (
+                None,
+                Some(OneOrMany::One(
+                    "https://www.w3.org/ns/activitystreams#Public".to_string(),
+                )),
+            ),
+            Visibility::FollowersOnly => (
+                Some(OneOrMany::One(
+                    "https://remote.example/users/bob/followers".to_string(),
+                )),
+                None,
+            ),
+            Visibility::Direct => (None, None),
+        };
+
+        // Append extra recipients to the `to` field.
+        if !extra_to.is_empty() {
+            let mut recipients: Vec<String> = match to.take() {
+                Some(OneOrMany::One(s)) => vec![s],
+                Some(OneOrMany::Many(v)) => v,
+                None => Vec::new(),
+            };
+            recipients.extend(extra_to.iter().map(|s| s.to_string()));
+            to = Some(OneOrMany::Many(recipients));
+        }
+
+        let note = BaseObject {
+            kind: ObjectType::Note,
+            content: Some(content.to_string()),
+            to: to.clone(),
+            cc: cc.clone(),
+            ..Default::default()
+        };
+
+        let activity = Activity {
+            base: BaseObject {
+                context: Some(activitypub::context::Context::Uri(
+                    ACTIVITY_STREAMS_CONTEXT.to_string(),
+                )),
+                kind: ApActivityType::Create,
+                to,
+                cc,
+                ..Default::default()
+            },
+            actor: Some("https://remote.example/users/bob".to_string()),
+            object: Some(ActivityObject::Object(Box::new(note))),
+            target: None,
+            result: None,
+            origin: None,
+            instrument: None,
+        };
+
+        serde_json::to_value(&activity).expect("activity serialization must not fail")
+    }
+
+    fn insert_inbox_create_addressed(
+        id: u64,
+        content: &str,
+        visibility: Visibility,
+        created_at: u64,
+        extra_to: &[&str],
+    ) {
+        let object_data = make_create_note_json_addressed(content, visibility, extra_to);
+        DBMS_CONTEXT.with(|ctx| {
+            let tx_id =
+                ctx.begin_transaction(db_utils::transaction::transaction_caller(ic_utils::now()));
+            let mut db = WasmDbmsDatabase::from_transaction(ctx, Schema, tx_id);
+            db.insert::<InboxActivity>(InboxActivityInsertRequest {
+                id: id.into(),
+                activity_type: DbActivityType::from(ApActivityType::Create),
+                actor_uri: "https://remote.example/users/bob".into(),
+                object_data: object_data.into(),
+                created_at: created_at.into(),
+            })
+            .expect("should insert inbox activity");
+            db.insert::<FeedEntry>(FeedEntryInsertRequest {
+                id: id.into(),
+                source: FeedSource::Inbox,
+                created_at: created_at.into(),
+            })
+            .expect("should insert feed entry");
+            db.commit().expect("should commit");
+        });
+    }
+
+    fn insert_inbox_create(id: u64, content: &str, visibility: Visibility, created_at: u64) {
+        let object_data = make_create_note_json(content, visibility);
+        DBMS_CONTEXT.with(|ctx| {
+            let tx_id =
+                ctx.begin_transaction(db_utils::transaction::transaction_caller(ic_utils::now()));
+            let mut db = WasmDbmsDatabase::from_transaction(ctx, Schema, tx_id);
+            db.insert::<InboxActivity>(InboxActivityInsertRequest {
+                id: id.into(),
+                activity_type: DbActivityType::from(ApActivityType::Create),
+                actor_uri: "https://remote.example/users/bob".into(),
+                object_data: object_data.into(),
+                created_at: created_at.into(),
+            })
+            .expect("should insert inbox activity");
+            db.insert::<FeedEntry>(FeedEntryInsertRequest {
+                id: id.into(),
+                source: FeedSource::Inbox,
+                created_at: created_at.into(),
+            })
+            .expect("should insert feed entry");
+            db.commit().expect("should commit");
+        });
+    }
+
+    fn unwrap_ok(response: ReadFeedResponse) -> Vec<FeedItem> {
+        let ReadFeedResponse::Ok(items) = response else {
+            panic!("expected Ok, got {response:?}");
+        };
+        items
+    }
+
+    #[test]
+    fn test_should_return_empty_feed_when_no_items() {
+        setup();
+
+        let items = unwrap_ok(read_feed(ReadFeedArgs {
+            limit: 10,
+            offset: 0,
+        }));
+
+        assert!(items.is_empty());
+    }
+
+    #[test]
+    fn test_should_return_outbox_statuses() {
+        setup();
+        insert_status(1, "Hello world", Visibility::Public, 1000);
+        insert_status(2, "Second post", Visibility::Public, 2000);
+
+        let items = unwrap_ok(read_feed(ReadFeedArgs {
+            limit: 10,
+            offset: 0,
+        }));
+
+        assert_eq!(items.len(), 2);
+        // newest first
+        assert_eq!(items[0].status.content, "Second post");
+        assert_eq!(items[1].status.content, "Hello world");
+        assert!(items[0].boosted_by.is_none());
+    }
+
+    #[test]
+    fn test_should_return_inbox_create_activities() {
+        setup();
+        insert_inbox_create(100, "Remote status", Visibility::Public, 3000);
+
+        let items = unwrap_ok(read_feed(ReadFeedArgs {
+            limit: 10,
+            offset: 0,
+        }));
+
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].status.content, "Remote status");
+        assert_eq!(items[0].status.author, candid::Principal::anonymous());
+    }
+
+    #[test]
+    fn test_should_merge_and_sort_outbox_and_inbox() {
+        setup();
+        insert_status(1, "Own status early", Visibility::Public, 1000);
+        insert_inbox_create(100, "Remote status mid", Visibility::Public, 2000);
+        insert_status(2, "Own status late", Visibility::Public, 3000);
+
+        let items = unwrap_ok(read_feed(ReadFeedArgs {
+            limit: 10,
+            offset: 0,
+        }));
+
+        assert_eq!(items.len(), 3);
+        assert_eq!(items[0].status.content, "Own status late");
+        assert_eq!(items[1].status.content, "Remote status mid");
+        assert_eq!(items[2].status.content, "Own status early");
+    }
+
+    #[test]
+    fn test_should_paginate_with_offset_and_limit() {
+        setup();
+        for i in 1..=5 {
+            insert_status(i, &format!("Status {i}"), Visibility::Public, i * 1000);
+        }
+
+        // page 1: items at indices 1..3 (after sorting newest-first: 5,4,3,2,1)
+        let items = unwrap_ok(read_feed(ReadFeedArgs {
+            limit: 2,
+            offset: 1,
+        }));
+
+        assert_eq!(items.len(), 2);
+        assert_eq!(items[0].status.content, "Status 4");
+        assert_eq!(items[1].status.content, "Status 3");
+    }
+
+    #[test]
+    fn test_should_return_limit_exceeded_error() {
+        setup();
+
+        let response = read_feed(ReadFeedArgs {
+            limit: crate::domain::MAX_PAGE_LIMIT + 1,
+            offset: 0,
+        });
+
+        assert_eq!(
+            response,
+            ReadFeedResponse::Err(ReadFeedError::LimitExceeded)
+        );
+    }
+
+    #[test]
+    fn test_should_infer_visibility_from_addressing() {
+        setup();
+        insert_inbox_create(100, "Public post", Visibility::Public, 1000);
+        insert_inbox_create(101, "Unlisted post", Visibility::Unlisted, 2000);
+        insert_inbox_create(102, "Followers only", Visibility::FollowersOnly, 3000);
+
+        let items = unwrap_ok(read_feed(ReadFeedArgs {
+            limit: 10,
+            offset: 0,
+        }));
+
+        assert_eq!(items.len(), 3);
+        // sorted newest first
+        assert_eq!(items[0].status.visibility, Visibility::FollowersOnly);
+        assert_eq!(items[1].status.visibility, Visibility::Unlisted);
+        assert_eq!(items[2].status.visibility, Visibility::Public);
+    }
+
+    #[test]
+    fn test_should_return_empty_page_beyond_data() {
+        setup();
+        insert_status(1, "Only status", Visibility::Public, 1000);
+
+        let items = unwrap_ok(read_feed(ReadFeedArgs {
+            limit: 10,
+            offset: 100,
+        }));
+
+        assert!(items.is_empty());
+    }
+
+    #[test]
+    fn test_should_set_owner_as_author_for_outbox_items() {
+        setup();
+        insert_status(1, "My post", Visibility::Public, 1000);
+
+        let items = unwrap_ok(read_feed(ReadFeedArgs {
+            limit: 10,
+            offset: 0,
+        }));
+
+        assert_eq!(items.len(), 1);
+        let owner = crate::settings::get_owner_principal().expect("owner");
+        assert_eq!(items[0].status.author, owner);
+    }
+
+    #[test]
+    fn test_should_show_direct_message_when_owner_is_addressed() {
+        setup();
+        let owner_uri = crate::domain::urls::actor_uri("rey_canisteryo").unwrap();
+        insert_inbox_create_addressed(100, "DM for you", Visibility::Direct, 1000, &[&owner_uri]);
+
+        let items = unwrap_ok(read_feed(ReadFeedArgs {
+            limit: 10,
+            offset: 0,
+        }));
+
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].status.content, "DM for you");
+        assert_eq!(items[0].status.visibility, Visibility::Direct);
+    }
+
+    #[test]
+    fn test_should_hide_direct_message_when_owner_is_not_addressed() {
+        setup();
+        insert_inbox_create_addressed(
+            100,
+            "DM not for you",
+            Visibility::Direct,
+            1000,
+            &["https://remote.example/users/charlie"],
+        );
+
+        let items = unwrap_ok(read_feed(ReadFeedArgs {
+            limit: 10,
+            offset: 0,
+        }));
+
+        assert!(items.is_empty());
+    }
+}

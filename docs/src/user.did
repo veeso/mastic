@@ -14,6 +14,18 @@ type AcceptFollowError = variant {
 };
 // Response type for the `accept_follow` method.
 type AcceptFollowResponse = variant { Ok; Err : AcceptFollowError };
+// A single entry in a user's feed. Wraps a [`Status`] and optionally indicates
+// that it was boosted (reblogged) by another user.
+type FeedItem = record {
+  // The status associated with this feed item.
+  status : Status;
+  // If this feed item was boosted (reblogged) by another user, the principal
+  // of the User Canister that performed the boost. Otherwise [`None`].
+  // 
+  // It works like this: if Alice creates a status, and Bob boosts it,
+  // then a new Feed Item is created with `boosted_by` set to Bob's principal.
+  boosted_by : opt principal;
+};
 // Request arguments for the `follow_user` method.
 type FollowUserArgs = record {
   // Handle of the user to follow.
@@ -97,6 +109,22 @@ type PublishStatusError = variant {
 // Response type for the `publish_status` method.
 // On success, returns the created [`Status`] with its assigned ID and timestamp.
 type PublishStatusResponse = variant { Ok : Status; Err : PublishStatusError };
+// Request arguments for the `read_feed` method.
+type ReadFeedArgs = record {
+  // Number of results to skip (for pagination).
+  offset : nat64;
+  // Maximum number of results to return.
+  limit : nat64;
+};
+// Error types for the `read_feed` method.
+type ReadFeedError = variant {
+  // Internal error occurred while reading the feed.
+  Internal : text;
+  // Limit exceeds maximum allowed page size.
+  LimitExceeded;
+};
+// Response type for the `read_feed` method.
+type ReadFeedResponse = variant { Ok : vec FeedItem; Err : ReadFeedError };
 // Request arguments for the `receive_activity` method.
 // Called by the Federation Canister to deliver an incoming ActivityPub activity.
 type ReceiveActivityArgs = record {
@@ -181,6 +209,7 @@ service : (UserInstallArgs) -> {
   get_following : (GetFollowersArgs) -> (GetFollowersResponse) query;
   get_profile : () -> (GetProfileResponse) query;
   publish_status : (PublishStatusArgs) -> (PublishStatusResponse);
+  read_feed : (ReadFeedArgs) -> (ReadFeedResponse) query;
   receive_activity : (ReceiveActivityArgs) -> (ReceiveActivityResponse);
   reject_follow : (AcceptFollowArgs) -> (AcceptFollowResponse);
 }
