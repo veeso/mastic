@@ -186,8 +186,6 @@ mod tests {
         })
     }
 
-    // ── publish_status ──────────────────────────────────────────────
-
     #[tokio::test]
     async fn test_should_publish_status_with_no_followers() {
         setup();
@@ -408,8 +406,6 @@ mod tests {
         }
     }
 
-    // ── make_follower_activity ──────────────────────────────────────
-
     #[test]
     fn test_make_follower_activity_should_build_create_note() {
         let follower = crate::schema::Follower {
@@ -537,8 +533,6 @@ mod tests {
         assert!(activity.base.to.is_none());
         assert!(activity.base.cc.is_none());
     }
-
-    // ── visibility_addressing ───────────────────────────────────────
 
     #[test]
     fn test_visibility_addressing_public() {

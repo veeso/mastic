@@ -572,10 +572,15 @@ fn test_should_roundtrip_read_feed_response_ok() {
 
 #[test]
 fn test_should_roundtrip_read_feed_response_err() {
-    let resp = ReadFeedResponse::Err(ReadFeedError::Unauthorized);
-    let bytes = Encode!(&resp).unwrap();
-    let decoded = Decode!(&bytes, ReadFeedResponse).unwrap();
-    assert_eq!(resp, decoded);
+    for error in [
+        ReadFeedError::LimitExceeded,
+        ReadFeedError::Internal("db error".to_string()),
+    ] {
+        let resp = ReadFeedResponse::Err(error);
+        let bytes = Encode!(&resp).unwrap();
+        let decoded = Decode!(&bytes, ReadFeedResponse).unwrap();
+        assert_eq!(resp, decoded);
+    }
 }
 
 #[test]

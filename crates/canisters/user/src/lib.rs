@@ -12,8 +12,8 @@ use did::user::{
     AcceptFollowArgs, AcceptFollowResponse, FollowUserArgs, FollowUserResponse,
     GetFollowRequestsArgs, GetFollowRequestsResponse, GetFollowersArgs, GetFollowersResponse,
     GetFollowingArgs, GetFollowingResponse, GetProfileResponse, PublishStatusArgs,
-    PublishStatusResponse, ReceiveActivityArgs, ReceiveActivityResponse, RejectFollowArgs,
-    RejectFollowResponse, UserInstallArgs,
+    PublishStatusResponse, ReadFeedArgs, ReadFeedResponse, ReceiveActivityArgs,
+    ReceiveActivityResponse, RejectFollowArgs, RejectFollowResponse, UserInstallArgs,
 };
 
 #[ic_cdk::init]
@@ -64,6 +64,11 @@ fn get_profile() -> GetProfileResponse {
 #[ic_cdk::update]
 async fn publish_status(args: PublishStatusArgs) -> PublishStatusResponse {
     api::publish_status(args).await
+}
+
+#[ic_cdk::query]
+fn read_feed(args: ReadFeedArgs) -> ReadFeedResponse {
+    api::read_feed(args)
 }
 
 #[ic_cdk::update]

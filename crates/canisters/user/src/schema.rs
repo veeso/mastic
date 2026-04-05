@@ -1,6 +1,7 @@
 //! Database schema for the user canister.
 
 mod activity;
+mod feed_source;
 mod follow_status;
 mod status;
 mod visibility;
@@ -11,6 +12,7 @@ use ic_dbms_canister::prelude::Principal;
 use wasm_dbms_api::prelude::*;
 
 pub use self::activity::ActivityType;
+pub use self::feed_source::FeedSource;
 pub use self::follow_status::FollowStatus;
 pub use self::status::{StatusContentSanitizer, StatusContentValidator};
 pub use self::visibility::Visibility;
@@ -128,6 +130,26 @@ pub struct FollowRequest {
     pub created_at: Uint64,
 }
 
+/// A denormalized feed entry that indexes both outbox (own statuses) and
+/// inbox (received `Create` activities) under a single sorted timeline.
+///
+/// The `source_id` references the primary key of either the `statuses` or
+/// `inbox` table depending on the [`FeedSource`] discriminator.
+#[derive(Debug, Table, Clone, PartialEq, Eq)]
+#[table = "feed"]
+pub struct FeedEntry {
+    /// Snowflake ID shared with the source record.
+    #[primary_key]
+    pub id: Uint64,
+    /// Whether this entry comes from the outbox or inbox.
+    #[custom_type]
+    pub source: FeedSource,
+    /// Created at timestamp, duplicated from the source record for
+    /// efficient `ORDER BY` + `LIMIT` + `OFFSET` without joining.
+    #[index]
+    pub created_at: Uint64,
+}
+
 #[derive(DatabaseSchema)]
 #[tables(
     Settings = "settings",
@@ -136,7 +158,8 @@ pub struct FollowRequest {
     InboxActivity = "inbox",
     Follower = "followers",
     Following = "following",
-    FollowRequest = "follow_requests"
+    FollowRequest = "follow_requests",
+    FeedEntry = "feed"
 )]
 pub struct Schema;
 
@@ -149,8 +172,6 @@ mod tests {
 
     use super::*;
     use crate::test_utils::{alice, bob, setup};
-
-    // ── Profile ──────────────────────────────────────────────────────
 
     #[test]
     fn test_should_insert_and_query_profile() {
@@ -409,8 +430,6 @@ mod tests {
         });
     }
 
-    // ── Status ───────────────────────────────────────────────────────
-
     #[test]
     fn test_should_insert_and_query_status() {
         setup();
@@ -532,8 +551,6 @@ mod tests {
         });
     }
 
-    // ── InboxActivity ────────────────────────────────────────────────
-
     #[test]
     fn test_should_insert_and_query_inbox_activity() {
         setup();
@@ -626,8 +643,6 @@ mod tests {
             assert!(rows.is_empty(), "inbox activity should be deleted");
         });
     }
-
-    // ── Follower ─────────────────────────────────────────────────────
 
     #[test]
     fn test_should_insert_and_query_follower() {
@@ -738,8 +753,6 @@ mod tests {
             assert!(rows.is_empty(), "follower should be deleted");
         });
     }
-
-    // ── Following ────────────────────────────────────────────────────
 
     #[test]
     fn test_should_insert_and_query_following() {
@@ -880,6 +893,63 @@ mod tests {
             let rows = db
                 .select::<Following>(Query::builder().build())
                 .expect("should select all following");
+
+            assert_eq!(rows.len(), 2);
+        });
+    }
+
+    #[test]
+    fn test_should_insert_and_query_feed_entry() {
+        setup();
+
+        DBMS_CONTEXT.with(|ctx| {
+            let db = WasmDbmsDatabase::oneshot(ctx, Schema);
+            db.insert::<FeedEntry>(FeedEntryInsertRequest {
+                id: 1u64.into(),
+                source: FeedSource::Outbox,
+                created_at: ic_utils::now().into(),
+            })
+            .expect("should insert feed entry");
+
+            let rows = db
+                .select::<FeedEntry>(Query::builder().build())
+                .expect("should select feed entries");
+
+            assert_eq!(rows.len(), 1);
+        });
+    }
+
+    #[test]
+    fn test_should_insert_multiple_feed_entries() {
+        setup();
+
+        DBMS_CONTEXT.with(|ctx| {
+            let tx_id =
+                ctx.begin_transaction(db_utils::transaction::transaction_caller(ic_utils::now()));
+            let mut db = WasmDbmsDatabase::from_transaction(ctx, Schema, tx_id);
+
+            db.insert::<FeedEntry>(FeedEntryInsertRequest {
+                id: 1u64.into(),
+                source: FeedSource::Outbox,
+                created_at: 1000u64.into(),
+            })
+            .expect("should insert first feed entry");
+
+            db.insert::<FeedEntry>(FeedEntryInsertRequest {
+                id: 2u64.into(),
+                source: FeedSource::Inbox,
+                created_at: 2000u64.into(),
+            })
+            .expect("should insert second feed entry");
+
+            db.commit().expect("should commit");
+        });
+
+        DBMS_CONTEXT.with(|ctx| {
+            let db = WasmDbmsDatabase::oneshot(ctx, Schema);
+            let rows = db
+                .select::<FeedEntry>(Query::builder().build())
+                .expect("should select feed entries");
 
             assert_eq!(rows.len(), 2);
         });
