@@ -11,8 +11,8 @@ mod test_utils;
 
 use candid::Principal;
 use did::directory::{
-    DirectoryInstallArgs, GetUserResponse, RetrySignUpResponse, SignUpRequest, SignUpResponse,
-    UserCanisterResponse, WhoAmIResponse,
+    DirectoryInstallArgs, GetUserArgs, GetUserResponse, RetrySignUpResponse, SignUpRequest,
+    SignUpResponse, UserCanisterResponse, WhoAmIResponse,
 };
 
 #[ic_cdk::init]
@@ -31,8 +31,8 @@ fn inspect_message() {
 }
 
 #[ic_cdk::query]
-fn get_user(handle: String) -> GetUserResponse {
-    api::get_user(&handle)
+fn get_user(args: GetUserArgs) -> GetUserResponse {
+    api::get_user(args)
 }
 
 #[ic_cdk::update]

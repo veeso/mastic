@@ -2,8 +2,8 @@
 
 use candid::Principal;
 use did::directory::{
-    DirectoryInstallArgs, GetUserResponse, RetrySignUpResponse, SignUpRequest, SignUpResponse,
-    UserCanisterResponse, WhoAmIResponse,
+    DirectoryInstallArgs, GetUserArgs, GetUserResponse, RetrySignUpResponse, SignUpRequest,
+    SignUpResponse, UserCanisterResponse, WhoAmIResponse,
 };
 use ic_dbms_canister::prelude::DBMS_CONTEXT;
 
@@ -56,9 +56,9 @@ pub fn post_upgrade(args: DirectoryInstallArgs) {
     ic_utils::log!("Directory canister post-upgrade completed successfully");
 }
 
-/// Handles the `get_user` method call to retrieve user information based on their handle.
-pub fn get_user(handle: &str) -> GetUserResponse {
-    crate::domain::users::get_user(handle)
+/// Handles the `get_user` method call to retrieve user information by handle or principal.
+pub fn get_user(args: GetUserArgs) -> GetUserResponse {
+    crate::domain::users::get_user(args)
 }
 
 /// Retry canister creation for the user that called this method.
@@ -251,7 +251,7 @@ mod tests {
         setup();
         crate::test_utils::setup_registered_user(crate::test_utils::bob(), "alice");
 
-        let response = get_user("alice");
+        let response = get_user(GetUserArgs::Handle("alice".to_string()));
 
         match response {
             GetUserResponse::Ok(user) => {
@@ -265,7 +265,7 @@ mod tests {
     fn test_should_get_user_return_not_found() {
         setup();
 
-        let response = get_user("nonexistent");
+        let response = get_user(GetUserArgs::Handle("nonexistent".to_string()));
 
         assert_eq!(
             response,
