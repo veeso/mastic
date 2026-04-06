@@ -128,3 +128,283 @@ fn status_to_did(owner_actor_uri: &str, status: crate::schema::Status) -> Status
         author: owner_actor_uri.to_string(),
     }
 }
+
+#[cfg(test)]
+mod tests {
+
+    use did::common::Visibility;
+    use did::user::{GetStatusesArgs, GetStatusesError, GetStatusesResponse};
+    use ic_dbms_canister::prelude::DBMS_CONTEXT;
+    use wasm_dbms::WasmDbmsDatabase;
+    use wasm_dbms_api::prelude::Database;
+
+    use super::get_statuses;
+    use crate::schema::{
+        Follower, FollowerInsertRequest, Schema, Status, StatusInsertRequest,
+        Visibility as DbVisibility,
+    };
+    use crate::test_utils::{admin, alice, setup};
+
+    fn insert_status(id: u64, content: &str, visibility: Visibility, created_at: u64) {
+        DBMS_CONTEXT.with(|ctx| {
+            let db = WasmDbmsDatabase::oneshot(ctx, Schema);
+            db.insert::<Status>(StatusInsertRequest {
+                id: id.into(),
+                content: content.into(),
+                visibility: DbVisibility::from(visibility),
+                created_at: created_at.into(),
+            })
+            .expect("should insert status");
+        });
+    }
+
+    fn insert_follower(actor_uri: &str) {
+        DBMS_CONTEXT.with(|ctx| {
+            let db = WasmDbmsDatabase::oneshot(ctx, Schema);
+            db.insert::<Follower>(FollowerInsertRequest {
+                actor_uri: actor_uri.into(),
+                created_at: ic_utils::now().into(),
+            })
+            .expect("should insert follower");
+        });
+    }
+
+    fn unwrap_ok(response: GetStatusesResponse) -> Vec<did::common::Status> {
+        let GetStatusesResponse::Ok(items) = response else {
+            panic!("expected Ok, got {response:?}");
+        };
+        items
+    }
+
+    #[tokio::test]
+    async fn test_should_return_empty_when_no_statuses() {
+        setup();
+
+        let items = unwrap_ok(
+            get_statuses(
+                GetStatusesArgs {
+                    limit: 10,
+                    offset: 0,
+                },
+                admin(),
+            )
+            .await,
+        );
+
+        assert!(items.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_should_return_limit_exceeded() {
+        setup();
+
+        let response = get_statuses(
+            GetStatusesArgs {
+                limit: crate::domain::MAX_PAGE_LIMIT + 1,
+                offset: 0,
+            },
+            admin(),
+        )
+        .await;
+
+        assert_eq!(
+            response,
+            GetStatusesResponse::Err(GetStatusesError::LimitExceeded)
+        );
+    }
+
+    #[tokio::test]
+    async fn test_should_return_statuses_ordered_by_created_at_desc() {
+        setup();
+        insert_status(1, "First", Visibility::Public, 1000);
+        insert_status(2, "Second", Visibility::Public, 2000);
+        insert_status(3, "Third", Visibility::Public, 3000);
+
+        let items = unwrap_ok(
+            get_statuses(
+                GetStatusesArgs {
+                    limit: 10,
+                    offset: 0,
+                },
+                admin(),
+            )
+            .await,
+        );
+
+        assert_eq!(items.len(), 3);
+        assert_eq!(items[0].content, "Third");
+        assert_eq!(items[1].content, "Second");
+        assert_eq!(items[2].content, "First");
+    }
+
+    #[tokio::test]
+    async fn test_should_paginate_with_offset_and_limit() {
+        setup();
+        for i in 1..=5 {
+            insert_status(i, &format!("Status {i}"), Visibility::Public, i * 1000);
+        }
+
+        // skip 1, take 2 → should get statuses 4 and 3 (newest-first)
+        let items = unwrap_ok(
+            get_statuses(
+                GetStatusesArgs {
+                    limit: 2,
+                    offset: 1,
+                },
+                admin(),
+            )
+            .await,
+        );
+
+        assert_eq!(items.len(), 2);
+        assert_eq!(items[0].content, "Status 4");
+        assert_eq!(items[1].content, "Status 3");
+    }
+
+    #[tokio::test]
+    async fn test_owner_should_see_all_visibilities() {
+        setup();
+        insert_status(1, "Public", Visibility::Public, 1000);
+        insert_status(2, "Unlisted", Visibility::Unlisted, 2000);
+        insert_status(3, "FollowersOnly", Visibility::FollowersOnly, 3000);
+        insert_status(4, "Direct", Visibility::Direct, 4000);
+
+        let items = unwrap_ok(
+            get_statuses(
+                GetStatusesArgs {
+                    limit: 10,
+                    offset: 0,
+                },
+                admin(),
+            )
+            .await,
+        );
+
+        assert_eq!(items.len(), 4);
+    }
+
+    #[tokio::test]
+    async fn test_follower_should_see_public_unlisted_followers_only() {
+        setup();
+        // The mock directory adapter returns "testuser" for any non-owner, non-anonymous caller.
+        // Insert a follower with that actor URI.
+        insert_follower("https://mastic.social/users/testuser");
+
+        insert_status(1, "Public", Visibility::Public, 1000);
+        insert_status(2, "Unlisted", Visibility::Unlisted, 2000);
+        insert_status(3, "FollowersOnly", Visibility::FollowersOnly, 3000);
+        insert_status(4, "Direct", Visibility::Direct, 4000);
+
+        let items = unwrap_ok(
+            get_statuses(
+                GetStatusesArgs {
+                    limit: 10,
+                    offset: 0,
+                },
+                alice(),
+            )
+            .await,
+        );
+
+        assert_eq!(items.len(), 3);
+        let visibilities: Vec<_> = items.iter().map(|s| s.visibility).collect();
+        assert!(visibilities.contains(&Visibility::Public));
+        assert!(visibilities.contains(&Visibility::Unlisted));
+        assert!(visibilities.contains(&Visibility::FollowersOnly));
+        assert!(!visibilities.contains(&Visibility::Direct));
+    }
+
+    #[tokio::test]
+    async fn test_anonymous_should_see_only_public_and_unlisted() {
+        setup();
+        insert_status(1, "Public", Visibility::Public, 1000);
+        insert_status(2, "Unlisted", Visibility::Unlisted, 2000);
+        insert_status(3, "FollowersOnly", Visibility::FollowersOnly, 3000);
+        insert_status(4, "Direct", Visibility::Direct, 4000);
+
+        let items = unwrap_ok(
+            get_statuses(
+                GetStatusesArgs {
+                    limit: 10,
+                    offset: 0,
+                },
+                candid::Principal::anonymous(),
+            )
+            .await,
+        );
+
+        assert_eq!(items.len(), 2);
+        let visibilities: Vec<_> = items.iter().map(|s| s.visibility).collect();
+        assert!(visibilities.contains(&Visibility::Public));
+        assert!(visibilities.contains(&Visibility::Unlisted));
+    }
+
+    #[tokio::test]
+    async fn test_non_follower_should_see_only_public_and_unlisted() {
+        setup();
+        // alice resolves to "testuser" via mock but is NOT in the followers table
+
+        insert_status(1, "Public", Visibility::Public, 1000);
+        insert_status(2, "Unlisted", Visibility::Unlisted, 2000);
+        insert_status(3, "FollowersOnly", Visibility::FollowersOnly, 3000);
+        insert_status(4, "Direct", Visibility::Direct, 4000);
+
+        let items = unwrap_ok(
+            get_statuses(
+                GetStatusesArgs {
+                    limit: 10,
+                    offset: 0,
+                },
+                alice(),
+            )
+            .await,
+        );
+
+        assert_eq!(items.len(), 2);
+        let visibilities: Vec<_> = items.iter().map(|s| s.visibility).collect();
+        assert!(visibilities.contains(&Visibility::Public));
+        assert!(visibilities.contains(&Visibility::Unlisted));
+    }
+
+    #[tokio::test]
+    async fn test_should_set_author_to_owner_actor_uri() {
+        setup();
+        insert_status(1, "Hello", Visibility::Public, 1000);
+
+        let items = unwrap_ok(
+            get_statuses(
+                GetStatusesArgs {
+                    limit: 10,
+                    offset: 0,
+                },
+                admin(),
+            )
+            .await,
+        );
+
+        assert_eq!(items.len(), 1);
+        assert_eq!(
+            items[0].author,
+            "https://mastic.social/users/rey_canisteryo"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_should_return_empty_page_beyond_data() {
+        setup();
+        insert_status(1, "Only status", Visibility::Public, 1000);
+
+        let items = unwrap_ok(
+            get_statuses(
+                GetStatusesArgs {
+                    limit: 10,
+                    offset: 100,
+                },
+                admin(),
+            )
+            .await,
+        );
+
+        assert!(items.is_empty());
+    }
+}
