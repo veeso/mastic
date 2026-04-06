@@ -10,6 +10,16 @@ type FederationInstallArgs = variant {
     directory_canister : principal;
   };
 };
+// Arguments for the `register_user` method of the Federation canister.
+type RegisterUserArgs = record {
+  user_handle : text;
+  user_id : principal;
+  user_canister_id : principal;
+};
+// Error type returned by the `register_user` method of the Federation canister.
+type RegisterUserError = variant { Internal : text };
+// Response type for the `register_user` method of the Federation canister.
+type RegisterUserResponse = variant { Ok; Err : RegisterUserError };
 // Arguments for the `send_activity` method of the Federation canister, supporting both single and batch activities.
 type SendActivityArgs = variant {
   // Send a single activity.
@@ -36,5 +46,6 @@ type SendActivityError = variant {
 // Response type for the `send_activity` method of the Federation canister.
 type SendActivityResponse = variant { Ok; Err : SendActivityError };
 service : (FederationInstallArgs) -> {
+  register_user : (RegisterUserArgs) -> (RegisterUserResponse);
   send_activity : (SendActivityArgs) -> (SendActivityResponse);
 }

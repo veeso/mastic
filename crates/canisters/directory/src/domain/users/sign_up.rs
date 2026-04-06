@@ -161,10 +161,15 @@ fn alice() -> Principal {
 fn start_sign_up_state_machine(_user_id: Principal, handle: String) {
     #[cfg(target_family = "wasm")]
     {
+        let federation_canister_id = crate::settings::get_federation_canister()
+            .expect("federation canister must be configured");
         state::SignUpStateMachine::start(
             _user_id,
             handle,
             crate::adapters::management_canister::IcManagementCanisterClient,
+            crate::adapters::federation_canister::IcFederationCanisterClient::from(
+                federation_canister_id,
+            ),
         );
     }
     #[cfg(not(target_family = "wasm"))]
@@ -176,6 +181,7 @@ fn start_sign_up_state_machine(_user_id: Principal, handle: String) {
                 canister_self: Principal::from_text("br5f7-7uaaa-aaaaa-qaaca-cai").unwrap(),
                 created_canister_id: Principal::from_text("bkyz2-fmaaa-aaaaa-qaaaq-cai").unwrap(),
             },
+            crate::adapters::federation_canister::mock::MockFederationCanisterClient,
         );
     }
 }

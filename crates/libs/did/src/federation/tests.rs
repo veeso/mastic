@@ -79,6 +79,37 @@ fn test_should_roundtrip_federation_install_args_upgrade() {
     assert_eq!(args, decoded);
 }
 
+// M-UNIT-TEST: RegisterUserArgs round-trips through Candid encoding.
+#[test]
+fn test_should_roundtrip_register_user_args() {
+    let args = RegisterUserArgs {
+        user_id: candid::Principal::from_text("mfufu-x6j4c-gomzb-geilq").unwrap(),
+        user_handle: "alice".to_string(),
+        user_canister_id: candid::Principal::from_text("bkyz2-fmaaa-aaaaa-qaaaq-cai").unwrap(),
+    };
+    let bytes = Encode!(&args).unwrap();
+    let decoded = Decode!(&bytes, RegisterUserArgs).unwrap();
+    assert_eq!(args, decoded);
+}
+
+// M-UNIT-TEST: RegisterUserResponse::Ok round-trips through Candid encoding.
+#[test]
+fn test_should_roundtrip_register_user_response_ok() {
+    let resp = RegisterUserResponse::Ok;
+    let bytes = Encode!(&resp).unwrap();
+    let decoded = Decode!(&bytes, RegisterUserResponse).unwrap();
+    assert_eq!(resp, decoded);
+}
+
+// M-UNIT-TEST: RegisterUserResponse::Err round-trips through Candid encoding.
+#[test]
+fn test_should_roundtrip_register_user_response_err() {
+    let resp = RegisterUserResponse::Err(RegisterUserError::Internal("db failure".to_string()));
+    let bytes = Encode!(&resp).unwrap();
+    let decoded = Decode!(&bytes, RegisterUserResponse).unwrap();
+    assert_eq!(resp, decoded);
+}
+
 #[test]
 fn test_should_roundtrip_send_activity_args_object() {
     let args = SendActivityArgsObject {
@@ -96,6 +127,24 @@ fn test_should_roundtrip_send_activity_args() {
         activity_json: r#"{"type":"Create"}"#.to_string(),
         target_inbox: "https://remote.example/inbox".to_string(),
     });
+    let bytes = Encode!(&args).unwrap();
+    let decoded = Decode!(&bytes, SendActivityArgs).unwrap();
+    assert_eq!(args, decoded);
+}
+
+// M-UNIT-TEST: SendActivityArgs::Batch round-trips through Candid encoding.
+#[test]
+fn test_should_roundtrip_send_activity_args_batch() {
+    let args = SendActivityArgs::Batch(vec![
+        SendActivityArgsObject {
+            activity_json: r#"{"type":"Create"}"#.to_string(),
+            target_inbox: "https://remote.example/inbox".to_string(),
+        },
+        SendActivityArgsObject {
+            activity_json: r#"{"type":"Follow"}"#.to_string(),
+            target_inbox: "https://other.example/inbox".to_string(),
+        },
+    ]);
     let bytes = Encode!(&args).unwrap();
     let decoded = Decode!(&bytes, SendActivityArgs).unwrap();
     assert_eq!(args, decoded);

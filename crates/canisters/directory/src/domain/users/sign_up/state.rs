@@ -6,6 +6,7 @@ use candid::Principal;
 use did::user::UserInstallArgs;
 use ic_management_canister_types::CanisterSettings;
 
+use crate::adapters::federation_canister::FederationCanister;
 use crate::adapters::management_canister::ManagementCanister;
 use crate::domain::users::repository::UserRepository;
 use crate::error::CanisterResult;
@@ -63,6 +64,10 @@ enum SignUpState {
     ///
     /// The state machine is ready to install the user canister wasm and initialize the canister with the user's information.
     InstallWasm { canister_id: Principal },
+    /// The user canister has been installed.
+    ///
+    /// The state machine should register the user with the federation canister so it can route ActivityPub traffic.
+    RegisterUser { canister_id: Principal },
     /// Commit changes to the directory canister to mark the user as active and associate them with their canister ID.
     CommitSignUp(SignUpResult),
 }
@@ -78,26 +83,30 @@ enum StepResult {
 
 /// State machine for the user sign up process.
 ///
-/// Generic over `C` so that the management canister dependency can be replaced
-/// with a mock during unit tests.
-pub struct SignUpStateMachine<C>
+/// Generic over `M` (management canister) and `F` (federation canister) so that
+/// both dependencies can be replaced with mocks during unit tests.
+pub struct SignUpStateMachine<M, F>
 where
-    C: ManagementCanister + 'static,
+    M: ManagementCanister + 'static,
+    F: FederationCanister + 'static,
 {
     /// The user for which the sign up process is being executed.
     user_id: Principal,
     /// User handle
     handle: String,
     /// Adapter for management canister calls.
-    client: C,
+    management: M,
+    /// Adapter for federation canister calls.
+    federation: F,
 }
 
-impl<C> SignUpStateMachine<C>
+impl<M, F> SignUpStateMachine<M, F>
 where
-    C: ManagementCanister + 'static,
+    M: ManagementCanister + 'static,
+    F: FederationCanister + 'static,
 {
     /// Start a new sign up process for a user by initializing their state in the `USER_SIGN_UP_STATES` thread-local storage.
-    pub fn start(user_id: Principal, handle: String, client: C) {
+    pub fn start(user_id: Principal, handle: String, management: M, federation: F) {
         ic_utils::log!("Starting sign up process for user {user_id}",);
         // if there is already an entry for the user, return early to prevent starting multiple sign up processes for the same user
         let already_exists =
@@ -113,7 +122,8 @@ where
         Self {
             user_id,
             handle,
-            client,
+            management,
+            federation,
         }
         .tick();
     }
@@ -178,6 +188,7 @@ where
         let new_state = match state {
             SignUpState::CreateCanister => self.create_canister().await,
             SignUpState::InstallWasm { canister_id } => self.install_wasm(canister_id).await,
+            SignUpState::RegisterUser { canister_id } => self.register_user(canister_id).await,
             SignUpState::CommitSignUp(SignUpResult::Success { canister_id }) => {
                 match self.commit_sign_up(canister_id) {
                     Ok(()) => return StepResult::Finished,
@@ -211,7 +222,7 @@ where
 
     /// Create a canister for the user by sending a request to the management canister.
     async fn create_canister(&self) -> SignUpState {
-        let controller = self.client.canister_self();
+        let controller = self.management.canister_self();
 
         let settings = Some(CanisterSettings {
             controllers: Some(vec![controller]),
@@ -220,7 +231,7 @@ where
 
         #[allow(irrefutable_let_patterns)]
         let Ok(canister_id) = self
-            .client
+            .management
             .create_canister(settings, INITIAL_USER_CANISTER_CYCLES)
             .await
         else {
@@ -256,7 +267,7 @@ where
         };
 
         if self
-            .client
+            .management
             .install_code(canister_id, USER_CANISTER_WASM, init_args)
             .await
             .is_err()
@@ -266,6 +277,22 @@ where
         };
 
         // success, move to next state
+        SignUpState::RegisterUser { canister_id }
+    }
+
+    /// Register the user with the federation canister so it can route ActivityPub traffic.
+    async fn register_user(&self, canister_id: Principal) -> SignUpState {
+        if self
+            .federation
+            .register_user(self.user_id, self.handle.clone(), canister_id)
+            .await
+            .is_err()
+        {
+            // failed, return same state to retry
+            return SignUpState::RegisterUser { canister_id };
+        }
+
+        // success, move to commit
         SignUpState::CommitSignUp(SignUpResult::Success { canister_id })
     }
 
@@ -290,17 +317,18 @@ mod tests {
     use candid::Principal;
 
     use super::*;
+    use crate::adapters::federation_canister::FederationCanisterError;
     use crate::adapters::management_canister::ManagementCanisterError;
     use crate::test_utils::{rey_canisteryo, setup};
 
     /// Configurable mock for [`ManagementCanister`].
-    struct TestClient {
+    struct TestManagementClient {
         canister_self: Principal,
         create_result: Result<Principal, ManagementCanisterError>,
         install_result: Result<(), ManagementCanisterError>,
     }
 
-    impl TestClient {
+    impl TestManagementClient {
         /// Return a client where all operations succeed.
         fn ok(created_canister_id: Principal) -> Self {
             Self {
@@ -321,7 +349,7 @@ mod tests {
         }
     }
 
-    impl ManagementCanister for TestClient {
+    impl ManagementCanister for TestManagementClient {
         async fn create_canister(
             &self,
             _settings: Option<CanisterSettings>,
@@ -348,15 +376,48 @@ mod tests {
         }
     }
 
+    /// Configurable mock for [`FederationCanister`].
+    struct TestFederationClient {
+        register_result: Result<(), FederationCanisterError>,
+    }
+
+    impl TestFederationClient {
+        fn ok() -> Self {
+            Self {
+                register_result: Ok(()),
+            }
+        }
+
+        fn with_register_err(mut self) -> Self {
+            self.register_result = Err(FederationCanisterError::CallFailed("test".to_string()));
+            self
+        }
+    }
+
+    impl FederationCanister for TestFederationClient {
+        async fn register_user(
+            &self,
+            _user_id: Principal,
+            _user_handle: String,
+            _user_canister_id: Principal,
+        ) -> Result<(), FederationCanisterError> {
+            self.register_result.clone()
+        }
+    }
+
     fn user_canister() -> Principal {
         Principal::from_text("b77ix-eeaaa-aaaaa-qaada-cai").unwrap()
     }
 
-    fn machine(client: TestClient) -> SignUpStateMachine<TestClient> {
+    fn machine(
+        mgmt: TestManagementClient,
+        fed: TestFederationClient,
+    ) -> SignUpStateMachine<TestManagementClient, TestFederationClient> {
         SignUpStateMachine {
             user_id: rey_canisteryo(),
-            client,
             handle: "rey_canisteryo".to_string(),
+            management: mgmt,
+            federation: fed,
         }
     }
 
@@ -364,7 +425,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_create_canister_should_advance_to_install_wasm() {
-        let sm = machine(TestClient::ok(user_canister()));
+        let sm = machine(
+            TestManagementClient::ok(user_canister()),
+            TestFederationClient::ok(),
+        );
 
         let result = sm.create_canister().await;
 
@@ -378,7 +442,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_create_canister_should_retry_on_failure() {
-        let sm = machine(TestClient::ok(user_canister()).with_create_err());
+        let sm = machine(
+            TestManagementClient::ok(user_canister()).with_create_err(),
+            TestFederationClient::ok(),
+        );
 
         let result = sm.create_canister().await;
 
@@ -388,24 +455,30 @@ mod tests {
     // -- install_wasm step ----------------------------------------------------
 
     #[tokio::test]
-    async fn test_install_wasm_should_advance_to_commit() {
+    async fn test_install_wasm_should_advance_to_register_user() {
         setup();
-        let sm = machine(TestClient::ok(user_canister()));
+        let sm = machine(
+            TestManagementClient::ok(user_canister()),
+            TestFederationClient::ok(),
+        );
 
         let result = sm.install_wasm(user_canister()).await;
 
         assert_eq!(
             result,
-            SignUpState::CommitSignUp(SignUpResult::Success {
+            SignUpState::RegisterUser {
                 canister_id: user_canister()
-            })
+            }
         );
     }
 
     #[tokio::test]
     async fn test_install_wasm_should_retry_on_install_failure() {
         setup();
-        let sm = machine(TestClient::ok(user_canister()).with_install_err());
+        let sm = machine(
+            TestManagementClient::ok(user_canister()).with_install_err(),
+            TestFederationClient::ok(),
+        );
 
         let result = sm.install_wasm(user_canister()).await;
 
@@ -417,11 +490,50 @@ mod tests {
         );
     }
 
+    // -- register_user step ---------------------------------------------------
+
+    #[tokio::test]
+    async fn test_register_user_should_advance_to_commit() {
+        let sm = machine(
+            TestManagementClient::ok(user_canister()),
+            TestFederationClient::ok(),
+        );
+
+        let result = sm.register_user(user_canister()).await;
+
+        assert_eq!(
+            result,
+            SignUpState::CommitSignUp(SignUpResult::Success {
+                canister_id: user_canister()
+            })
+        );
+    }
+
+    #[tokio::test]
+    async fn test_register_user_should_retry_on_failure() {
+        let sm = machine(
+            TestManagementClient::ok(user_canister()),
+            TestFederationClient::ok().with_register_err(),
+        );
+
+        let result = sm.register_user(user_canister()).await;
+
+        assert_eq!(
+            result,
+            SignUpState::RegisterUser {
+                canister_id: user_canister()
+            }
+        );
+    }
+
     // -- step: full state transitions -----------------------------------------
 
     #[tokio::test]
     async fn test_step_should_advance_from_create_to_install() {
-        let sm = machine(TestClient::ok(user_canister()));
+        let sm = machine(
+            TestManagementClient::ok(user_canister()),
+            TestFederationClient::ok(),
+        );
         let current = SignUpStateStep::default();
 
         let result = sm.step(current).await;
@@ -438,8 +550,64 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_step_should_advance_from_install_to_register_user() {
+        setup();
+        let sm = machine(
+            TestManagementClient::ok(user_canister()),
+            TestFederationClient::ok(),
+        );
+        let current = SignUpStateStep {
+            state: SignUpState::InstallWasm {
+                canister_id: user_canister(),
+            },
+            retries: 0,
+        };
+
+        let result = sm.step(current).await;
+
+        assert_eq!(
+            result,
+            StepResult::Continue(SignUpStateStep {
+                state: SignUpState::RegisterUser {
+                    canister_id: user_canister()
+                },
+                retries: 0,
+            })
+        );
+    }
+
+    #[tokio::test]
+    async fn test_step_should_advance_from_register_user_to_commit() {
+        let sm = machine(
+            TestManagementClient::ok(user_canister()),
+            TestFederationClient::ok(),
+        );
+        let current = SignUpStateStep {
+            state: SignUpState::RegisterUser {
+                canister_id: user_canister(),
+            },
+            retries: 0,
+        };
+
+        let result = sm.step(current).await;
+
+        assert_eq!(
+            result,
+            StepResult::Continue(SignUpStateStep {
+                state: SignUpState::CommitSignUp(SignUpResult::Success {
+                    canister_id: user_canister()
+                }),
+                retries: 0,
+            })
+        );
+    }
+
+    #[tokio::test]
     async fn test_step_should_increment_retries_on_same_state() {
-        let sm = machine(TestClient::ok(user_canister()).with_create_err());
+        let sm = machine(
+            TestManagementClient::ok(user_canister()).with_create_err(),
+            TestFederationClient::ok(),
+        );
         let current = SignUpStateStep {
             state: SignUpState::CreateCanister,
             retries: 2,
@@ -457,8 +625,37 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_step_should_increment_retries_on_register_user_failure() {
+        let sm = machine(
+            TestManagementClient::ok(user_canister()),
+            TestFederationClient::ok().with_register_err(),
+        );
+        let current = SignUpStateStep {
+            state: SignUpState::RegisterUser {
+                canister_id: user_canister(),
+            },
+            retries: 1,
+        };
+
+        let result = sm.step(current).await;
+
+        assert_eq!(
+            result,
+            StepResult::Continue(SignUpStateStep {
+                state: SignUpState::RegisterUser {
+                    canister_id: user_canister()
+                },
+                retries: 2,
+            })
+        );
+    }
+
+    #[tokio::test]
     async fn test_step_should_transition_to_failure_on_max_retries() {
-        let sm = machine(TestClient::ok(user_canister()).with_create_err());
+        let sm = machine(
+            TestManagementClient::ok(user_canister()).with_create_err(),
+            TestFederationClient::ok(),
+        );
         let current = SignUpStateStep {
             state: SignUpState::CreateCanister,
             retries: MAX_RETRIES,
@@ -476,8 +673,35 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_step_should_transition_register_user_to_failure_on_max_retries() {
+        let sm = machine(
+            TestManagementClient::ok(user_canister()),
+            TestFederationClient::ok().with_register_err(),
+        );
+        let current = SignUpStateStep {
+            state: SignUpState::RegisterUser {
+                canister_id: user_canister(),
+            },
+            retries: MAX_RETRIES,
+        };
+
+        let result = sm.step(current).await;
+
+        assert_eq!(
+            result,
+            StepResult::Continue(SignUpStateStep {
+                state: SignUpState::CommitSignUp(SignUpResult::Failure),
+                retries: 0,
+            })
+        );
+    }
+
+    #[tokio::test]
     async fn test_step_should_finish_when_commit_failure_exhausts_retries() {
-        let sm = machine(TestClient::ok(user_canister()));
+        let sm = machine(
+            TestManagementClient::ok(user_canister()),
+            TestFederationClient::ok(),
+        );
         let current = SignUpStateStep {
             state: SignUpState::CommitSignUp(SignUpResult::Failure),
             retries: MAX_RETRIES,
@@ -491,7 +715,10 @@ mod tests {
     #[tokio::test]
     async fn test_step_should_finish_on_successful_commit() {
         setup();
-        let sm = machine(TestClient::ok(user_canister()));
+        let sm = machine(
+            TestManagementClient::ok(user_canister()),
+            TestFederationClient::ok(),
+        );
         // the user must exist in the DB for commit to succeed
         UserRepository::sign_up(rey_canisteryo(), "alice".to_string())
             .expect("sign_up should succeed");
@@ -511,7 +738,10 @@ mod tests {
     #[tokio::test]
     async fn test_step_should_finish_on_successful_commit_failure() {
         setup();
-        let sm = machine(TestClient::ok(user_canister()));
+        let sm = machine(
+            TestManagementClient::ok(user_canister()),
+            TestFederationClient::ok(),
+        );
         UserRepository::sign_up(rey_canisteryo(), "alice".to_string())
             .expect("sign_up should succeed");
 
@@ -528,8 +758,11 @@ mod tests {
     #[tokio::test]
     async fn test_step_should_retry_commit_on_missing_user() {
         setup();
-        // do NOT insert the user — commit will fail
-        let sm = machine(TestClient::ok(user_canister()));
+        // do NOT insert the user -- commit will fail
+        let sm = machine(
+            TestManagementClient::ok(user_canister()),
+            TestFederationClient::ok(),
+        );
 
         let current = SignUpStateStep {
             state: SignUpState::CommitSignUp(SignUpResult::Success {
