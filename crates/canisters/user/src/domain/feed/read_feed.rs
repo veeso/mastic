@@ -45,7 +45,6 @@ pub fn read_feed(ReadFeedArgs { limit, offset }: ReadFeedArgs) -> ReadFeedRespon
 /// Sorting, offset and limit are fully handled at the database level,
 /// keeping memory usage bounded regardless of feed size.
 fn read_feed_inner(limit: u64, offset: u64) -> CanisterResult<Vec<FeedItem>> {
-    let owner = crate::settings::get_owner_principal()?;
     let own_profile = crate::domain::profile::ProfileRepository::get_profile()?;
     let owner_actor_uri = crate::domain::urls::actor_uri(&own_profile.handle.0)?;
 
@@ -77,7 +76,7 @@ fn read_feed_inner(limit: u64, offset: u64) -> CanisterResult<Vec<FeedItem>> {
             };
 
             let item = match source {
-                FeedSource::Outbox => hydrate_outbox(&db, id, owner),
+                FeedSource::Outbox => hydrate_outbox(&db, id, &owner_actor_uri),
                 FeedSource::Inbox => hydrate_inbox(&db, id, &owner_actor_uri),
             };
 
@@ -91,7 +90,7 @@ fn read_feed_inner(limit: u64, offset: u64) -> CanisterResult<Vec<FeedItem>> {
 }
 
 /// Loads a status from the `statuses` table and wraps it as a [`FeedItem`].
-fn hydrate_outbox(db: &impl Database, id: u64, owner: candid::Principal) -> Option<FeedItem> {
+fn hydrate_outbox(db: &impl Database, id: u64, owner_actor_uri: &str) -> Option<FeedItem> {
     let query = Query::builder()
         .all()
         .and_where(Filter::eq("id", Value::from(id)))
@@ -108,7 +107,7 @@ fn hydrate_outbox(db: &impl Database, id: u64, owner: candid::Principal) -> Opti
         status: Status {
             id,
             content,
-            author: owner,
+            author: owner_actor_uri.to_string(),
             created_at,
             visibility: db_vis.into(),
         },
@@ -141,13 +140,13 @@ fn hydrate_inbox(db: &impl Database, id: u64, owner_actor_uri: &str) -> Option<F
         return None;
     }
 
+    let author_uri = activity.actor.clone().unwrap_or_default();
+
     Some(FeedItem {
         status: Status {
             id,
             content,
-            // Remote authors do not have an IC principal; use anonymous as a
-            // placeholder until directory-based resolution is implemented.
-            author: candid::Principal::anonymous(),
+            author: author_uri,
             created_at,
             visibility,
         },
@@ -459,7 +458,7 @@ mod tests {
 
         assert_eq!(items.len(), 1);
         assert_eq!(items[0].status.content, "Remote status");
-        assert_eq!(items[0].status.author, candid::Principal::anonymous());
+        assert_eq!(items[0].status.author, "https://remote.example/users/bob");
     }
 
     #[test]
@@ -556,8 +555,10 @@ mod tests {
         }));
 
         assert_eq!(items.len(), 1);
-        let owner = crate::settings::get_owner_principal().expect("owner");
-        assert_eq!(items[0].status.author, owner);
+        assert_eq!(
+            items[0].status.author,
+            "https://mastic.social/users/rey_canisteryo"
+        );
     }
 
     #[test]

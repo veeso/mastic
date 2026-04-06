@@ -64,11 +64,15 @@ async fn save_status_and_publish_to_federation(
     let snowflake_id = StatusRepository::create(content.clone(), visibility, created_at)?;
     ic_utils::log!("Status created with ID: {snowflake_id}");
 
+    // build owner actor URI
+    let own_profile = crate::domain::profile::ProfileRepository::get_profile()?;
+    let owner_actor_uri = crate::domain::urls::actor_uri(&own_profile.handle.0)?;
+
     // make status object
     let status = Status {
         id: snowflake_id.into(),
         content,
-        author: ic_utils::caller(),
+        author: owner_actor_uri,
         created_at,
         visibility,
     };
@@ -95,7 +99,7 @@ async fn save_status_and_publish_to_federation(
 /// The `target_inbox` is derived by appending `/inbox` to the follower's
 /// actor URI, following the standard ActivityPub convention.
 fn make_follower_activity(follower: &Follower, status: &Status) -> SendActivityArgsObject {
-    let actor = status.author.to_text();
+    let actor = status.author.clone();
     let (to, cc) = visibility_addressing(&status.visibility);
 
     let note = BaseObject {
@@ -201,7 +205,7 @@ mod tests {
         };
         assert_eq!(status.content, "Hello, Fediverse!");
         assert_eq!(status.visibility, Visibility::Public);
-        assert_eq!(status.author, ic_utils::caller());
+        assert_eq!(status.author, "https://mastic.social/users/rey_canisteryo");
         assert!(status.id > 0);
         assert_eq!(count_statuses(), 1);
     }
@@ -415,7 +419,7 @@ mod tests {
         let status = Status {
             id: 42,
             content: "Hello!".to_string(),
-            author: ic_utils::caller(),
+            author: "https://mastic.social/users/rey_canisteryo".to_string(),
             created_at: 1_000_000,
             visibility: Visibility::Public,
         };
@@ -429,7 +433,7 @@ mod tests {
         assert_eq!(activity.base.kind, ActivityType::Create);
         assert_eq!(
             activity.actor.as_deref(),
-            Some(ic_utils::caller().to_text().as_str())
+            Some("https://mastic.social/users/rey_canisteryo")
         );
 
         let ActivityObject::Object(note) = activity.object.expect("should have object") else {
@@ -449,7 +453,7 @@ mod tests {
         let status = Status {
             id: 1,
             content: "Public post".to_string(),
-            author: ic_utils::caller(),
+            author: "https://mastic.social/users/rey_canisteryo".to_string(),
             created_at: 0,
             visibility: Visibility::Public,
         };
@@ -474,7 +478,7 @@ mod tests {
         let status = Status {
             id: 1,
             content: "Unlisted post".to_string(),
-            author: ic_utils::caller(),
+            author: "https://mastic.social/users/rey_canisteryo".to_string(),
             created_at: 0,
             visibility: Visibility::Unlisted,
         };
@@ -499,7 +503,7 @@ mod tests {
         let status = Status {
             id: 1,
             content: "Followers only post".to_string(),
-            author: ic_utils::caller(),
+            author: "https://mastic.social/users/rey_canisteryo".to_string(),
             created_at: 0,
             visibility: Visibility::FollowersOnly,
         };
@@ -521,7 +525,7 @@ mod tests {
         let status = Status {
             id: 1,
             content: "Direct post".to_string(),
-            author: ic_utils::caller(),
+            author: "https://mastic.social/users/rey_canisteryo".to_string(),
             created_at: 0,
             visibility: Visibility::Direct,
         };

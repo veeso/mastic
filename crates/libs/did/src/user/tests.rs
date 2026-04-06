@@ -346,7 +346,7 @@ fn test_should_roundtrip_publish_status_response_ok() {
     let resp = PublishStatusResponse::Ok(crate::common::Status {
         id: 2,
         content: "Hello".to_string(),
-        author: candid::Principal::anonymous(),
+        author: "https://mastic.social/users/alice".to_string(),
         created_at: 42,
         visibility: crate::common::Visibility::Public,
     });
@@ -559,7 +559,7 @@ fn test_should_roundtrip_get_statuses_response_ok() {
     let resp = GetStatusesResponse::Ok(vec![crate::common::Status {
         id: 2,
         content: "Hello".to_string(),
-        author: candid::Principal::anonymous(),
+        author: "https://mastic.social/users/alice".to_string(),
         created_at: 42,
         visibility: crate::common::Visibility::Public,
     }]);
@@ -585,7 +585,7 @@ fn test_should_roundtrip_read_feed_response_ok() {
         status: crate::common::Status {
             id: 2,
             content: "Hello".to_string(),
-            author: candid::Principal::anonymous(),
+            author: "https://mastic.social/users/alice".to_string(),
             created_at: 42,
             visibility: crate::common::Visibility::Public,
         },
