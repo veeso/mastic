@@ -176,7 +176,7 @@ pub async fn reject_follow(args: RejectFollowArgs) -> RejectFollowResponse {
 mod tests {
 
     use super::*;
-    use crate::test_utils::{admin, federation, setup};
+    use crate::test_utils::{admin, directory, federation, setup};
 
     #[test]
     fn test_should_init_canister() {
@@ -211,7 +211,7 @@ mod tests {
         post_upgrade(UserInstallArgs::Init {
             owner: admin(),
             federation_canister: federation(),
-            directory_canister: federation(),
+            directory_canister: directory(),
             handle: "rey_canisteryo".to_string(),
             public_url: "https://mastic.social".to_string(),
         });

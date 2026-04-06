@@ -32,3 +32,22 @@ pub fn setup() {
         public_url: "https://mastic.social".to_string(),
     });
 }
+
+pub fn insert_status(id: u64, content: &str, visibility: did::common::Visibility, created_at: u64) {
+    use ic_dbms_canister::prelude::DBMS_CONTEXT;
+    use wasm_dbms::WasmDbmsDatabase;
+    use wasm_dbms_api::prelude::Database;
+
+    use crate::schema::{Schema, Status, StatusInsertRequest, Visibility as DbVisibility};
+
+    DBMS_CONTEXT.with(|ctx| {
+        let db = WasmDbmsDatabase::oneshot(ctx, Schema);
+        db.insert::<Status>(StatusInsertRequest {
+            id: id.into(),
+            content: content.into(),
+            visibility: DbVisibility::from(visibility),
+            created_at: created_at.into(),
+        })
+        .expect("should insert status");
+    });
+}

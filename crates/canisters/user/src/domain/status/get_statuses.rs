@@ -139,24 +139,8 @@ mod tests {
     use wasm_dbms_api::prelude::Database;
 
     use super::get_statuses;
-    use crate::schema::{
-        Follower, FollowerInsertRequest, Schema, Status, StatusInsertRequest,
-        Visibility as DbVisibility,
-    };
-    use crate::test_utils::{admin, alice, setup};
-
-    fn insert_status(id: u64, content: &str, visibility: Visibility, created_at: u64) {
-        DBMS_CONTEXT.with(|ctx| {
-            let db = WasmDbmsDatabase::oneshot(ctx, Schema);
-            db.insert::<Status>(StatusInsertRequest {
-                id: id.into(),
-                content: content.into(),
-                visibility: DbVisibility::from(visibility),
-                created_at: created_at.into(),
-            })
-            .expect("should insert status");
-        });
-    }
+    use crate::schema::{Follower, FollowerInsertRequest, Schema};
+    use crate::test_utils::{admin, alice, insert_status, setup};
 
     fn insert_follower(actor_uri: &str) {
         DBMS_CONTEXT.with(|ctx| {
