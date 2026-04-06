@@ -226,7 +226,7 @@ service : (UserInstallArgs) -> {
   get_followers : (GetFollowersArgs) -> (GetFollowersResponse) query;
   get_following : (GetFollowersArgs) -> (GetFollowersResponse) query;
   get_profile : () -> (GetProfileResponse) query;
-  get_statuses : (GetStatusesArgs) -> (GetStatusesResponse) query;
+  get_statuses : (GetStatusesArgs) -> (GetStatusesResponse) composite_query;
   publish_status : (PublishStatusArgs) -> (PublishStatusResponse);
   read_feed : (ReadFeedArgs) -> (ReadFeedResponse) query;
   receive_activity : (ReceiveActivityArgs) -> (ReceiveActivityResponse);

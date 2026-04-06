@@ -62,7 +62,7 @@ fn get_profile() -> GetProfileResponse {
     api::get_profile()
 }
 
-#[ic_cdk::query]
+#[ic_cdk::query(composite = true)]
 async fn get_statuses(args: GetStatusesArgs) -> GetStatusesResponse {
     api::get_statuses(args).await
 }

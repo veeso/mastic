@@ -569,6 +569,19 @@ fn test_should_roundtrip_get_statuses_response_ok() {
 }
 
 #[test]
+fn test_should_roundtrip_get_statuses_response_err() {
+    for error in [
+        GetStatusesError::LimitExceeded,
+        GetStatusesError::Internal("db error".to_string()),
+    ] {
+        let resp = GetStatusesResponse::Err(error);
+        let bytes = Encode!(&resp).unwrap();
+        let decoded = Decode!(&bytes, GetStatusesResponse).unwrap();
+        assert_eq!(resp, decoded);
+    }
+}
+
+#[test]
 fn test_should_roundtrip_read_feed_args() {
     let args = ReadFeedArgs {
         offset: 0,

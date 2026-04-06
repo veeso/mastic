@@ -95,26 +95,9 @@ impl StatusRepository {
 mod tests {
 
     use did::common::Visibility;
-    use ic_dbms_canister::prelude::DBMS_CONTEXT;
-    use wasm_dbms::WasmDbmsDatabase;
-    use wasm_dbms_api::prelude::Database;
 
     use super::StatusRepository;
-    use crate::schema::{Schema, Status, StatusInsertRequest, Visibility as DbVisibility};
-    use crate::test_utils::setup;
-
-    fn insert_status(id: u64, content: &str, visibility: Visibility, created_at: u64) {
-        DBMS_CONTEXT.with(|ctx| {
-            let db = WasmDbmsDatabase::oneshot(ctx, Schema);
-            db.insert::<Status>(StatusInsertRequest {
-                id: id.into(),
-                content: content.into(),
-                visibility: DbVisibility::from(visibility),
-                created_at: created_at.into(),
-            })
-            .expect("should insert status");
-        });
-    }
+    use crate::test_utils::{insert_status, setup};
 
     #[test]
     fn test_should_return_empty_when_no_statuses() {
