@@ -3,7 +3,7 @@
 #[cfg(test)]
 mod tests;
 
-use candid::CandidType;
+use candid::{CandidType, Principal};
 use serde::{Deserialize, Serialize};
 
 /// Install arguments for the Federation canister.
@@ -83,6 +83,27 @@ pub struct Activity {
     pub cc: Vec<String>,
     /// Publication timestamp in RFC 3339 format.
     pub published: Option<String>,
+}
+
+/// Arguments for the `register_user` method of the Federation canister.
+#[derive(Debug, Clone, PartialEq, Eq, CandidType, Serialize, Deserialize)]
+pub struct RegisterUserArgs {
+    pub user_id: Principal,
+    pub user_handle: String,
+    pub user_canister_id: Principal,
+}
+
+/// Response type for the `register_user` method of the Federation canister.
+#[derive(Debug, Clone, PartialEq, Eq, CandidType, Serialize, Deserialize)]
+pub enum RegisterUserResponse {
+    Ok,
+    Err(RegisterUserError),
+}
+
+/// Error type returned by the `register_user` method of the Federation canister.
+#[derive(Debug, Clone, PartialEq, Eq, CandidType, Serialize, Deserialize)]
+pub enum RegisterUserError {
+    Internal(String),
 }
 
 /// An object sent to the `send_activity` inside of [`SendActivityArgs`] for a single activity.

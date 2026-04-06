@@ -1,8 +1,13 @@
-use did::federation::{FederationInstallArgs, SendActivityArgs, SendActivityResponse};
+use did::federation::{
+    FederationInstallArgs, RegisterUserArgs, RegisterUserResponse, SendActivityArgs,
+    SendActivityResponse,
+};
 
 mod api;
 #[allow(dead_code, reason = "will be used by WI-0.10 routing logic")]
 mod conversions;
+mod directory;
+mod inspect;
 mod memory;
 mod settings;
 
@@ -17,6 +22,16 @@ fn init(args: FederationInstallArgs) {
 #[ic_cdk::post_upgrade]
 fn post_upgrade(args: FederationInstallArgs) {
     api::post_upgrade(args);
+}
+
+#[ic_cdk::inspect_message]
+fn inspect_message() {
+    inspect::inspect();
+}
+
+#[ic_cdk::update]
+fn register_user(args: RegisterUserArgs) -> RegisterUserResponse {
+    api::register_user(args)
 }
 
 #[ic_cdk::update]
