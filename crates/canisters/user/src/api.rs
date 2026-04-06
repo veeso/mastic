@@ -5,9 +5,10 @@ pub mod inspect;
 use did::user::{
     AcceptFollowArgs, AcceptFollowResponse, FollowUserArgs, FollowUserResponse,
     GetFollowRequestsArgs, GetFollowRequestsResponse, GetFollowersArgs, GetFollowersResponse,
-    GetFollowingArgs, GetFollowingResponse, GetProfileResponse, PublishStatusArgs,
-    PublishStatusResponse, ReadFeedArgs, ReadFeedResponse, ReceiveActivityArgs,
-    ReceiveActivityResponse, RejectFollowArgs, RejectFollowResponse, UserInstallArgs,
+    GetFollowingArgs, GetFollowingResponse, GetProfileResponse, GetStatusesArgs,
+    GetStatusesResponse, PublishStatusArgs, PublishStatusResponse, ReadFeedArgs, ReadFeedResponse,
+    ReceiveActivityArgs, ReceiveActivityResponse, RejectFollowArgs, RejectFollowResponse,
+    UserInstallArgs,
 };
 use ic_dbms_canister::prelude::DBMS_CONTEXT;
 
@@ -18,6 +19,7 @@ pub fn init(args: UserInstallArgs) {
     let UserInstallArgs::Init {
         owner,
         federation_canister,
+        directory_canister,
         handle,
         public_url,
     } = args
@@ -43,6 +45,12 @@ pub fn init(args: UserInstallArgs) {
     ic_utils::log!("Setting federation canister to {federation_canister}");
     if let Err(err) = crate::settings::set_federation_canister(federation_canister) {
         ic_utils::trap!("Failed to set federation canister: {:?}", err);
+    }
+
+    // set directory canister
+    ic_utils::log!("Setting directory canister to {directory_canister}");
+    if let Err(err) = crate::settings::set_directory_canister(directory_canister) {
+        ic_utils::trap!("Failed to set directory canister: {:?}", err);
     }
 
     // set public url
@@ -115,6 +123,13 @@ pub fn get_following(args: GetFollowingArgs) -> GetFollowingResponse {
 /// Gets the user profile.
 pub fn get_profile() -> GetProfileResponse {
     crate::domain::profile::get_profile()
+}
+
+/// Gets a paginated list of the user's statuses.
+pub async fn get_statuses(args: GetStatusesArgs) -> GetStatusesResponse {
+    let caller = ic_utils::caller();
+
+    crate::domain::status::get_statuses(args, caller).await
 }
 
 /// Publishes a new status.
@@ -196,6 +211,7 @@ mod tests {
         post_upgrade(UserInstallArgs::Init {
             owner: admin(),
             federation_canister: federation(),
+            directory_canister: federation(),
             handle: "rey_canisteryo".to_string(),
             public_url: "https://mastic.social".to_string(),
         });

@@ -7,6 +7,7 @@ fn test_should_roundtrip_user_install_args_init() {
     let args = UserInstallArgs::Init {
         owner: candid::Principal::anonymous(),
         federation_canister: candid::Principal::anonymous(),
+        directory_canister: candid::Principal::anonymous(),
         handle: "rey_canisteryo".to_string(),
         public_url: "https://mastic.social".to_string(),
     };
@@ -539,6 +540,31 @@ fn test_should_roundtrip_get_liked_response_err() {
     let resp = GetLikedResponse::Err(GetLikedError::Unauthorized);
     let bytes = Encode!(&resp).unwrap();
     let decoded = Decode!(&bytes, GetLikedResponse).unwrap();
+    assert_eq!(resp, decoded);
+}
+
+#[test]
+fn test_should_roundtrip_get_statuses_args() {
+    let args = GetStatusesArgs {
+        offset: 0,
+        limit: 20,
+    };
+    let bytes = Encode!(&args).unwrap();
+    let decoded = Decode!(&bytes, GetStatusesArgs).unwrap();
+    assert_eq!(args, decoded);
+}
+
+#[test]
+fn test_should_roundtrip_get_statuses_response_ok() {
+    let resp = GetStatusesResponse::Ok(vec![crate::common::Status {
+        id: 2,
+        content: "Hello".to_string(),
+        author: candid::Principal::anonymous(),
+        created_at: 42,
+        visibility: crate::common::Visibility::Public,
+    }]);
+    let bytes = Encode!(&resp).unwrap();
+    let decoded = Decode!(&bytes, GetStatusesResponse).unwrap();
     assert_eq!(resp, decoded);
 }
 

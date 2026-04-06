@@ -81,6 +81,8 @@ for the full specification.
 | :-- | :---------------------------- | :--------- | :----------------------------------- |
 | `0` | `SETTING_FEDERATION_CANISTER` | `BLOB`     | Principal of the Federation canister |
 | `1` | `SETTING_OWNER_PRINCIPAL`     | `BLOB`     | Principal of the canister owner      |
+| `2` | `SETTING_PUBLIC_URL`          | `TEXT`     | Public URL of the Mastic instance    |
+| `3` | `SETTING_DIRECTORY_CANISTER`  | `BLOB`     | Principal of the Directory canister  |
 
 ### `profiles` Table
 

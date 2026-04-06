@@ -17,6 +17,8 @@ pub enum UserInstallArgs {
         owner: candid::Principal,
         /// Principal of the Federation Canister used for outbound ActivityPub delivery.
         federation_canister: candid::Principal,
+        /// Principal of the Directory Canister used for principal→handle resolution.
+        directory_canister: candid::Principal,
         /// User handle
         handle: String,
         /// The public URL of the Mastic instance (e.g. `https://mastic.social`)
@@ -442,6 +444,31 @@ pub enum GetLikedError {
 pub enum GetLikedResponse {
     Ok(Vec<String>),
     Err(GetLikedError),
+}
+
+/// Request arguments for the `get_statuses` method.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, CandidType, Serialize, Deserialize)]
+pub struct GetStatusesArgs {
+    /// Number of results to skip (for pagination).
+    pub offset: u64,
+    /// Maximum number of results to return.
+    pub limit: u64,
+}
+
+/// Error types for the `get_statuses` method.
+#[derive(Debug, Clone, PartialEq, Eq, CandidType, Serialize, Deserialize)]
+pub enum GetStatusesError {
+    /// Limit exceeds maximum allowed page size.
+    LimitExceeded,
+    /// Internal error occurred while fetching statuses.
+    Internal(String),
+}
+
+/// Response type for the `get_statuses` method.
+#[derive(Debug, Clone, PartialEq, Eq, CandidType, Serialize, Deserialize)]
+pub enum GetStatusesResponse {
+    Ok(Vec<Status>),
+    Err(GetStatusesError),
 }
 
 /// Request arguments for the `read_feed` method.

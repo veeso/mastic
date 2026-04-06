@@ -75,6 +75,7 @@ impl CanisterSetup for MasticCanisterSetup {
         let user_init_args = Encode!(&UserInstallArgs::Init {
             owner: rey_canisteryo(),
             federation_canister,
+            directory_canister,
             handle: "rey_canisteryo".to_string(),
             public_url: PUBLIC_URL.to_string(),
         })
