@@ -19,10 +19,15 @@ pub fn bob() -> Principal {
     Principal::from_text("br5f7-7uaaa-aaaaa-qaaca-cai").unwrap()
 }
 
+pub fn directory() -> Principal {
+    Principal::from_text("bw4dl-smaaa-aaaaa-qaacq-cai").unwrap()
+}
+
 pub fn setup() {
     crate::api::init(UserInstallArgs::Init {
         owner: admin(),
         federation_canister: federation(),
+        directory_canister: directory(),
         handle: "rey_canisteryo".to_string(),
         public_url: "https://mastic.social".to_string(),
     });
