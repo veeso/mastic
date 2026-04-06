@@ -80,9 +80,16 @@ async fn determine_relationship(caller: Principal) -> CanisterResult<CallerRelat
         return Ok(CallerRelationship::Owner);
     }
 
-    // resove handle
-    let handle: String = todo!();
+    // resolve handle via directory
+    let handle = match crate::adapters::directory::resolve_handle(caller).await? {
+        Some(handle) => handle,
+        None => {
+            ic_utils::log!("Caller {caller} is not registered in the directory");
+            return Ok(CallerRelationship::Other);
+        }
+    };
     ic_utils::log!("Resolved handle for caller {caller}: {handle}");
+
     let actor_uri = crate::domain::urls::actor_uri(&handle)?;
 
     if FollowerRepository::is_follower(&actor_uri)? {

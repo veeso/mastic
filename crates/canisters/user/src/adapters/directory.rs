@@ -92,16 +92,12 @@ impl DirectoryCanister for IcDirectoryCanisterClient {
             .with_arg(args)
             .await
             .map_err(|e| {
-                ic_utils::log!(
-                    "DirectoryCanisterClientError::resolve_handle: call failed: {e:?}"
-                );
+                ic_utils::log!("DirectoryCanisterClientError::resolve_handle: call failed: {e:?}");
                 DirectoryCanisterClientError::CallFailed(format!("{e:?}"))
             })?;
 
         let response = candid::decode_one::<GetUserResponse>(&raw).map_err(|e| {
-            ic_utils::log!(
-                "DirectoryCanisterClientError::resolve_handle: decode failed: {e}"
-            );
+            ic_utils::log!("DirectoryCanisterClientError::resolve_handle: decode failed: {e}");
             DirectoryCanisterClientError::DecodeFailed(e.to_string())
         })?;
 
@@ -120,9 +116,7 @@ impl DirectoryCanister for IcDirectoryCanisterClient {
                 Ok(None)
             }
             GetUserResponse::Err(e) => {
-                ic_utils::log!(
-                    "IcDirectoryCanisterClient::resolve_handle: directory error: {e:?}"
-                );
+                ic_utils::log!("IcDirectoryCanisterClient::resolve_handle: directory error: {e:?}");
                 Err(DirectoryCanisterClientError::CallFailed(format!("{e:?}")))
             }
         }

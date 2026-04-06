@@ -19,12 +19,12 @@ type AcceptFollowResponse = variant { Ok; Err : AcceptFollowError };
 type FeedItem = record {
   // The status associated with this feed item.
   status : Status;
-  // If this feed item was boosted (reblogged) by another user, the principal
-  // of the User Canister that performed the boost. Otherwise [`None`].
+  // If this feed item was boosted (reblogged) by another user, the actor URI
+  // of the user that performed the boost. Otherwise [`None`].
   // 
   // It works like this: if Alice creates a status, and Bob boosts it,
-  // then a new Feed Item is created with `boosted_by` set to Bob's principal.
-  boosted_by : opt principal;
+  // then a new Feed Item is created with `boosted_by` set to Bob's actor URI.
+  boosted_by : opt text;
 };
 // Request arguments for the `follow_user` method.
 type FollowUserArgs = record {
@@ -88,6 +88,22 @@ type GetProfileError = variant {
 };
 // Response type for the `get_profile` method.
 type GetProfileResponse = variant { Ok : UserProfile; Err : GetProfileError };
+// Request arguments for the `get_statuses` method.
+type GetStatusesArgs = record {
+  // Number of results to skip (for pagination).
+  offset : nat64;
+  // Maximum number of results to return.
+  limit : nat64;
+};
+// Error types for the `get_statuses` method.
+type GetStatusesError = variant {
+  // Internal error occurred while fetching statuses.
+  Internal : text;
+  // Limit exceeds maximum allowed page size.
+  LimitExceeded;
+};
+// Response type for the `get_statuses` method.
+type GetStatusesResponse = variant { Ok : vec Status; Err : GetStatusesError };
 // Request arguments for the `publish_status` method.
 type PublishStatusArgs = record {
   // The text content of the new post.
@@ -151,8 +167,8 @@ type Status = record {
   content : text;
   // Timestamp (milliseconds since epoch) of when the status was created.
   created_at : nat64;
-  // The principal of the User Canister that authored this status.
-  author : principal;
+  // The actor URI of the status author (e.g. `https://mastic.social/users/alice`).
+  author : text;
   // The visibility setting of the status, controlling its audience.
   visibility : Visibility;
 };
@@ -170,6 +186,8 @@ type UserInstallArgs = variant {
     owner : principal;
     // User handle
     handle : text;
+    // Principal of the Directory Canister used for principal→handle resolution.
+    directory_canister : principal;
   };
 };
 // A user's public profile information. Stored in the User Canister and returned
@@ -208,6 +226,7 @@ service : (UserInstallArgs) -> {
   get_followers : (GetFollowersArgs) -> (GetFollowersResponse) query;
   get_following : (GetFollowersArgs) -> (GetFollowersResponse) query;
   get_profile : () -> (GetProfileResponse) query;
+  get_statuses : (GetStatusesArgs) -> (GetStatusesResponse) query;
   publish_status : (PublishStatusArgs) -> (PublishStatusResponse);
   read_feed : (ReadFeedArgs) -> (ReadFeedResponse) query;
   receive_activity : (ReceiveActivityArgs) -> (ReceiveActivityResponse);

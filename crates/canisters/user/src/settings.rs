@@ -73,6 +73,10 @@ pub fn set_owner_principal(principal: Principal) -> CanisterResult<()> {
 }
 
 /// Gets the principal of the directory canister.
+#[cfg_attr(
+    not(any(target_family = "wasm", test)),
+    expect(dead_code, reason = "called only from wasm adapter")
+)]
 pub fn get_directory_canister() -> CanisterResult<Principal> {
     DBMS_CONTEXT
         .with(|ctx| {

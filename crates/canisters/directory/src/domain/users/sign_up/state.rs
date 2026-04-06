@@ -246,6 +246,7 @@ where
         let init_args = UserInstallArgs::Init {
             owner: self.user_id,
             federation_canister,
+            directory_canister: ic_utils::canister_id(),
             handle: self.handle.clone(),
             public_url,
         };
