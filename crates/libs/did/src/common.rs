@@ -47,8 +47,8 @@ pub struct Status {
     pub id: u64,
     /// The text content of the status.
     pub content: String,
-    /// The principal of the User Canister that authored this status.
-    pub author: candid::Principal,
+    /// The actor URI of the status author (e.g. `https://mastic.social/users/alice`).
+    pub author: String,
     /// Timestamp (milliseconds since epoch) of when the status was created.
     pub created_at: u64,
     /// The visibility setting of the status, controlling its audience.
@@ -61,10 +61,10 @@ pub struct Status {
 pub struct FeedItem {
     /// The status associated with this feed item.
     pub status: Status,
-    /// If this feed item was boosted (reblogged) by another user, the principal
-    /// of the User Canister that performed the boost. Otherwise [`None`].
+    /// If this feed item was boosted (reblogged) by another user, the actor URI
+    /// of the user that performed the boost. Otherwise [`None`].
     ///
     /// It works like this: if Alice creates a status, and Bob boosts it,
-    /// then a new Feed Item is created with `boosted_by` set to Bob's principal.
-    pub boosted_by: Option<candid::Principal>,
+    /// then a new Feed Item is created with `boosted_by` set to Bob's actor URI.
+    pub boosted_by: Option<String>,
 }

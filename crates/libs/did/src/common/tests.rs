@@ -51,7 +51,7 @@ fn test_should_roundtrip_status() {
     let status = Status {
         id: 4,
         content: "Hello, world!".to_string(),
-        author: candid::Principal::anonymous(),
+        author: "https://mastic.social/users/alice".to_string(),
         created_at: 1_000_000_000,
         visibility: Visibility::Public,
     };
@@ -66,11 +66,11 @@ fn test_should_roundtrip_feed_item() {
         status: Status {
             id: 4,
             content: "A post".to_string(),
-            author: candid::Principal::anonymous(),
+            author: "https://mastic.social/users/alice".to_string(),
             created_at: 42,
             visibility: Visibility::FollowersOnly,
         },
-        boosted_by: Some(candid::Principal::anonymous()),
+        boosted_by: Some("https://mastic.social/users/bob".to_string()),
     };
     let bytes = Encode!(&item).unwrap();
     let decoded = Decode!(&bytes, FeedItem).unwrap();
@@ -83,7 +83,7 @@ fn test_should_roundtrip_feed_item_without_boost() {
         status: Status {
             id: 4,
             content: "A post".to_string(),
-            author: candid::Principal::anonymous(),
+            author: "https://mastic.social/users/alice".to_string(),
             created_at: 42,
             visibility: Visibility::Unlisted,
         },
