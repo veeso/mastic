@@ -7,6 +7,10 @@ pub enum CanisterError {
     /// Database error
     #[error("Database error: {0}")]
     Database(#[from] wasm_dbms_api::prelude::DbmsError),
+    /// Directory error
+    #[error("Directory call failed: {0}")]
+    #[cfg(any(target_family = "wasm", test))]
+    Directory(#[from] crate::adapters::directory::DirectoryCanisterClientError),
     /// Federation error
     #[error("Federation call failed: {0}")]
     #[cfg(any(target_family = "wasm", test))]
