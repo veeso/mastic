@@ -39,6 +39,23 @@ impl FollowerRepository {
         })
     }
 
+    /// Checks if the given actor URI is a [`Follower`] of the user.
+    pub fn is_follower(actor_uri: &str) -> CanisterResult<bool> {
+        DBMS_CONTEXT.with(|ctx| {
+            let db = WasmDbmsDatabase::oneshot(ctx, Schema);
+
+            db.select::<Follower>(
+                Query::builder()
+                    .all()
+                    .and_where(Filter::eq("actor_uri", actor_uri.into()))
+                    .limit(1)
+                    .build(),
+            )
+            .map(|records| !records.is_empty())
+            .map_err(CanisterError::from)
+        })
+    }
+
     /// Get the list of [`Follower`]s of the user.
     pub fn get_paginated(offset: usize, limit: usize) -> CanisterResult<Vec<Follower>> {
         DBMS_CONTEXT.with(|ctx| {
