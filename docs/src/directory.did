@@ -21,6 +21,14 @@ type GetUser = record {
   // The matched user's handle.
   handle : text;
 };
+// Request arguments for the `get_user` method.
+// Look up a user by either their handle or their IC principal.
+type GetUserArgs = variant {
+  // Look up a user by their IC principal.
+  Principal : principal;
+  // Look up a user by their handle.
+  Handle : text;
+};
 // Error types for the `get_user` method.
 type GetUserError = variant {
   // The provided handle is invalid (e.g. empty or contains disallowed characters).
@@ -110,7 +118,7 @@ type WhoAmIError = variant {
 // information or an error if they are not registered.
 type WhoAmIResponse = variant { Ok : WhoAmI; Err : WhoAmIError };
 service : (DirectoryInstallArgs) -> {
-  get_user : (text) -> (GetUserResponse) query;
+  get_user : (GetUserArgs) -> (GetUserResponse) query;
   retry_sign_up : () -> (RetrySignUpResponse);
   sign_up : (SignUpRequest) -> (SignUpResponse);
   user_canister : (opt principal) -> (UserCanisterResponse) query;

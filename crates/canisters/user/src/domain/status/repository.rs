@@ -9,6 +9,7 @@ use crate::domain::snowflake::Snowflake;
 use crate::error::CanisterResult;
 use crate::schema::{
     FeedEntry, FeedEntryInsertRequest, FeedSource, Schema, Status, StatusInsertRequest,
+    StatusRecord,
 };
 
 /// Interface for the [`Status`] repository.
@@ -52,5 +53,36 @@ impl StatusRepository {
         })?;
 
         Ok(snowflake_id)
+    }
+
+    /// Get a paginated list of [`Status`]es with the given visibility, ordered from the most recent to the oldest.
+    ///
+    /// This function is used to implement the `get_statuses` API, and the returned statuses are filtered based on the relationship of the caller with the user (owner, follower, or other).
+    pub fn get_paginated_by_visibility(
+        visibility: &[Visibility],
+        offset: usize,
+        limit: usize,
+    ) -> CanisterResult<Vec<Status>> {
+        DBMS_CONTEXT.with(|ctx| {
+            let db = WasmDbmsDatabase::oneshot(ctx, Schema);
+
+            let mut query = Query::builder().all().limit(limit).offset(offset);
+            for v in visibility {
+                let visibility = crate::schema::Visibility::from(*v);
+                query = query.and_where(Filter::eq("visibility", visibility.into()));
+            }
+
+            let results = db.select::<Status>(query.build())?;
+            Ok(results.into_iter().map(Self::record_to_status).collect())
+        })
+    }
+
+    fn record_to_status(record: StatusRecord) -> Status {
+        Status {
+            id: record.id.expect("must have field"),
+            content: record.content.expect("must have field"),
+            visibility: record.visibility.expect("must have field"),
+            created_at: record.created_at.expect("must have field"),
+        }
     }
 }
