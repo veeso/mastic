@@ -91,10 +91,16 @@ fn test_should_roundtrip_user_canister_response_err() {
 }
 
 #[test]
-fn test_should_roundtrip_get_user_args() {
-    let args = GetUserArgs {
-        handle: "alice".to_string(),
-    };
+fn test_should_roundtrip_get_user_args_handle() {
+    let args = GetUserArgs::Handle("alice".to_string());
+    let bytes = Encode!(&args).unwrap();
+    let decoded = Decode!(&bytes, GetUserArgs).unwrap();
+    assert_eq!(args, decoded);
+}
+
+#[test]
+fn test_should_roundtrip_get_user_args_principal() {
+    let args = GetUserArgs::Principal(candid::Principal::anonymous());
     let bytes = Encode!(&args).unwrap();
     let decoded = Decode!(&bytes, GetUserArgs).unwrap();
     assert_eq!(args, decoded);

@@ -136,10 +136,13 @@ pub enum UserCanisterResponse {
 }
 
 /// Request arguments for the `get_user` method.
+/// Look up a user by either their handle or their IC principal.
 #[derive(Debug, Clone, PartialEq, Eq, CandidType, Serialize, Deserialize)]
-pub struct GetUserArgs {
-    /// The handle to look up.
-    pub handle: String,
+pub enum GetUserArgs {
+    /// Look up a user by their handle.
+    Handle(String),
+    /// Look up a user by their IC principal.
+    Principal(candid::Principal),
 }
 
 /// Data returned by the `get_user` method on success.
