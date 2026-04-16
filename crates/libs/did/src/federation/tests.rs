@@ -153,9 +153,10 @@ fn test_should_roundtrip_send_activity_args_batch() {
 #[test]
 fn test_should_roundtrip_send_activity_error() {
     for error in [
-        SendActivityError::Unauthorized,
-        SendActivityError::DeliveryFailed,
-        SendActivityError::InvalidActivity,
+        SendActivityError::InvalidTargetInbox("bad url".to_string()),
+        SendActivityError::UnknownLocalUser("alice".to_string()),
+        SendActivityError::DeliveryFailed("call trapped".to_string()),
+        SendActivityError::Rejected("user rejected".to_string()),
     ] {
         let bytes = Encode!(&error).unwrap();
         let decoded = Decode!(&bytes, SendActivityError).unwrap();
@@ -164,23 +165,50 @@ fn test_should_roundtrip_send_activity_error() {
 }
 
 #[test]
-fn test_should_roundtrip_send_activity_response_ok() {
-    let resp = SendActivityResponse::Ok;
+fn test_should_roundtrip_send_activity_result_ok() {
+    let result = SendActivityResult::Ok;
+    let bytes = Encode!(&result).unwrap();
+    let decoded = Decode!(&bytes, SendActivityResult).unwrap();
+    assert_eq!(result, decoded);
+}
+
+#[test]
+fn test_should_roundtrip_send_activity_result_err() {
+    for error in [
+        SendActivityError::InvalidTargetInbox("bad url".to_string()),
+        SendActivityError::UnknownLocalUser("alice".to_string()),
+        SendActivityError::DeliveryFailed("call trapped".to_string()),
+        SendActivityError::Rejected("user rejected".to_string()),
+    ] {
+        let result = SendActivityResult::Err(error);
+        let bytes = Encode!(&result).unwrap();
+        let decoded = Decode!(&bytes, SendActivityResult).unwrap();
+        assert_eq!(result, decoded);
+    }
+}
+
+// M-UNIT-TEST: SendActivityResponse::One round-trips through Candid encoding.
+#[test]
+fn test_should_roundtrip_send_activity_response_one() {
+    let resp = SendActivityResponse::One(SendActivityResult::Ok);
     let bytes = Encode!(&resp).unwrap();
     let decoded = Decode!(&bytes, SendActivityResponse).unwrap();
     assert_eq!(resp, decoded);
 }
 
+// M-UNIT-TEST: SendActivityResponse::Batch round-trips through Candid encoding
+// with a mix of success and error outcomes.
 #[test]
-fn test_should_roundtrip_send_activity_response_err() {
-    for error in [
-        SendActivityError::Unauthorized,
-        SendActivityError::DeliveryFailed,
-        SendActivityError::InvalidActivity,
-    ] {
-        let resp = SendActivityResponse::Err(error);
-        let bytes = Encode!(&resp).unwrap();
-        let decoded = Decode!(&bytes, SendActivityResponse).unwrap();
-        assert_eq!(resp, decoded);
-    }
+fn test_should_roundtrip_send_activity_response_batch() {
+    let resp = SendActivityResponse::Batch(vec![
+        SendActivityResult::Ok,
+        SendActivityResult::Err(SendActivityError::DeliveryFailed(
+            "call trapped".to_string(),
+        )),
+        SendActivityResult::Err(SendActivityError::UnknownLocalUser("alice".to_string())),
+        SendActivityResult::Err(SendActivityError::Rejected("user rejected".to_string())),
+    ]);
+    let bytes = Encode!(&resp).unwrap();
+    let decoded = Decode!(&bytes, SendActivityResponse).unwrap();
+    assert_eq!(resp, decoded);
 }

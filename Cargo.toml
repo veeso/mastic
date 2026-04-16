@@ -40,6 +40,7 @@ serde_bytes = "0.11"
 serde_json = "1"
 thiserror = "2"
 tokio = { version = "1", features = ["full"] }
+url = "2"
 wasm-dbms = "0.8"
 wasm-dbms-api = "0.8"
 wasm-dbms-memory = "0.8"

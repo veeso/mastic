@@ -29,10 +29,12 @@ impl UserClient<'_> {
         caller: Principal,
         content: String,
         visibility: Visibility,
+        mentions: Vec<String>,
     ) -> PublishStatusResponse {
         let args = PublishStatusArgs {
             content,
             visibility,
+            mentions,
         };
 
         self.env

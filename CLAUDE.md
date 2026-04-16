@@ -41,8 +41,8 @@ just build_directory        # Build only the directory canister
 just build_federation       # Build only the federation canister
 just build_user             # Build only the user canister
 just test                   # Run unit tests
-just integration_test       # Run pocket-ic integration tests
-just test_all               # Run all tests (unit + integration)
+just integration_test       # Run pocket-ic integration tests (always run `just build_all` first to ensure WASM artifacts are up to date)
+just test_all               # Run all tests (unit + integration) (always run `just build_all` first to ensure WASM artifacts are up to date)
 just check_code             # Run nightly rustfmt --check + clippy -D warnings
 just fmt                    # Format code (stable)
 just fmt_nightly            # Format code (nightly, used in CI)
