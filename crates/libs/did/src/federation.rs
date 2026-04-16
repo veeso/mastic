@@ -125,19 +125,41 @@ pub enum SendActivityArgs {
 }
 
 /// Error type returned by the `send_activity` method of the Federation canister.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, CandidType, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, CandidType, Serialize, Deserialize)]
 pub enum SendActivityError {
-    /// the caller is not a registered User Canister.
-    Unauthorized,
-    /// the HTTP request to the target inbox failed.
-    DeliveryFailed,
-    /// the JSON could not be parsed as a valid ActivityPub activity.
-    InvalidActivity,
+    /// The `target_inbox` URL failed to parse or has an unexpected path shape.
+    InvalidTargetInbox(String),
+    /// The local inbox references a handle that is not registered in the
+    /// Directory Canister.
+    UnknownLocalUser(String),
+    /// The inter-canister call to the target User Canister failed (transport
+    /// or decode).
+    DeliveryFailed(String),
+    /// The target User Canister accepted the call but rejected the activity.
+    Rejected(String),
+}
+
+/// Per-activity outcome of a `send_activity` call.
+///
+/// Carries the delivery result for a single [`SendActivityArgsObject`]. Batch
+/// calls return one result per input object, index-aligned with the request.
+#[derive(Debug, Clone, PartialEq, Eq, CandidType, Serialize, Deserialize)]
+pub enum SendActivityResult {
+    Ok,
+    Err(SendActivityError),
 }
 
 /// Response type for the `send_activity` method of the Federation canister.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, CandidType, Serialize, Deserialize)]
+///
+/// Mirrors the shape of [`SendActivityArgs`]: a [`SendActivityArgs::One`]
+/// request returns [`SendActivityResponse::One`], and a
+/// [`SendActivityArgs::Batch`] request returns [`SendActivityResponse::Batch`]
+/// with one [`SendActivityResult`] per input object in the same order.
+#[derive(Debug, Clone, PartialEq, Eq, CandidType, Serialize, Deserialize)]
 pub enum SendActivityResponse {
-    Ok,
-    Err(SendActivityError),
+    /// Outcome for a single activity delivery.
+    One(SendActivityResult),
+    /// Per-activity outcomes for a batch delivery, index-aligned with the
+    /// request.
+    Batch(Vec<SendActivityResult>),
 }

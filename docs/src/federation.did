@@ -36,15 +36,35 @@ type SendActivityArgsObject = record {
 };
 // Error type returned by the `send_activity` method of the Federation canister.
 type SendActivityError = variant {
-  // the caller is not a registered User Canister.
-  Unauthorized;
-  // the JSON could not be parsed as a valid ActivityPub activity.
-  InvalidActivity;
-  // the HTTP request to the target inbox failed.
-  DeliveryFailed;
+  // The local inbox references a handle that is not registered in the
+  // Directory Canister.
+  UnknownLocalUser : text;
+  // The `target_inbox` URL failed to parse or has an unexpected path shape.
+  InvalidTargetInbox : text;
+  // The target User Canister accepted the call but rejected the activity.
+  Rejected : text;
+  // The inter-canister call to the target User Canister failed (transport
+  // or decode).
+  DeliveryFailed : text;
 };
 // Response type for the `send_activity` method of the Federation canister.
-type SendActivityResponse = variant { Ok; Err : SendActivityError };
+// 
+// Mirrors the shape of [`SendActivityArgs`]: a [`SendActivityArgs::One`]
+// request returns [`SendActivityResponse::One`], and a
+// [`SendActivityArgs::Batch`] request returns [`SendActivityResponse::Batch`]
+// with one [`SendActivityResult`] per input object in the same order.
+type SendActivityResponse = variant {
+  // Outcome for a single activity delivery.
+  One : SendActivityResult;
+  // Per-activity outcomes for a batch delivery, index-aligned with the
+  // request.
+  Batch : vec SendActivityResult;
+};
+// Per-activity outcome of a `send_activity` call.
+// 
+// Carries the delivery result for a single [`SendActivityArgsObject`]. Batch
+// calls return one result per input object, index-aligned with the request.
+type SendActivityResult = variant { Ok; Err : SendActivityError };
 service : (FederationInstallArgs) -> {
   register_user : (RegisterUserArgs) -> (RegisterUserResponse);
   send_activity : (SendActivityArgs) -> (SendActivityResponse);

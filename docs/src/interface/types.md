@@ -731,23 +731,31 @@ type GetFollowingError = variant {
 ### PublishStatus
 
 Request, response, and error types for the `publish_status` method. Creates a
-new status post in the caller's outbox and distributes it to followers via the
-Federation Canister.
+new status post in the caller's outbox and distributes it via the Federation
+Canister. For `Public`, `Unlisted`, and `FollowersOnly` visibilities, the
+recipients are the author's followers. For `Direct` visibility, the recipients
+are the explicitly listed `mentions` — followers are not addressed.
 
-| Field        | Description                                                       |
-| ------------ | ----------------------------------------------------------------- |
-| `content`    | The text content of the new post.                                 |
-| `visibility` | Audience control for this status (see [Visibility](#visibility)). |
+| Field        | Description                                                                             |
+| ------------ | --------------------------------------------------------------------------------------- |
+| `content`    | The text content of the new post.                                                       |
+| `visibility` | Audience control for this status (see [Visibility](#visibility)).                       |
+| `mentions`   | Actor URIs explicitly mentioned. Required (non-empty) when `visibility` is `Direct`.    |
 
 On success, returns the created `Status` with its assigned ID and timestamp.
 
 - **Unauthorized**: the caller is not the canister owner.
+- **ContentEmpty**: the content is empty or contains only whitespace.
 - **ContentTooLong**: the content exceeds the maximum allowed length.
+- **NoRecipients**: a `Direct` status was published with an empty `mentions`
+  list.
+- **Internal**: an internal error occurred while publishing the status.
 
 ```candid
 type PublishStatusArgs = record {
   content : text;
   visibility : Visibility;
+  mentions : vec text;
 };
 
 type PublishStatusResponse = variant {
@@ -757,7 +765,10 @@ type PublishStatusResponse = variant {
 
 type PublishStatusError = variant {
   Unauthorized;
+  ContentEmpty;
   ContentTooLong;
+  NoRecipients;
+  Internal : text;
 };
 ```
 
@@ -1025,33 +1036,52 @@ type FederationInstallArgs = variant {
 ### SendActivity
 
 Request, response, and error types for the `send_activity` method. Called by a
-User Canister to deliver an outbound ActivityPub activity to a remote server's
-inbox via HTTP.
+registered User Canister to deliver an outbound ActivityPub activity. Supports
+a single activity (`One`) or a batch (`Batch`) per call. Local targets are
+routed to the recipient User Canister via the Directory Canister; remote
+targets are skipped (remote HTTP delivery is Milestone 2).
 
-| Field           | Description                                                  |
-| --------------- | ------------------------------------------------------------ |
-| `activity_json` | JSON-encoded ActivityPub activity object to send.            |
-| `target_inbox`  | URL of the remote actor's inbox to deliver the activity to.  |
+| Field           | Description                                                 |
+| --------------- | ----------------------------------------------------------- |
+| `activity_json` | JSON-encoded ActivityPub activity object to send.           |
+| `target_inbox`  | URL of the actor's inbox to deliver the activity to.        |
 
-- **Unauthorized**: the caller is not a registered User Canister.
-- **DeliveryFailed**: the HTTP request to the target inbox failed.
-- **InvalidActivity**: the JSON could not be parsed as a valid ActivityPub
+`SendActivityError`:
+
+- **InvalidTargetInbox(text)**: `target_inbox` URL failed to parse or has an
+  unexpected path shape.
+- **UnknownLocalUser(text)**: local inbox references a handle that is not
+  registered in the Directory Canister.
+- **DeliveryFailed(text)**: inter-canister call to the target User Canister
+  failed (transport or decode).
+- **Rejected(text)**: target User Canister accepted the call but rejected the
   activity.
 
 ```candid
-type SendActivityArgs = record {
+type SendActivityArgsObject = record {
   activity_json : text;
   target_inbox : text;
 };
 
-type SendActivityResponse = variant {
+type SendActivityArgs = variant {
+  One : SendActivityArgsObject;
+  Batch : vec SendActivityArgsObject;
+};
+
+type SendActivityResult = variant {
   Ok;
   Err : SendActivityError;
 };
 
+type SendActivityResponse = variant {
+  One : SendActivityResult;
+  Batch : vec SendActivityResult;
+};
+
 type SendActivityError = variant {
-  Unauthorized;
-  DeliveryFailed;
-  InvalidActivity;
+  InvalidTargetInbox : text;
+  UnknownLocalUser : text;
+  DeliveryFailed : text;
+  Rejected : text;
 };
 ```

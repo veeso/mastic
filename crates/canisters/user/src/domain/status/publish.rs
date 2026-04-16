@@ -10,25 +10,34 @@ use did::user::{PublishStatusArgs, PublishStatusError, PublishStatusResponse};
 use crate::domain::follower::FollowerRepository;
 use crate::domain::status::StatusRepository;
 use crate::error::CanisterResult;
-use crate::schema::{Follower, StatusContentSanitizer};
+use crate::schema::StatusContentSanitizer;
 
 /// The ActivityStreams public addressing constant.
 const AS_PUBLIC: &str = "https://www.w3.org/ns/activitystreams#Public";
 
-/// Publish a new status with the given content and visibility.
+/// Publish a new status with the given content, visibility, and mentions.
 ///
 /// The publish flow consists in:
 ///
-/// 1. Sanitize and validate the content
-/// 2. Create a new status in the database with the given content and visibility, and get the generated ID.
-/// 3. Publish a new activity to federation, for each follower of the user, with a `Create(Note)` activity.
+/// 1. Sanitize and validate the content; reject empty, too-long, or
+///    [`Visibility::Direct`] with no mentioned recipients.
+/// 2. Create the status in the database and mint its snowflake ID.
+/// 3. Compute the recipient list from the visibility:
+///    - [`Visibility::Direct`]: the explicitly mentioned actors.
+///    - All other visibilities: the author's followers.
+/// 4. Emit one `Create(Note)` activity per recipient to the Federation
+///    Canister as a single batch.
 pub async fn publish_status(
     PublishStatusArgs {
         content,
         visibility,
+        mentions,
     }: PublishStatusArgs,
 ) -> PublishStatusResponse {
-    ic_utils::log!("Publishing status with content: {content} and visibility: {visibility:?}");
+    ic_utils::log!(
+        "Publishing status with content: {content}, visibility: {visibility:?}, \
+         mentions: {mentions:?}"
+    );
 
     let content = StatusContentSanitizer::sanitize_content(&content);
     if content.is_empty() {
@@ -39,8 +48,12 @@ pub async fn publish_status(
         ic_utils::log!("Status content exceeds max length");
         return PublishStatusResponse::Err(PublishStatusError::ContentTooLong);
     }
+    if visibility == Visibility::Direct && mentions.is_empty() {
+        ic_utils::log!("Direct status has no mentioned recipients");
+        return PublishStatusResponse::Err(PublishStatusError::NoRecipients);
+    }
 
-    match save_status_and_publish_to_federation(content, visibility).await {
+    match save_status_and_publish_to_federation(content, visibility, mentions).await {
         Ok(status) => PublishStatusResponse::Ok(status),
         Err(e) => {
             ic_utils::log!("Error publishing status: {e}");
@@ -55,10 +68,8 @@ pub async fn publish_status(
 async fn save_status_and_publish_to_federation(
     content: String,
     visibility: Visibility,
+    mentions: Vec<String>,
 ) -> CanisterResult<Status> {
-    // get all followers
-    let followers = FollowerRepository::get_followers()?;
-
     // insert
     let created_at = ic_utils::now();
     let snowflake_id = StatusRepository::create(content.clone(), visibility, created_at)?;
@@ -77,10 +88,20 @@ async fn save_status_and_publish_to_federation(
         visibility,
     };
 
-    let mut activities = Vec::with_capacity(followers.len());
-    for follower in followers {
-        activities.push(make_follower_activity(&follower, &status));
-    }
+    let recipients = match visibility {
+        Visibility::Direct => mentions.clone(),
+        Visibility::Public | Visibility::Unlisted | Visibility::FollowersOnly => {
+            FollowerRepository::get_followers()?
+                .into_iter()
+                .map(|f| f.actor_uri.0)
+                .collect()
+        }
+    };
+
+    let activities: Vec<SendActivityArgsObject> = recipients
+        .iter()
+        .map(|recipient_uri| make_activity(recipient_uri, &status, &mentions))
+        .collect();
     ic_utils::log!(
         "Prepared {len} activities for federation",
         len = activities.len()
@@ -94,13 +115,19 @@ async fn save_status_and_publish_to_federation(
 }
 
 /// Build a [`SendActivityArgsObject`] containing a `Create(Note)` activity
-/// addressed to a single follower.
+/// addressed to a single recipient actor.
 ///
-/// The `target_inbox` is derived by appending `/inbox` to the follower's
-/// actor URI, following the standard ActivityPub convention.
-fn make_follower_activity(follower: &Follower, status: &Status) -> SendActivityArgsObject {
+/// The `target_inbox` is derived by appending `/inbox` to the recipient's
+/// actor URI, following the standard ActivityPub convention. The activity's
+/// `to`/`cc` fields are set per [`visibility_addressing`] and augmented
+/// with the caller-supplied `mentions`.
+fn make_activity(
+    recipient_uri: &str,
+    status: &Status,
+    mentions: &[String],
+) -> SendActivityArgsObject {
     let actor = status.author.clone();
-    let (to, cc) = visibility_addressing(&status.visibility);
+    let (to, cc) = visibility_addressing(&status.visibility, mentions);
 
     let note = BaseObject {
         id: Some(status.id.to_string()),
@@ -135,21 +162,39 @@ fn make_follower_activity(follower: &Follower, status: &Status) -> SendActivityA
 
     SendActivityArgsObject {
         activity_json,
-        target_inbox: format!("{actor_uri}/inbox", actor_uri = follower.actor_uri),
+        target_inbox: format!("{recipient_uri}/inbox"),
     }
 }
 
 /// Map a [`Visibility`] value to the ActivityPub `to` and `cc` fields.
 ///
 /// Returns `(to, cc)` as optional [`OneOrMany<String>`] values following
-/// Mastodon's addressing conventions.
+/// Mastodon's addressing conventions. `mentions` are added to the
+/// appropriate field so the mentioned actors are notified:
+///
+/// - [`Visibility::Public`]: `to = [AS_PUBLIC]`, `cc = mentions`.
+/// - [`Visibility::Unlisted`]: `to = mentions`, `cc = [AS_PUBLIC]`.
+/// - [`Visibility::FollowersOnly`]: `to = mentions`, `cc = None`.
+/// - [`Visibility::Direct`]: `to = mentions`, `cc = None`.
 fn visibility_addressing(
     visibility: &Visibility,
+    mentions: &[String],
 ) -> (Option<OneOrMany<String>>, Option<OneOrMany<String>>) {
+    let mentions = vec_to_one_or_many(mentions);
     match visibility {
-        Visibility::Public => (Some(OneOrMany::One(AS_PUBLIC.to_string())), None),
-        Visibility::Unlisted => (None, Some(OneOrMany::One(AS_PUBLIC.to_string()))),
-        Visibility::FollowersOnly | Visibility::Direct => (None, None),
+        Visibility::Public => (Some(OneOrMany::One(AS_PUBLIC.to_string())), mentions),
+        Visibility::Unlisted => (mentions, Some(OneOrMany::One(AS_PUBLIC.to_string()))),
+        Visibility::FollowersOnly | Visibility::Direct => (mentions, None),
+    }
+}
+
+/// Convert a slice of strings into an optional [`OneOrMany`], returning
+/// `None` when the slice is empty.
+fn vec_to_one_or_many(items: &[String]) -> Option<OneOrMany<String>> {
+    match items.len() {
+        0 => None,
+        1 => Some(OneOrMany::One(items[0].clone())),
+        _ => Some(OneOrMany::Many(items.to_vec())),
     }
 }
 
@@ -167,6 +212,8 @@ mod tests {
     use super::*;
     use crate::schema::{Follower, FollowerInsertRequest, Schema};
     use crate::test_utils::setup;
+
+    const BOB_URI: &str = "https://remote.example/users/bob";
 
     /// Helper to insert a follower into the database for testing.
     fn insert_follower(actor_uri: &str) {
@@ -197,6 +244,7 @@ mod tests {
         let response = publish_status(PublishStatusArgs {
             content: "Hello, Fediverse!".to_string(),
             visibility: Visibility::Public,
+            mentions: vec![],
         })
         .await;
 
@@ -219,6 +267,7 @@ mod tests {
         let response = publish_status(PublishStatusArgs {
             content: "Status with followers".to_string(),
             visibility: Visibility::Public,
+            mentions: vec![],
         })
         .await;
 
@@ -236,6 +285,7 @@ mod tests {
         let response = publish_status(PublishStatusArgs {
             content: String::new(),
             visibility: Visibility::Public,
+            mentions: vec![],
         })
         .await;
 
@@ -253,6 +303,7 @@ mod tests {
         let response = publish_status(PublishStatusArgs {
             content: "   \t\n  ".to_string(),
             visibility: Visibility::Public,
+            mentions: vec![],
         })
         .await;
 
@@ -271,6 +322,7 @@ mod tests {
         let response = publish_status(PublishStatusArgs {
             content: long_content,
             visibility: Visibility::Public,
+            mentions: vec![],
         })
         .await;
 
@@ -289,6 +341,7 @@ mod tests {
         let response = publish_status(PublishStatusArgs {
             content: exact_content.clone(),
             visibility: Visibility::Public,
+            mentions: vec![],
         })
         .await;
 
@@ -305,6 +358,7 @@ mod tests {
         let response = publish_status(PublishStatusArgs {
             content: "  Hello, world!  ".to_string(),
             visibility: Visibility::Public,
+            mentions: vec![],
         })
         .await;
 
@@ -326,9 +380,15 @@ mod tests {
         ];
 
         for vis in visibilities {
+            let mentions = if vis == Visibility::Direct {
+                vec![BOB_URI.to_string()]
+            } else {
+                vec![]
+            };
             let response = publish_status(PublishStatusArgs {
                 content: format!("Status with {vis:?}"),
                 visibility: vis,
+                mentions,
             })
             .await;
 
@@ -350,6 +410,7 @@ mod tests {
         let response = publish_status(PublishStatusArgs {
             content: emoji_content.clone(),
             visibility: Visibility::Public,
+            mentions: vec![],
         })
         .await;
 
@@ -367,6 +428,7 @@ mod tests {
         let response = publish_status(PublishStatusArgs {
             content: emoji_content,
             visibility: Visibility::Public,
+            mentions: vec![],
         })
         .await;
 
@@ -386,6 +448,7 @@ mod tests {
             let response = publish_status(PublishStatusArgs {
                 content: format!("Status {i}"),
                 visibility: Visibility::Public,
+                mentions: vec![],
             })
             .await;
 
@@ -410,12 +473,18 @@ mod tests {
         }
     }
 
+    fn public_status(visibility: Visibility) -> Status {
+        Status {
+            id: 1,
+            content: format!("{visibility:?} post"),
+            author: "https://mastic.social/users/rey_canisteryo".to_string(),
+            created_at: 0,
+            visibility,
+        }
+    }
+
     #[test]
-    fn test_make_follower_activity_should_build_create_note() {
-        let follower = crate::schema::Follower {
-            actor_uri: "https://remote.example/users/bob".to_string().into(),
-            created_at: 0u64.into(),
-        };
+    fn test_make_activity_should_build_create_note() {
         let status = Status {
             id: 42,
             content: "Hello!".to_string(),
@@ -424,9 +493,9 @@ mod tests {
             visibility: Visibility::Public,
         };
 
-        let args = make_follower_activity(&follower, &status);
+        let args = make_activity(BOB_URI, &status, &[]);
 
-        assert_eq!(args.target_inbox, "https://remote.example/users/bob/inbox");
+        assert_eq!(args.target_inbox, format!("{BOB_URI}/inbox"));
 
         let activity: activitypub::activity::Activity =
             serde_json::from_str(&args.activity_json).expect("should deserialize activity");
@@ -445,20 +514,8 @@ mod tests {
     }
 
     #[test]
-    fn test_make_follower_activity_should_set_public_addressing() {
-        let follower = crate::schema::Follower {
-            actor_uri: "https://remote.example/users/bob".to_string().into(),
-            created_at: 0u64.into(),
-        };
-        let status = Status {
-            id: 1,
-            content: "Public post".to_string(),
-            author: "https://mastic.social/users/rey_canisteryo".to_string(),
-            created_at: 0,
-            visibility: Visibility::Public,
-        };
-
-        let args = make_follower_activity(&follower, &status);
+    fn test_make_activity_should_set_public_addressing() {
+        let args = make_activity(BOB_URI, &public_status(Visibility::Public), &[]);
         let activity: activitypub::activity::Activity =
             serde_json::from_str(&args.activity_json).expect("should deserialize");
 
@@ -470,20 +527,8 @@ mod tests {
     }
 
     #[test]
-    fn test_make_follower_activity_should_set_unlisted_addressing() {
-        let follower = crate::schema::Follower {
-            actor_uri: "https://remote.example/users/bob".to_string().into(),
-            created_at: 0u64.into(),
-        };
-        let status = Status {
-            id: 1,
-            content: "Unlisted post".to_string(),
-            author: "https://mastic.social/users/rey_canisteryo".to_string(),
-            created_at: 0,
-            visibility: Visibility::Unlisted,
-        };
-
-        let args = make_follower_activity(&follower, &status);
+    fn test_make_activity_should_set_unlisted_addressing() {
+        let args = make_activity(BOB_URI, &public_status(Visibility::Unlisted), &[]);
         let activity: activitypub::activity::Activity =
             serde_json::from_str(&args.activity_json).expect("should deserialize");
 
@@ -495,20 +540,8 @@ mod tests {
     }
 
     #[test]
-    fn test_make_follower_activity_should_set_followers_only_addressing() {
-        let follower = crate::schema::Follower {
-            actor_uri: "https://remote.example/users/bob".to_string().into(),
-            created_at: 0u64.into(),
-        };
-        let status = Status {
-            id: 1,
-            content: "Followers only post".to_string(),
-            author: "https://mastic.social/users/rey_canisteryo".to_string(),
-            created_at: 0,
-            visibility: Visibility::FollowersOnly,
-        };
-
-        let args = make_follower_activity(&follower, &status);
+    fn test_make_activity_should_set_followers_only_addressing() {
+        let args = make_activity(BOB_URI, &public_status(Visibility::FollowersOnly), &[]);
         let activity: activitypub::activity::Activity =
             serde_json::from_str(&args.activity_json).expect("should deserialize");
 
@@ -517,52 +550,107 @@ mod tests {
     }
 
     #[test]
-    fn test_make_follower_activity_should_set_direct_addressing() {
-        let follower = crate::schema::Follower {
-            actor_uri: "https://remote.example/users/bob".to_string().into(),
-            created_at: 0u64.into(),
-        };
-        let status = Status {
-            id: 1,
-            content: "Direct post".to_string(),
-            author: "https://mastic.social/users/rey_canisteryo".to_string(),
-            created_at: 0,
-            visibility: Visibility::Direct,
-        };
-
-        let args = make_follower_activity(&follower, &status);
+    fn test_make_activity_should_set_direct_addressing_with_mentions() {
+        let args = make_activity(
+            BOB_URI,
+            &public_status(Visibility::Direct),
+            &[BOB_URI.to_string()],
+        );
         let activity: activitypub::activity::Activity =
             serde_json::from_str(&args.activity_json).expect("should deserialize");
 
-        assert!(activity.base.to.is_none());
+        assert_eq!(activity.base.to, Some(OneOrMany::One(BOB_URI.to_string())));
         assert!(activity.base.cc.is_none());
     }
 
     #[test]
-    fn test_visibility_addressing_public() {
-        let (to, cc) = visibility_addressing(&Visibility::Public);
+    fn test_make_activity_should_include_mentions_in_cc_for_public() {
+        let mentions = vec![BOB_URI.to_string()];
+        let args = make_activity(BOB_URI, &public_status(Visibility::Public), &mentions);
+        let activity: activitypub::activity::Activity =
+            serde_json::from_str(&args.activity_json).expect("should deserialize");
+
+        assert_eq!(
+            activity.base.to,
+            Some(OneOrMany::One(AS_PUBLIC.to_string()))
+        );
+        assert_eq!(activity.base.cc, Some(OneOrMany::One(BOB_URI.to_string())));
+    }
+
+    #[test]
+    fn test_visibility_addressing_public_no_mentions() {
+        let (to, cc) = visibility_addressing(&Visibility::Public, &[]);
         assert_eq!(to, Some(OneOrMany::One(AS_PUBLIC.to_string())));
         assert!(cc.is_none());
     }
 
     #[test]
-    fn test_visibility_addressing_unlisted() {
-        let (to, cc) = visibility_addressing(&Visibility::Unlisted);
+    fn test_visibility_addressing_unlisted_no_mentions() {
+        let (to, cc) = visibility_addressing(&Visibility::Unlisted, &[]);
         assert!(to.is_none());
         assert_eq!(cc, Some(OneOrMany::One(AS_PUBLIC.to_string())));
     }
 
     #[test]
-    fn test_visibility_addressing_followers_only() {
-        let (to, cc) = visibility_addressing(&Visibility::FollowersOnly);
+    fn test_visibility_addressing_followers_only_no_mentions() {
+        let (to, cc) = visibility_addressing(&Visibility::FollowersOnly, &[]);
         assert!(to.is_none());
         assert!(cc.is_none());
     }
 
     #[test]
-    fn test_visibility_addressing_direct() {
-        let (to, cc) = visibility_addressing(&Visibility::Direct);
-        assert!(to.is_none());
+    fn test_visibility_addressing_direct_with_mentions() {
+        let mentions = vec![BOB_URI.to_string()];
+        let (to, cc) = visibility_addressing(&Visibility::Direct, &mentions);
+        assert_eq!(to, Some(OneOrMany::One(BOB_URI.to_string())));
         assert!(cc.is_none());
+    }
+
+    #[test]
+    fn test_visibility_addressing_direct_with_multiple_mentions() {
+        let mentions = vec![
+            BOB_URI.to_string(),
+            "https://remote.example/users/carol".to_string(),
+        ];
+        let (to, cc) = visibility_addressing(&Visibility::Direct, &mentions);
+        assert_eq!(to, Some(OneOrMany::Many(mentions)));
+        assert!(cc.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_should_reject_direct_without_mentions() {
+        setup();
+
+        let response = publish_status(PublishStatusArgs {
+            content: "Secret".to_string(),
+            visibility: Visibility::Direct,
+            mentions: vec![],
+        })
+        .await;
+
+        assert_eq!(
+            response,
+            PublishStatusResponse::Err(PublishStatusError::NoRecipients),
+        );
+        assert_eq!(count_statuses(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_should_publish_direct_with_mentions() {
+        setup();
+        insert_follower("https://remote.example/users/carol");
+
+        let response = publish_status(PublishStatusArgs {
+            content: "Hi Bob".to_string(),
+            visibility: Visibility::Direct,
+            mentions: vec![BOB_URI.to_string()],
+        })
+        .await;
+
+        let PublishStatusResponse::Ok(status) = response else {
+            panic!("expected Ok, got {response:?}");
+        };
+        assert_eq!(status.visibility, Visibility::Direct);
+        assert_eq!(count_statuses(), 1);
     }
 }

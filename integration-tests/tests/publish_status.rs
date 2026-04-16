@@ -19,6 +19,7 @@ async fn test_should_publish_status(env: PocketIcTestEnv<MasticCanisterSetup>) {
             rey_canisteryo(),
             "Hello, World!".to_string(),
             did::common::Visibility::Public,
+            vec![],
         )
         .await
     {

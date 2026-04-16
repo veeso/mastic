@@ -76,7 +76,7 @@ impl FederationCanister for IcFederationCanisterClient {
         &self,
         args: SendActivityArgs,
     ) -> Result<(), FederationCanisterClientError> {
-        use did::federation::SendActivityResponse;
+        use did::federation::{SendActivityResponse, SendActivityResult};
 
         ic_utils::log!("IcFederationCanisterClient::send_activity: sending send_activity request");
 
@@ -93,19 +93,21 @@ impl FederationCanister for IcFederationCanisterClient {
             FederationCanisterClientError::DecodeFailed(e.to_string())
         })?;
 
-        match response {
-            SendActivityResponse::Ok => {
-                ic_utils::log!(
-                    "IcFederationCanisterClient::send_activity: sent activity successfully"
-                );
-                Ok(())
-            }
-            SendActivityResponse::Err(e) => {
+        let results: Vec<SendActivityResult> = match response {
+            SendActivityResponse::One(result) => vec![result],
+            SendActivityResponse::Batch(results) => results,
+        };
+
+        for result in results {
+            if let SendActivityResult::Err(e) = result {
                 ic_utils::log!(
                     "IcFederationCanisterClient::send_activity: federation error: {e:?}"
                 );
-                Err(FederationCanisterClientError::CallFailed(format!("{e:?}")))
+                return Err(FederationCanisterClientError::CallFailed(format!("{e:?}")));
             }
         }
+
+        ic_utils::log!("IcFederationCanisterClient::send_activity: sent activity successfully");
+        Ok(())
     }
 }

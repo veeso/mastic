@@ -7,8 +7,8 @@ use ic_stable_structures::memory_manager::VirtualMemory;
 use ic_stable_structures::{DefaultMemoryImpl, StableBTreeMap};
 
 use crate::memory::{
-    MEMORY_MANAGER, StorablePrincipal, USER_DATA_BY_HANDLE_MEMORY_ID, USER_DATA_BY_ID_MEMORY_ID,
-    USER_DATA_MEMORY_ID, UserData,
+    MEMORY_MANAGER, StorablePrincipal, USER_DATA_BY_CANISTER_ID_MEMORY_ID,
+    USER_DATA_BY_HANDLE_MEMORY_ID, USER_DATA_BY_ID_MEMORY_ID, USER_DATA_MEMORY_ID, UserData,
 };
 
 thread_local! {
@@ -20,6 +20,11 @@ thread_local! {
     /// Secondary index: maps a user handle (e.g. `"alice"`) to the numeric key in [`USER_DATA`].
     static USER_DATA_BY_HANDLE: RefCell<StableBTreeMap<String, u64, VirtualMemory<DefaultMemoryImpl>>> =
         RefCell::new(StableBTreeMap::new(MEMORY_MANAGER.with(|mm| mm.get(USER_DATA_BY_HANDLE_MEMORY_ID))));
+
+    /// Secondary index: maps a User Canister principal to the numeric key in [`USER_DATA`].
+    /// Used by `send_activity` to authorize inbound calls.
+    static USER_DATA_BY_CANISTER_ID: RefCell<StableBTreeMap<StorablePrincipal, u64, VirtualMemory<DefaultMemoryImpl>>> =
+        RefCell::new(StableBTreeMap::new(MEMORY_MANAGER.with(|mm| mm.get(USER_DATA_BY_CANISTER_ID_MEMORY_ID))));
 
     /// Primary store: maps an auto-incremented numeric key to [`UserData`].
     static USER_DATA: RefCell<StableBTreeMap<u64, UserData, VirtualMemory<DefaultMemoryImpl>>> =
@@ -40,6 +45,17 @@ pub fn insert_user(user_id: Principal, user_handle: String, user_canister_id: Pr
     USER_DATA.with_borrow_mut(|data| data.insert(next_id, user_data));
     USER_DATA_BY_ID.with_borrow_mut(|index| index.insert(StorablePrincipal(user_id), next_id));
     USER_DATA_BY_HANDLE.with_borrow_mut(|index| index.insert(user_handle, next_id));
+    USER_DATA_BY_CANISTER_ID
+        .with_borrow_mut(|index| index.insert(StorablePrincipal(user_canister_id), next_id));
+}
+
+/// Get user data by User Canister principal, returning `None` if no user with
+/// the given canister principal exists.
+pub fn get_user_by_canister_id(user_canister_id: &Principal) -> Option<UserData> {
+    let key = USER_DATA_BY_CANISTER_ID
+        .with_borrow(|data| data.get(&StorablePrincipal(*user_canister_id)))?;
+
+    USER_DATA.with_borrow(|data| data.get(&key))
 }
 
 /// Get user data by user ID, returning `None` if no user with the given ID exists.
@@ -54,10 +70,6 @@ pub fn get_user_by_id(user_id: &Principal) -> Option<UserData> {
 }
 
 /// Get user data by handle, returning `None` if no user with the given handle exists.
-#[allow(
-    dead_code,
-    reason = "will be used by activity routing in a later milestone"
-)]
 pub fn get_user_by_handle(user_handle: &String) -> Option<UserData> {
     let key = USER_DATA_BY_HANDLE.with_borrow(|data| data.get(user_handle))?;
 

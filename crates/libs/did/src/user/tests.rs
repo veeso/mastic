@@ -335,6 +335,7 @@ fn test_should_roundtrip_publish_status_args() {
     let args = PublishStatusArgs {
         content: "Hello, world!".to_string(),
         visibility: crate::common::Visibility::Public,
+        mentions: vec!["https://mastic.social/users/alice".to_string()],
     };
     let bytes = Encode!(&args).unwrap();
     let decoded = Decode!(&bytes, PublishStatusArgs).unwrap();
@@ -361,6 +362,8 @@ fn test_should_roundtrip_publish_status_response_err() {
         PublishStatusError::Unauthorized,
         PublishStatusError::ContentEmpty,
         PublishStatusError::ContentTooLong,
+        PublishStatusError::NoRecipients,
+        PublishStatusError::Internal("db".to_string()),
     ] {
         let resp = PublishStatusResponse::Err(error);
         let bytes = Encode!(&resp).unwrap();

@@ -3,10 +3,12 @@ use did::federation::{
     SendActivityResponse,
 };
 
+mod adapters;
 mod api;
-#[allow(dead_code, reason = "will be used by WI-0.10 routing logic")]
+#[allow(dead_code, reason = "will be used by future activity processing")]
 mod conversions;
 mod directory;
+mod domain;
 mod inspect;
 mod memory;
 mod settings;
@@ -35,9 +37,8 @@ fn register_user(args: RegisterUserArgs) -> RegisterUserResponse {
 }
 
 #[ic_cdk::update]
-fn send_activity(_args: SendActivityArgs) -> SendActivityResponse {
-    // TODO: no-op for now. Implement in WI-0.10
-    SendActivityResponse::Ok
+async fn send_activity(args: SendActivityArgs) -> SendActivityResponse {
+    api::send_activity(args).await
 }
 
 ic_cdk::export_candid!();

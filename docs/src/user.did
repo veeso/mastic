@@ -108,6 +108,11 @@ type GetStatusesResponse = variant { Ok : vec Status; Err : GetStatusesError };
 type PublishStatusArgs = record {
   // The text content of the new post.
   content : text;
+  // Actor URIs explicitly mentioned by the author. Required (non-empty)
+  // for [`Visibility::Direct`]; optional for other visibilities, where
+  // the entries are carried as additional `cc` addressees so the
+  // mentioned actors are notified.
+  mentions : vec text;
   // Audience control for this status.
   visibility : Visibility;
 };
@@ -119,6 +124,9 @@ type PublishStatusError = variant {
   ContentEmpty;
   // The content exceeds the maximum allowed length.
   ContentTooLong;
+  // A [`Visibility::Direct`] status was published without any mentioned
+  // recipients.
+  NoRecipients;
   // The caller is not the canister owner.
   Unauthorized;
 };

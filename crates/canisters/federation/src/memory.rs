@@ -17,6 +17,7 @@ pub const PUBLIC_URL_MEMORY_ID: MemoryId = MemoryId::new(1);
 pub const USER_DATA_BY_ID_MEMORY_ID: MemoryId = MemoryId::new(10);
 pub const USER_DATA_BY_HANDLE_MEMORY_ID: MemoryId = MemoryId::new(11);
 pub const USER_DATA_MEMORY_ID: MemoryId = MemoryId::new(12);
+pub const USER_DATA_BY_CANISTER_ID_MEMORY_ID: MemoryId = MemoryId::new(13);
 
 thread_local! {
     /// Memory manager

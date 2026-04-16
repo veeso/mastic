@@ -2,7 +2,10 @@
 
 pub mod inspect;
 
-use did::federation::{FederationInstallArgs, RegisterUserArgs, RegisterUserResponse};
+use did::federation::{
+    FederationInstallArgs, RegisterUserArgs, RegisterUserResponse, SendActivityArgs,
+    SendActivityResponse,
+};
 
 /// Initialize the canister with the given arguments
 pub fn init(args: FederationInstallArgs) {
@@ -56,11 +59,25 @@ pub fn register_user(args: RegisterUserArgs) -> RegisterUserResponse {
     RegisterUserResponse::Ok
 }
 
+pub async fn send_activity(args: SendActivityArgs) -> SendActivityResponse {
+    let caller = ic_utils::caller();
+    if !self::inspect::is_user_canister(caller) {
+        ic_utils::trap!(
+            "Unauthorized caller: {caller}. Only registered User Canisters are allowed to send activities.",
+        );
+    }
+
+    crate::domain::activity::send_activity(args).await
+}
+
 #[cfg(test)]
 mod tests {
 
     use candid::Principal;
-    use did::federation::{FederationInstallArgs, RegisterUserArgs, RegisterUserResponse};
+    use did::federation::{
+        FederationInstallArgs, RegisterUserArgs, RegisterUserResponse, SendActivityArgs,
+        SendActivityArgsObject, SendActivityResponse, SendActivityResult,
+    };
 
     use super::*;
     use crate::test_utils::{alice, directory, public_url, setup};
@@ -145,5 +162,67 @@ mod tests {
             user_handle: "alice".to_string(),
             user_canister_id: user_canister,
         });
+    }
+
+    /// Seeds the default unit-test caller principal (returned by
+    /// [`ic_utils::caller`] on non-wasm targets) as a registered User
+    /// Canister in the directory so that `send_activity` authorization
+    /// passes.
+    fn seed_caller_as_user_canister() {
+        let caller = ic_utils::caller();
+        crate::directory::insert_user(caller, "caller".to_string(), caller);
+    }
+
+    fn remote_inbox_obj() -> SendActivityArgsObject {
+        SendActivityArgsObject {
+            activity_json: r#"{"type":"Create"}"#.to_string(),
+            target_inbox: "https://other.social/users/bob/inbox".to_string(),
+        }
+    }
+
+    // M-UNIT-TEST: send_activity returns Ok for a single remote target when
+    // the caller is a registered User Canister (remote delivery is skipped
+    // in Milestone 0).
+    #[tokio::test]
+    async fn test_should_accept_send_activity_from_registered_user_canister() {
+        setup();
+        seed_caller_as_user_canister();
+
+        let response = send_activity(SendActivityArgs::One(remote_inbox_obj())).await;
+
+        assert_eq!(response, SendActivityResponse::One(SendActivityResult::Ok));
+    }
+
+    // M-UNIT-TEST: send_activity aggregates a batch of remote targets into a
+    // Batch response with one Ok per input.
+    #[tokio::test]
+    async fn test_should_accept_batch_send_activity() {
+        setup();
+        seed_caller_as_user_canister();
+
+        let response = send_activity(SendActivityArgs::Batch(vec![
+            remote_inbox_obj(),
+            remote_inbox_obj(),
+        ]))
+        .await;
+
+        match response {
+            SendActivityResponse::Batch(results) => {
+                assert_eq!(results.len(), 2);
+                assert_eq!(results[0], SendActivityResult::Ok);
+                assert_eq!(results[1], SendActivityResult::Ok);
+            }
+            other => panic!("expected Batch response, got {other:?}"),
+        }
+    }
+
+    // M-UNIT-TEST: send_activity traps when the caller is not a registered
+    // User Canister.
+    #[tokio::test]
+    #[should_panic(expected = "Unauthorized caller")]
+    async fn test_should_trap_on_send_activity_with_unauthorized_caller() {
+        setup();
+
+        let _ = send_activity(SendActivityArgs::One(remote_inbox_obj())).await;
     }
 }

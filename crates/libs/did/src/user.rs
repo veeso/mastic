@@ -277,6 +277,11 @@ pub struct PublishStatusArgs {
     pub content: String,
     /// Audience control for this status.
     pub visibility: Visibility,
+    /// Actor URIs explicitly mentioned by the author. Required (non-empty)
+    /// for [`Visibility::Direct`]; optional for other visibilities, where
+    /// the entries are carried as additional `cc` addressees so the
+    /// mentioned actors are notified.
+    pub mentions: Vec<String>,
 }
 
 /// Error types for the `publish_status` method.
@@ -288,6 +293,9 @@ pub enum PublishStatusError {
     ContentEmpty,
     /// The content exceeds the maximum allowed length.
     ContentTooLong,
+    /// A [`Visibility::Direct`] status was published without any mentioned
+    /// recipients.
+    NoRecipients,
     /// Internal error occurred while publishing the status.
     Internal(String),
 }
