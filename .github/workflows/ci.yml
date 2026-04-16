@@ -1,8 +1,5 @@
 name: build_and_test
 
-env:
-  RUST_VERSION: 1.94.1
-
 on:
   push:
     branches:
@@ -53,14 +50,12 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: $RUST_VERSION
           components: rustfmt, clippy
           target: wasm32-unknown-unknown
 
       - name: Install Rust (wasm32-unknown-unknown target)
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: $RUST_VERSION
           target: wasm32-unknown-unknown
           components: rustfmt, clippy
 
