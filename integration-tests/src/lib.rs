@@ -13,11 +13,23 @@ use pocket_ic_harness::{Canister, CanisterSetup, PocketIcTestEnv, alice};
 pub use self::directory_client::DirectoryClient;
 pub use self::user_client::UserClient;
 
-const PUBLIC_URL: &str = "https://mastic.social";
+pub const PUBLIC_URL: &str = "https://mastic.social";
 
 pub fn rey_canisteryo() -> Principal {
     Principal::from_text("duo63-t5gbk-nptmp-gq7dy-saoed-ni2jl-5uuzr-ikrjk-o6vhp-2c3p5-pqe")
         .expect("Failed to parse Rey canister ID")
+}
+
+pub fn charlie() -> Principal {
+    Principal::self_authenticating([3u8; 32])
+}
+
+pub fn carol() -> Principal {
+    Principal::self_authenticating([4u8; 32])
+}
+
+pub fn dave() -> Principal {
+    Principal::self_authenticating([5u8; 32])
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
