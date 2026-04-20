@@ -40,6 +40,12 @@ impl StatusRepository {
                 id: snowflake_id.into(),
                 content: content.into(),
                 visibility: visibility.into(),
+                like_count: 0u64.into(),
+                boost_count: 0u64.into(),
+                in_reply_to_uri: Nullable::Null,
+                spoiler_text: Nullable::Null,
+                sensitive: false.into(),
+                edited_at: Nullable::Null,
                 created_at: created_at.into(),
             })?;
 
@@ -86,6 +92,12 @@ impl StatusRepository {
             id: record.id.expect("must have field"),
             content: record.content.expect("must have field"),
             visibility: record.visibility.expect("must have field"),
+            like_count: record.like_count.expect("must have field"),
+            boost_count: record.boost_count.expect("must have field"),
+            in_reply_to_uri: record.in_reply_to_uri.expect("must have field"),
+            spoiler_text: record.spoiler_text.expect("must have field"),
+            sensitive: record.sensitive.expect("must have field"),
+            edited_at: record.edited_at.expect("must have field"),
             created_at: record.created_at.expect("must have field"),
         }
     }

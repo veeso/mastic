@@ -3,7 +3,7 @@
 use activitypub::Activity;
 use activitypub::activity::{ActivityObject, ActivityType};
 use did::user::{ReceiveActivityArgs, ReceiveActivityError, ReceiveActivityResponse};
-use wasm_dbms_api::prelude::Database;
+use wasm_dbms_api::prelude::{Database, Nullable};
 
 use crate::domain::follow_request::FollowRequestRepository;
 use crate::domain::following::FollowingRepository;
@@ -74,6 +74,8 @@ fn handle_create(activity: &Activity, activity_json: &str) -> Result<(), Receive
                 activity_type: DbActivityType::from(ActivityType::Create),
                 actor_uri: actor_uri.into(),
                 object_data: object_data.into(),
+                is_boost: false.into(),
+                original_status_uri: Nullable::Null,
                 created_at: created_at.into(),
             })?;
 

@@ -36,7 +36,7 @@ pub fn setup() {
 pub fn insert_status(id: u64, content: &str, visibility: did::common::Visibility, created_at: u64) {
     use ic_dbms_canister::prelude::DBMS_CONTEXT;
     use wasm_dbms::WasmDbmsDatabase;
-    use wasm_dbms_api::prelude::Database;
+    use wasm_dbms_api::prelude::{Database, Nullable};
 
     use crate::schema::{Schema, Status, StatusInsertRequest, Visibility as DbVisibility};
 
@@ -46,6 +46,12 @@ pub fn insert_status(id: u64, content: &str, visibility: did::common::Visibility
             id: id.into(),
             content: content.into(),
             visibility: DbVisibility::from(visibility),
+            like_count: 0u64.into(),
+            boost_count: 0u64.into(),
+            in_reply_to_uri: Nullable::Null,
+            spoiler_text: Nullable::Null,
+            sensitive: false.into(),
+            edited_at: Nullable::Null,
             created_at: created_at.into(),
         })
         .expect("should insert status");
