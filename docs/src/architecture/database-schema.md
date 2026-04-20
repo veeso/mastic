@@ -6,6 +6,8 @@
     - [Directory Canister Settings Keys](#directory-canister-settings-keys)
     - [`moderators` Table](#moderators-table)
     - [`users` Table](#users-table)
+    - [`tombstones` Table](#tombstones-table)
+    - [`reports` Table](#reports-table)
   - [User Canister](#user-canister)
     - [User Canister Settings Keys](#user-canister-settings-keys)
     - [`profiles` Table](#profiles-table)
@@ -13,10 +15,23 @@
     - [`inbox` Table](#inbox-table)
     - [`followers` Table](#followers-table)
     - [`following` Table](#following-table)
+    - [`liked` Table](#liked-table)
+    - [`blocks` Table](#blocks-table)
+    - [`mutes` Table](#mutes-table)
+    - [`bookmarks` Table](#bookmarks-table)
+    - [`boosts` Table](#boosts-table)
+    - [`media` Table](#media-table)
+    - [`edit_history` Table](#edit_history-table)
+    - [`hashtags` Table](#hashtags-table)
+    - [`status_hashtags` Table](#status_hashtags-table)
+    - [`featured_tags` Table](#featured_tags-table)
+    - [`pinned_statuses` Table](#pinned_statuses-table)
+    - [`profile_metadata` Table](#profile_metadata-table)
   - [Custom Data Types](#custom-data-types)
     - [`Visibility`](#visibility)
     - [`ActivityType`](#activitytype)
     - [`FollowStatus`](#followstatus)
+    - [`ReportState`](#reportstate)
   - [Persistence](#persistence)
 
 Mastic uses [wasm-dbms](https://github.com/veeso/wasm-dbms) for persistent
@@ -73,6 +88,36 @@ strips leading `@`) and `HandleValidator` (enforces the
 [handle rules](../specs/handles.md)). See the [Handle Validation](../specs/handles.md) page
 for the full specification.
 
+### `tombstones` Table
+
+Retains deleted handles to block immediate re-registration and to keep
+an audit trail. `handle` uses the same sanitizer/validator pair as the
+`users.handle` column; see the [Handle Validation](../specs/handles.md) spec.
+
+| Column       | Type        | Constraint                      | Description                         |
+| :----------- | :---------- | :------------------------------ | :---------------------------------- |
+| `handle`     | `TEXT`      | PRIMARY KEY, sanitized, validated | Handle of the deleted user        |
+| `principal`  | `Principal` |                                 | Principal of the deleted user       |
+| `deleted_at` | `UINT64`    |                                 | Timestamp when the user was deleted |
+
+### `reports` Table
+
+Stores user-submitted moderation reports. See the
+[Reports](../specs/reports.md) spec for validation rules on `reason`
+and `target_status_uri`.
+
+| Column              | Type                  | Constraint           | Description                            |
+| :------------------ | :-------------------- | :------------------- | :------------------------------------- |
+| `id`                | `UINT64`              | PRIMARY KEY          | [Snowflake ID](../specs/snowflake.md)  |
+| `reporter`          | `Principal`           |                      | Principal of the reporter              |
+| `target_canister`   | `Principal`           |                      | Reported user's canister principal     |
+| `target_status_uri` | `Nullable<Text>`      | validated            | URI of the reported status, if any     |
+| `reason`            | `TEXT`                | sanitized, validated | Free-form reason                       |
+| `state`             | `ReportState`         |                      | `Open`, `Resolved`, `Dismissed`        |
+| `created_at`        | `UINT64`              | INDEX                | Submission timestamp                   |
+| `resolved_at`       | `Nullable<Uint64>`    |                      | Timestamp when the report was resolved |
+| `resolved_by`       | `Nullable<Principal>` |                      | Moderator who resolved the report      |
+
 ## User Canister
 
 ### User Canister Settings Keys
@@ -101,24 +146,35 @@ Single-row table holding the owner's profile.
 
 ### `statuses` Table
 
-| Column       | Type         | Constraint  | Description                                     |
-| :----------- | :----------- | :---------- | :---------------------------------------------- |
-| `id`         | `UINT64`     | PRIMARY KEY | [Snowflake ID](../specs/snowflake.md)           |
-| `content`    | `TEXT`       |             | Status body                                     |
-| `visibility` | `Visibility` |             | `Public`, `Unlisted`, `FollowersOnly`, `Direct` |
-| `created_at` | `UINT64`     | INDEX       | Creation timestamp (indexed for feed ordering)  |
+See the [Status Content](../specs/status.md) spec for full validation
+rules on `content`, `spoiler_text`, and `in_reply_to_uri`.
+
+| Column            | Type               | Constraint         | Description                                     |
+| :---------------- | :----------------- | :----------------- | :---------------------------------------------- |
+| `id`              | `UINT64`           | PRIMARY KEY        | [Snowflake ID](../specs/snowflake.md)           |
+| `content`         | `TEXT`             | validated          | Status body                                     |
+| `visibility`      | `Visibility`       |                    | `Public`, `Unlisted`, `FollowersOnly`, `Direct` |
+| `like_count`      | `UINT64`           |                    | Cached `Like` count                             |
+| `boost_count`     | `UINT64`           |                    | Cached `Announce` (boost) count                 |
+| `in_reply_to_uri` | `Nullable<Text>`   | INDEX, validated   | URI of the replied-to status                    |
+| `spoiler_text`    | `Nullable<Text>`   | sanitized, validated | Optional content warning / spoiler            |
+| `sensitive`       | `Boolean`          |                    | Whether clients should hide behind a CW         |
+| `edited_at`       | `Nullable<Uint64>` |                    | Timestamp of the last edit                      |
+| `created_at`      | `UINT64`           | INDEX              | Creation timestamp (indexed for feed ordering)  |
 
 ### `inbox` Table
 
 Stores inbound ActivityPub activities.
 
-| Column          | Type           | Constraint  | Description                                      |
-| :-------------- | :------------- | :---------- | :----------------------------------------------- |
-| `id`            | `UINT64`       | PRIMARY KEY | [Snowflake ID](../specs/snowflake.md)            |
-| `activity_type` | `ActivityType` |             | Activity discriminator (`Create`, `Follow`, ...) |
-| `actor_uri`     | `TEXT`         | validated   | Originating actor's URI                          |
-| `object_data`   | `JSON`         |             | Activity object payload                          |
-| `created_at`    | `UINT64`       | INDEX       | Reception timestamp (indexed for feed ordering)  |
+| Column                | Type             | Constraint  | Description                                      |
+| :-------------------- | :--------------- | :---------- | :----------------------------------------------- |
+| `id`                  | `UINT64`         | PRIMARY KEY | [Snowflake ID](../specs/snowflake.md)            |
+| `activity_type`       | `ActivityType`   |             | Activity discriminator (`Create`, `Follow`, ...) |
+| `actor_uri`           | `TEXT`           | validated   | Originating actor's URI                          |
+| `object_data`         | `JSON`           |             | Activity object payload                          |
+| `is_boost`            | `Boolean`        |             | `true` when entry is an `Announce` (boost)       |
+| `original_status_uri` | `Nullable<Text>` | validated   | URI of the boosted status                        |
+| `created_at`          | `UINT64`         | INDEX       | Reception timestamp (indexed for feed ordering)  |
 
 ### `follow_requests` Table
 
@@ -141,6 +197,137 @@ Stores inbound ActivityPub activities.
 | `actor_uri`  | `TEXT`         | PRIMARY KEY | Followed actor's URI                 |
 | `status`     | `FollowStatus` |             | `Pending` or `Accepted` (rejected entries are deleted) |
 | `created_at` | `UINT64`       |             | Timestamp when follow was requested  |
+
+### `liked` Table
+
+| Column       | Type     | Constraint             | Description                         |
+| :----------- | :------- | :--------------------- | :---------------------------------- |
+| `status_uri` | `TEXT`   | PRIMARY KEY, validated | URI of the liked status             |
+| `created_at` | `UINT64` |                        | Timestamp when the status was liked |
+
+### `blocks` Table
+
+| Column       | Type     | Constraint             | Description                    |
+| :----------- | :------- | :--------------------- | :----------------------------- |
+| `actor_uri`  | `TEXT`   | PRIMARY KEY, validated | URI of the blocked actor       |
+| `created_at` | `UINT64` |                        | Timestamp when block was added |
+
+### `mutes` Table
+
+| Column       | Type     | Constraint             | Description                   |
+| :----------- | :------- | :--------------------- | :---------------------------- |
+| `actor_uri`  | `TEXT`   | PRIMARY KEY, validated | URI of the muted actor        |
+| `created_at` | `UINT64` |                        | Timestamp when mute was added |
+
+### `bookmarks` Table
+
+| Column       | Type     | Constraint             | Description                     |
+| :----------- | :------- | :--------------------- | :------------------------------ |
+| `status_uri` | `TEXT`   | PRIMARY KEY, validated | URI of the bookmarked status    |
+| `created_at` | `UINT64` |                        | Timestamp when bookmark was set |
+
+### `boosts` Table
+
+Tracks `Announce` activities emitted by the user. Each boost is
+paired with a wrapper row in the `statuses` table.
+
+| Column                | Type     | Constraint                    | Description                           |
+| :-------------------- | :------- | :---------------------------- | :------------------------------------ |
+| `id`                  | `UINT64` | PRIMARY KEY                   | [Snowflake ID](../specs/snowflake.md) |
+| `status_id`           | `UINT64` | FK → `statuses.id`            | Wrapper status row                    |
+| `original_status_uri` | `TEXT`   | validated                     | URI of the boosted status             |
+| `created_at`          | `UINT64` | INDEX                         | Timestamp when the boost was emitted  |
+
+### `media` Table
+
+See the [Media Attachments](../specs/media.md) spec for full validation
+rules on `media_type`, `description`, and `blurhash`.
+
+| Column        | Type             | Constraint                | Description                           |
+| :------------ | :--------------- | :------------------------ | :------------------------------------ |
+| `id`          | `UINT64`         | PRIMARY KEY               | [Snowflake ID](../specs/snowflake.md) |
+| `status_id`   | `UINT64`         | FK → `statuses.id`, INDEX | Parent status                         |
+| `media_type`  | `TEXT`           | validated                 | MIME-like media type                  |
+| `description` | `Nullable<Text>` | sanitized, validated      | Alt-text description                  |
+| `blurhash`    | `Nullable<Text>` | validated                 | Blurhash preview string               |
+| `bytes`       | `BLOB`           |                           | Raw media bytes                       |
+| `created_at`  | `UINT64`         |                           | Creation timestamp                    |
+
+### `edit_history` Table
+
+`previous_spoiler_text` uses the same sanitizer/validator pair as
+`statuses.spoiler_text`; see the [Status Content](../specs/status.md)
+spec.
+
+| Column                  | Type             | Constraint                | Description                           |
+| :---------------------- | :--------------- | :------------------------ | :------------------------------------ |
+| `id`                    | `UINT64`         | PRIMARY KEY               | [Snowflake ID](../specs/snowflake.md) |
+| `status_id`             | `UINT64`         | FK → `statuses.id`, INDEX | Status this entry belongs to          |
+| `previous_content`      | `TEXT`           |                           | Content before the edit               |
+| `previous_spoiler_text` | `Nullable<Text>` | sanitized, validated      | Spoiler text before the edit          |
+| `edited_at`             | `UINT64`         | INDEX                     | Timestamp of the edit                 |
+
+### `hashtags` Table
+
+Local per-user index of hashtags referenced by the user's statuses.
+
+| Column       | Type     | Constraint         | Description                                 |
+| :----------- | :------- | :----------------- | :------------------------------------------ |
+| `id`         | `UINT64` | PRIMARY KEY        | [Snowflake ID](../specs/snowflake.md)       |
+| `tag`        | `TEXT`   | UNIQUE, validated  | Sanitized, lowercase tag (without `#`)      |
+| `created_at` | `UINT64` |                    | Timestamp when the hashtag was first seen   |
+
+The `tag` column uses `HashtagSanitizer` (trims whitespace, lowercases,
+strips leading `#`) and `HashtagValidator`. See the
+[Hashtag Validation](../specs/hashtags.md) page for the full
+specification.
+
+### `status_hashtags` Table
+
+Join table between `statuses` and `hashtags`. Uses a surrogate `id`
+primary key because the underlying storage layer does not support
+composite primary keys; uniqueness of `(status_id, hashtag_id)` is
+enforced by the application layer.
+
+| Column       | Type     | Constraint                | Description                           |
+| :----------- | :------- | :------------------------ | :------------------------------------ |
+| `id`         | `UINT64` | PRIMARY KEY               | [Snowflake ID](../specs/snowflake.md) |
+| `status_id`  | `UINT64` | FK → `statuses.id`, INDEX | Status                                |
+| `hashtag_id` | `UINT64` | FK → `hashtags.id`, INDEX | Hashtag                               |
+
+### `featured_tags` Table
+
+Up to four hashtags featured on the user's profile. The `tag` column
+uses the same [`HashtagSanitizer` / `HashtagValidator`](../specs/hashtags.md)
+pair as the `hashtags` table.
+
+| Column       | Type     | Constraint                   | Description                     |
+| :----------- | :------- | :--------------------------- | :------------------------------ |
+| `tag`        | `TEXT`   | PRIMARY KEY, validated       | Sanitized, lowercase tag        |
+| `position`   | `UINT8`  | UNIQUE (`0`..=`3`)           | Display position                |
+| `created_at` | `UINT64` |                              | Timestamp when tag was featured |
+
+### `pinned_statuses` Table
+
+Up to five statuses pinned on the user's profile.
+
+| Column      | Type     | Constraint                 | Description                     |
+| :---------- | :------- | :------------------------- | :------------------------------ |
+| `status_id` | `UINT64` | PRIMARY KEY, FK → `statuses.id` | Pinned status              |
+| `position`  | `UINT8`  | UNIQUE (`0`..=`4`)         | Display position                |
+| `pinned_at` | `UINT64` |                            | Timestamp when status was pinned |
+
+### `profile_metadata` Table
+
+Up to four custom fields shown on the user's profile. See the
+[Profile Metadata](../specs/profile-metadata.md) spec for full
+validation rules.
+
+| Column     | Type    | Constraint                | Description         |
+| :--------- | :------ | :------------------------ | :------------------ |
+| `position` | `UINT8` | PRIMARY KEY (`0`..=`3`)   | Position in the list |
+| `name`     | `TEXT`  | sanitized, validated      | Field name          |
+| `value`    | `TEXT`  | sanitized, validated      | Field value         |
 
 ## Custom Data Types
 
@@ -185,6 +372,14 @@ Maps to `activitypub::ActivityType`.
 | :---- | :--------- |
 | `0`   | `Pending`  |
 | `1`   | `Accepted` |
+
+### `ReportState`
+
+| Value | Variant     |
+| :---- | :---------- |
+| `0`   | `Open`      |
+| `1`   | `Resolved`  |
+| `2`   | `Dismissed` |
 
 ## Persistence
 

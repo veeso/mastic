@@ -252,7 +252,7 @@ mod tests {
     use did::user::{ReadFeedArgs, ReadFeedError, ReadFeedResponse};
     use ic_dbms_canister::prelude::DBMS_CONTEXT;
     use wasm_dbms::WasmDbmsDatabase;
-    use wasm_dbms_api::prelude::Database;
+    use wasm_dbms_api::prelude::{Database, Nullable};
 
     use super::read_feed;
     use crate::schema::{
@@ -271,6 +271,12 @@ mod tests {
                 id: id.into(),
                 content: content.into(),
                 visibility: DbVisibility::from(visibility),
+                like_count: 0u64.into(),
+                boost_count: 0u64.into(),
+                in_reply_to_uri: Nullable::Null,
+                spoiler_text: Nullable::Null,
+                sensitive: false.into(),
+                edited_at: Nullable::Null,
                 created_at: created_at.into(),
             })
             .expect("should insert status");
@@ -372,6 +378,8 @@ mod tests {
                 activity_type: DbActivityType::from(ApActivityType::Create),
                 actor_uri: "https://remote.example/users/bob".into(),
                 object_data: object_data.into(),
+                is_boost: false.into(),
+                original_status_uri: Nullable::Null,
                 created_at: created_at.into(),
             })
             .expect("should insert inbox activity");
@@ -396,6 +404,8 @@ mod tests {
                 activity_type: DbActivityType::from(ApActivityType::Create),
                 actor_uri: "https://remote.example/users/bob".into(),
                 object_data: object_data.into(),
+                is_boost: false.into(),
+                original_status_uri: Nullable::Null,
                 created_at: created_at.into(),
             })
             .expect("should insert inbox activity");
