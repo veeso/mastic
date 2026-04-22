@@ -1,3 +1,18 @@
+// Error types for the `delete_profile` method on the Directory Canister.
+type DeleteProfileError = variant {
+  // Internal error occurred while deleting the profile.
+  Internal : text;
+  // The caller has no account to delete.
+  NotRegistered;
+  // Deletion is already in progress for the caller.
+  DeletionAlreadyInProgress;
+  // The caller's canister is not active (e.g. pending creation or failed).
+  CanisterNotActive;
+  // Anonymous callers cannot delete.
+  AnonymousPrincipal;
+};
+// Response type for the `delete_profile` method on the Directory Canister.
+type DeleteProfileResponse = variant { Ok; Err : DeleteProfileError };
 // Install arguments for the Directory canister.
 type DirectoryInstallArgs = variant {
   // Upgrade argument, provided on `upgrade`
@@ -40,6 +55,17 @@ type GetUserError = variant {
 };
 // Response type for the `get_user` method.
 type GetUserResponse = variant { Ok : GetUser; Err : GetUserError };
+// Error types for the `retry_delete_profile` method on the Directory Canister.
+type RetryDeleteProfileError = variant {
+  // Internal error occurred while retrying the profile deletion.
+  Internal : text;
+  // The caller has no account to delete.
+  NotRegistered;
+  // The caller's account is not in a deletion-pending state, so retrying is not allowed.
+  CanisterNotInDeletionState;
+};
+// Response type for the `retry_delete_profile` method on the Directory Canister.
+type RetryDeleteProfileResponse = variant { Ok; Err : RetryDeleteProfileError };
 // Response error types for the `retry_sign_up` method.
 // Retries the canister creation for a user that failed to create their canister during the sign up process.
 type RetrySignUpError = variant {
@@ -64,6 +90,8 @@ type SignUpError = variant {
   AnonymousPrincipal;
   // The chosen handle is already taken by another user
   HandleTaken;
+  // Handle is tombstoned (i.e. was recently used by a deleted account)
+  HandleTombstoned;
   // Internal error
   InternalError : text;
 };
@@ -91,6 +119,8 @@ type UserCanisterResponse = variant { Ok : principal; Err : UserCanisterError };
 // The status of a user's canister, used in the `who_am_i` method to indicate whether
 // the user's canister is active, pending creation, or failed to create.
 type UserCanisterStatus = variant {
+  // Deletion pending
+  DeletionPending;
   // Creation failed
   CreationFailed;
   // Active and created
@@ -118,7 +148,9 @@ type WhoAmIError = variant {
 // information or an error if they are not registered.
 type WhoAmIResponse = variant { Ok : WhoAmI; Err : WhoAmIError };
 service : (DirectoryInstallArgs) -> {
+  delete_profile : () -> (DeleteProfileResponse);
   get_user : (GetUserArgs) -> (GetUserResponse) query;
+  retry_delete_profile : () -> (RetryDeleteProfileResponse);
   retry_sign_up : () -> (RetrySignUpResponse);
   sign_up : (SignUpRequest) -> (SignUpResponse);
   user_canister : (opt principal) -> (UserCanisterResponse) query;

@@ -2,3 +2,4 @@
 
 pub mod federation_canister;
 pub mod management_canister;
+pub mod user_canister;

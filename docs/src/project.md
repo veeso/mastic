@@ -200,6 +200,10 @@ get\_user : (*GetUserArgs*) -> (*GetUserResponse*) query;
 
 remove\_moderator : (*RemoveModeratorArgs*) -> (*RemoveModeratorResponse*);
 
+retry\_delete\_profile : () -> (*RetryDeleteProfileResponse*);
+
+retry\_sign\_up : () -> (*RetrySignUpResponse*);
+
 search\_profiles : (*SearchProfilesArgs*) -> (*SearchProfilesResponse*) query;
 
 sign\_up : (*text*) -> (*SignUpResponse*);
@@ -234,9 +238,9 @@ block\_user : (*BlockUserArgs*) -> (*BlockUserResponse*);
 
 boost\_status : (*BoostStatusArgs*) -> (*BoostStatusResponse*);
 
-delete\_profile : () -> (*DeleteProfileResponse*);
-
 delete\_status : (*DeleteStatusArgs*) -> (*DeleteStatusResponse*);
+
+emit\_delete\_profile\_activity : () -> (*EmitDeleteProfileActivityResponse*);
 
 follow\_user : (*FollowUserArgs*) -> (*FollowUserResponse*);
 

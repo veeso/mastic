@@ -33,6 +33,17 @@ impl ManagementCanister for MockManagementCanisterClient {
         Ok(())
     }
 
+    async fn stop_canister(&self, _canister_id: Principal) -> Result<(), ManagementCanisterError> {
+        Ok(())
+    }
+
+    async fn delete_canister(
+        &self,
+        _canister_id: Principal,
+    ) -> Result<(), ManagementCanisterError> {
+        Ok(())
+    }
+
     fn canister_version(&self) -> u64 {
         0
     }

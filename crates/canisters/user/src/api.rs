@@ -3,12 +3,12 @@
 pub mod inspect;
 
 use did::user::{
-    AcceptFollowArgs, AcceptFollowResponse, FollowUserArgs, FollowUserResponse,
-    GetFollowRequestsArgs, GetFollowRequestsResponse, GetFollowersArgs, GetFollowersResponse,
-    GetFollowingArgs, GetFollowingResponse, GetProfileResponse, GetStatusesArgs,
-    GetStatusesResponse, PublishStatusArgs, PublishStatusResponse, ReadFeedArgs, ReadFeedResponse,
-    ReceiveActivityArgs, ReceiveActivityResponse, RejectFollowArgs, RejectFollowResponse,
-    UpdateProfileArgs, UpdateProfileResponse, UserInstallArgs,
+    AcceptFollowArgs, AcceptFollowResponse, EmitDeleteProfileActivityResponse, FollowUserArgs,
+    FollowUserResponse, GetFollowRequestsArgs, GetFollowRequestsResponse, GetFollowersArgs,
+    GetFollowersResponse, GetFollowingArgs, GetFollowingResponse, GetProfileResponse,
+    GetStatusesArgs, GetStatusesResponse, PublishStatusArgs, PublishStatusResponse, ReadFeedArgs,
+    ReadFeedResponse, ReceiveActivityArgs, ReceiveActivityResponse, RejectFollowArgs,
+    RejectFollowResponse, UpdateProfileArgs, UpdateProfileResponse, UserInstallArgs,
 };
 use ic_dbms_canister::prelude::DBMS_CONTEXT;
 
@@ -170,6 +170,17 @@ pub async fn reject_follow(args: RejectFollowArgs) -> RejectFollowResponse {
     }
 
     crate::domain::follower::reject_follow(args).await
+}
+
+/// Emit a `Delete(Person)` activity to followers on profile deletion.
+///
+/// This function can only be called by the directory canister.
+pub async fn emit_delete_profile_activity() -> EmitDeleteProfileActivityResponse {
+    if !inspect::is_directory_canister(ic_utils::caller()) {
+        ic_utils::trap!("Only the directory canister can emit delete profile activity");
+    }
+
+    crate::domain::profile::emit_delete_profile_activity().await
 }
 
 /// Updates the user's profile.

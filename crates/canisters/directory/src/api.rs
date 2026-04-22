@@ -2,8 +2,9 @@
 
 use candid::Principal;
 use did::directory::{
-    DirectoryInstallArgs, GetUserArgs, GetUserResponse, RetrySignUpResponse, SignUpRequest,
-    SignUpResponse, UserCanisterResponse, WhoAmIResponse,
+    DeleteProfileResponse, DirectoryInstallArgs, GetUserArgs, GetUserResponse,
+    RetryDeleteProfileResponse, RetrySignUpResponse, SignUpRequest, SignUpResponse,
+    UserCanisterResponse, WhoAmIResponse,
 };
 use ic_dbms_canister::prelude::DBMS_CONTEXT;
 
@@ -56,9 +57,25 @@ pub fn post_upgrade(args: DirectoryInstallArgs) {
     ic_utils::log!("Directory canister post-upgrade completed successfully");
 }
 
+/// Handles the `delete_profile` method call to delete the caller's profile and User Canister.
+pub fn delete_profile() -> DeleteProfileResponse {
+    let caller = ic_utils::caller();
+
+    crate::domain::users::delete_profile(caller)
+}
+
 /// Handles the `get_user` method call to retrieve user information by handle or principal.
 pub fn get_user(args: GetUserArgs) -> GetUserResponse {
     crate::domain::users::get_user(args)
+}
+
+/// Retry an interrupted profile deletion for the caller. Callable only when the
+/// caller's canister status is `DeletionPending`.
+pub fn retry_delete_profile() -> RetryDeleteProfileResponse {
+    let caller = ic_utils::caller();
+    ic_utils::log!("retry_delete_profile called by {caller}");
+
+    crate::domain::users::retry_delete_profile(caller)
 }
 
 /// Retry canister creation for the user that called this method.

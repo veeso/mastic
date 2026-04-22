@@ -38,6 +38,7 @@ impl fmt::Display for UserCanisterStatus {
             DidUserCanisterStatus::Active => "active",
             DidUserCanisterStatus::CreationPending => "creation_pending",
             DidUserCanisterStatus::CreationFailed => "creation_failed",
+            DidUserCanisterStatus::DeletionPending => "deletion_pending",
         };
         write!(f, "{}", activity_str)
     }
@@ -53,6 +54,7 @@ impl Encode for UserCanisterStatus {
             DidUserCanisterStatus::Active => 0,
             DidUserCanisterStatus::CreationPending => 1,
             DidUserCanisterStatus::CreationFailed => 2,
+            DidUserCanisterStatus::DeletionPending => 3,
         }])
     }
 
@@ -69,6 +71,7 @@ impl Encode for UserCanisterStatus {
             0 => DidUserCanisterStatus::Active,
             1 => DidUserCanisterStatus::CreationPending,
             2 => DidUserCanisterStatus::CreationFailed,
+            3 => DidUserCanisterStatus::DeletionPending,
             _ => {
                 return Err(MemoryError::DecodeError(DecodeError::InvalidDiscriminant(
                     byte,
