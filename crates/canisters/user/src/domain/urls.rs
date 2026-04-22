@@ -17,30 +17,18 @@ pub fn inbox_url(handle: &str) -> CanisterResult<String> {
     Ok(format!("{public_url}/users/{handle}/inbox"))
 }
 
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "will be used by upcoming canister methods")
-)]
 /// Build the outbox URL for a user: `{public_url}/users/{handle}/outbox`.
 pub fn outbox_url(handle: &str) -> CanisterResult<String> {
     let public_url = crate::settings::get_public_url()?;
     Ok(format!("{public_url}/users/{handle}/outbox"))
 }
 
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "will be used by upcoming canister methods")
-)]
 /// Build the followers collection URL: `{public_url}/users/{handle}/followers`.
 pub fn followers_url(handle: &str) -> CanisterResult<String> {
     let public_url = crate::settings::get_public_url()?;
     Ok(format!("{public_url}/users/{handle}/followers"))
 }
 
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "will be used by upcoming canister methods")
-)]
 /// Build the following collection URL: `{public_url}/users/{handle}/following`.
 pub fn following_url(handle: &str) -> CanisterResult<String> {
     let public_url = crate::settings::get_public_url()?;

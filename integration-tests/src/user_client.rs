@@ -5,7 +5,7 @@ use did::user::{
     GetFollowRequestsArgs, GetFollowRequestsResponse, GetFollowersArgs, GetFollowersResponse,
     GetFollowingArgs, GetFollowingResponse, GetProfileResponse, GetStatusesArgs,
     GetStatusesResponse, PublishStatusArgs, PublishStatusResponse, ReadFeedArgs, ReadFeedResponse,
-    RejectFollowArgs, RejectFollowResponse,
+    RejectFollowArgs, RejectFollowResponse, UpdateProfileArgs, UpdateProfileResponse,
 };
 use pocket_ic_harness::PocketIcTestEnv;
 
@@ -192,5 +192,24 @@ impl UserClient<'_> {
             )
             .await
             .expect("Failed to call get_statuses")
+    }
+
+    pub async fn update_profile(
+        &self,
+        caller: Principal,
+        display_name: did::common::FieldUpdate<String>,
+        bio: did::common::FieldUpdate<String>,
+    ) -> UpdateProfileResponse {
+        let args = UpdateProfileArgs { display_name, bio };
+
+        self.env
+            .update(
+                self.canister_id,
+                caller,
+                "update_profile",
+                Encode!(&args).expect("Failed to encode update_profile arguments"),
+            )
+            .await
+            .expect("Failed to call update_profile")
     }
 }

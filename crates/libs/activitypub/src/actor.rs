@@ -12,9 +12,10 @@ use crate::mastodon::MediaReference;
 use crate::object::{BaseObject, OneOrMany};
 
 /// The ActivityPub actor family of type discriminators.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ActorType {
     /// A human account.
+    #[default]
     Person,
     /// A software application.
     Application,

@@ -1,13 +1,15 @@
 //! User profile repository
 
 use candid::Principal;
+use db_utils::field_update::field_update_to_nullable;
 use db_utils::settings::SettingsError;
+use did::common::FieldUpdate;
 use ic_dbms_canister::prelude::DBMS_CONTEXT;
 use wasm_dbms::WasmDbmsDatabase;
 use wasm_dbms_api::prelude::*;
 
 use crate::error::{CanisterError, CanisterResult};
-use crate::schema::{Profile, ProfileInsertRequest, ProfileRecord, Schema};
+use crate::schema::{Profile, ProfileInsertRequest, ProfileRecord, ProfileUpdateRequest, Schema};
 
 pub struct ProfileRepository;
 
@@ -49,6 +51,38 @@ impl ProfileRepository {
 
             Ok(())
         })
+    }
+
+    /// Update the user's profile with the given display name and bio.
+    ///
+    /// Returns `Ok(true)` when a row was written, `Ok(false)` when every
+    /// field is [`FieldUpdate::Leave`] (no-op). The caller can use the
+    /// boolean to decide whether to fan out an activity.
+    pub fn update_profile(
+        bio: FieldUpdate<String>,
+        display_name: FieldUpdate<String>,
+    ) -> CanisterResult<bool> {
+        if [&display_name, &bio]
+            .iter()
+            .all(|field| matches!(field, FieldUpdate::Leave))
+        {
+            ic_utils::log!("No profile fields to update, skipping database update");
+            return Ok(false);
+        }
+        let patch = ProfileUpdateRequest {
+            display_name: field_update_to_nullable(display_name.map(|v| v.into())),
+            bio: field_update_to_nullable(bio.map(|v| v.into())),
+            updated_at: Some(ic_utils::now().into()),
+            ..Default::default()
+        };
+
+        DBMS_CONTEXT.with(|ctx| {
+            let db = WasmDbmsDatabase::oneshot(ctx, Schema);
+
+            db.update::<Profile>(patch)
+        })?;
+
+        Ok(true)
     }
 
     fn record_to_profile(record: ProfileRecord) -> Profile {

@@ -9,7 +9,8 @@ pub fn inspect() {
         | "get_follow_requests"
         | "publish_status"
         | "read_feed"
-        | "reject_follow" => {
+        | "reject_follow"
+        | "update_profile" => {
             let caller = ic_utils::caller();
             if !crate::api::inspect::is_owner(caller) {
                 ic_cdk::api::msg_reject(

@@ -691,6 +691,7 @@ name = "db-utils"
 version = "0.1.0"
 dependencies = [
  "candid",
+ "did",
  "ic-dbms-canister",
  "ic-utils",
  "serde",
@@ -1392,9 +1393,9 @@ dependencies = [
 
 [[package]]
 name = "ic-cdk"
-version = "0.20.0"
+version = "0.20.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "057912339f889013f42b36cc0623585949ed278457efb32aef041bdc48acb111"
+checksum = "a64dfa64757e7bfdd3bd6048c35e1edd74b69325deeed6bcaafedbc864c645fc"
 dependencies = [
  "candid",
  "ic-cdk-executor",
@@ -1419,9 +1420,9 @@ dependencies = [
 
 [[package]]
 name = "ic-cdk-macros"
-version = "0.20.0"
+version = "0.20.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b140627c01710ac185fbc984ab1fda1781ffef4abbd952e07383350899b0952b"
+checksum = "fd0794365edf9997b1114b4ea10358c6af1317e39fc6611b4fc67053a44ec8f1"
 dependencies = [
  "candid",
  "darling 0.23.0",
@@ -1455,9 +1456,9 @@ dependencies = [
 
 [[package]]
 name = "ic-dbms-api"
-version = "0.8.1"
+version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "febed6ca414a16d313f6c4a61ec8f6cfdaf4e477fe6afa5759bc04393aac1701"
+checksum = "069acb68d6a6dc4af55a52dd355f2c0002409fb4e45d6c05732660455882ba55"
 dependencies = [
  "candid",
  "ic-cdk",
@@ -1468,9 +1469,9 @@ dependencies = [
 
 [[package]]
 name = "ic-dbms-canister"
-version = "0.8.1"
+version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "300873bf80b5273af4fea689e5ef4c0059fb54ed2f3f24be759ce0d1cd5cd8b8"
+checksum = "e57c0026862e70674f7187e79acf6079b24f97103dbd73c961acb19728e838a5"
 dependencies = [
  "candid",
  "ic-cdk",
@@ -1485,9 +1486,9 @@ dependencies = [
 
 [[package]]
 name = "ic-dbms-macros"
-version = "0.8.1"
+version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "661e4e41dbb04851f35f2b34e6010d57a944572c1eeac01d59ca2a95afbf9639"
+checksum = "79399ced674f72bf80857290b1e505bc643fd053807f48fd62a0a1630e4c0958"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1614,9 +1615,9 @@ dependencies = [
 
 [[package]]
 name = "ic0"
-version = "1.0.1"
+version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1499d08fd5be8f790d477e1865d63bab6a8d748300e141270c4296e6d5fdd6bc"
+checksum = "c77c8932bff1f09502d0d8c079d5a206a06afe523e35e816162cf4d30b5bf80d"
 
 [[package]]
 name = "ic_bls12_381"
@@ -1934,9 +1935,9 @@ checksum = "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe"
 
 [[package]]
 name = "leb128"
-version = "0.2.5"
+version = "0.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "884e2677b40cc8c339eaefcb701c32ef1fd2493d71118dc0ca4b6a736c93bd67"
+checksum = "6cc46bac87ef8093eed6f272babb833b6443374399985ac8ed28471ee0918545"
 
 [[package]]
 name = "leb128fmt"
@@ -2843,9 +2844,9 @@ checksum = "f87165f0995f63a9fbeea62b64d10b4d9d8e78ec6d7d51fb2125fda7bb36788f"
 
 [[package]]
 name = "rustls-webpki"
-version = "0.103.12"
+version = "0.103.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8279bb85272c9f10811ae6a6c547ff594d6a7f3c6c6b02ee9726d1d0dcfcdd06"
+checksum = "61c429a8649f110dddef65e2a5ad240f747e85f7758a6bccc7e5777bd33f756e"
 dependencies = [
  "aws-lc-rs",
  "ring",
@@ -3679,9 +3680,9 @@ checksum = "6af6ae20167a9ece4bcb41af5b80f8a1f1df981f6391189ce00fd257af04126a"
 
 [[package]]
 name = "typenum"
-version = "1.19.0"
+version = "1.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "562d481066bde0658276a35467c4af00bdc6ee726305698a55b86e61d7ad82bb"
+checksum = "40ce102ab67701b8526c123c1bab5cbe42d7040ccfd0f64af1a385808d2f43de"
 
 [[package]]
 name = "unicase"
@@ -3887,9 +3888,9 @@ dependencies = [
 
 [[package]]
 name = "wasm-dbms"
-version = "0.8.1"
+version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6c679aa3f2a75746446dd2415eb6e1e4f8ba58aedcc36c8929237764ef33d066"
+checksum = "64ab5f7084540742e643a4c2b5e7034de18c066613c323d9fd15b24d3eeaf248"
 dependencies = [
  "wasm-dbms-api",
  "wasm-dbms-memory",
@@ -3897,9 +3898,9 @@ dependencies = [
 
 [[package]]
 name = "wasm-dbms-api"
-version = "0.8.1"
+version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "01ec680b73519eb648974682944e8ca99b15d9125249eb6d3984cf46ad8baa6d"
+checksum = "22e766800086d0c54ea2c122a4a7d3ea540773eb57f7d09e999e4ee6f01a5ed9"
 dependencies = [
  "candid",
  "lazy-regex",
@@ -3915,9 +3916,9 @@ dependencies = [
 
 [[package]]
 name = "wasm-dbms-macros"
-version = "0.8.1"
+version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ff89d2609219b62ed0fdbb335a520d6bf6dbe9a1e8d0aa097f80c96e931b70d1"
+checksum = "fc45c843e816068795f34c4218fd135f529a2cf0143b2498cbd7b6d7bac56a45"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3926,9 +3927,9 @@ dependencies = [
 
 [[package]]
 name = "wasm-dbms-memory"
-version = "0.8.1"
+version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3c65525ea01e4d0a703cd3776b5ff2c849ddd3db55d70cbaaa1312692a7ab7f7"
+checksum = "8262660d686ec48e32cc2083cd677e07156a32c61085d78dfe378a68025784e5"
 dependencies = [
  "wasm-dbms-api",
 ]
@@ -4308,9 +4309,9 @@ checksum = "d6bbff5f0aada427a1e5a6da5f1f98158182f26556f345ac9e04d36d0ebed650"
 
 [[package]]
 name = "winnow"
-version = "1.0.1"
+version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "09dac053f1cd375980747450bfc7250c264eaae0583872e845c0c7cd578872b5"
+checksum = "2ee1708bef14716a11bae175f579062d4554d95be2c6829f518df847b7b3fdd0"
 dependencies = [
  "memchr",
 ]

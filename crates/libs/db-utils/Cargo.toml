@@ -8,6 +8,7 @@ publish = false
 
 [dependencies]
 candid = { workspace = true }
+did = { workspace = true }
 ic-dbms-canister = { workspace = true }
 ic-utils = { workspace = true }
 serde = { workspace = true }

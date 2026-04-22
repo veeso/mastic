@@ -14,7 +14,7 @@ use did::user::{
     GetFollowingArgs, GetFollowingResponse, GetProfileResponse, GetStatusesArgs,
     GetStatusesResponse, PublishStatusArgs, PublishStatusResponse, ReadFeedArgs, ReadFeedResponse,
     ReceiveActivityArgs, ReceiveActivityResponse, RejectFollowArgs, RejectFollowResponse,
-    UserInstallArgs,
+    UpdateProfileArgs, UpdateProfileResponse, UserInstallArgs,
 };
 
 #[ic_cdk::init]
@@ -85,6 +85,11 @@ fn receive_activity(args: ReceiveActivityArgs) -> ReceiveActivityResponse {
 #[ic_cdk::update]
 async fn reject_follow(args: RejectFollowArgs) -> RejectFollowResponse {
     api::reject_follow(args).await
+}
+
+#[ic_cdk::update]
+async fn update_profile(args: UpdateProfileArgs) -> UpdateProfileResponse {
+    api::update_profile(args).await
 }
 
 ic_cdk::export_candid!();
