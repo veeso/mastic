@@ -9,12 +9,12 @@ mod settings;
 mod test_utils;
 
 use did::user::{
-    AcceptFollowArgs, AcceptFollowResponse, FollowUserArgs, FollowUserResponse,
-    GetFollowRequestsArgs, GetFollowRequestsResponse, GetFollowersArgs, GetFollowersResponse,
-    GetFollowingArgs, GetFollowingResponse, GetProfileResponse, GetStatusesArgs,
-    GetStatusesResponse, PublishStatusArgs, PublishStatusResponse, ReadFeedArgs, ReadFeedResponse,
-    ReceiveActivityArgs, ReceiveActivityResponse, RejectFollowArgs, RejectFollowResponse,
-    UpdateProfileArgs, UpdateProfileResponse, UserInstallArgs,
+    AcceptFollowArgs, AcceptFollowResponse, EmitDeleteProfileActivityResponse, FollowUserArgs,
+    FollowUserResponse, GetFollowRequestsArgs, GetFollowRequestsResponse, GetFollowersArgs,
+    GetFollowersResponse, GetFollowingArgs, GetFollowingResponse, GetProfileResponse,
+    GetStatusesArgs, GetStatusesResponse, PublishStatusArgs, PublishStatusResponse, ReadFeedArgs,
+    ReadFeedResponse, ReceiveActivityArgs, ReceiveActivityResponse, RejectFollowArgs,
+    RejectFollowResponse, UpdateProfileArgs, UpdateProfileResponse, UserInstallArgs,
 };
 
 #[ic_cdk::init]
@@ -40,6 +40,11 @@ async fn accept_follow(args: AcceptFollowArgs) -> AcceptFollowResponse {
 #[ic_cdk::update]
 async fn follow_user(args: FollowUserArgs) -> FollowUserResponse {
     api::follow_user(args).await
+}
+
+#[ic_cdk::update]
+async fn emit_delete_profile_activity() -> EmitDeleteProfileActivityResponse {
+    api::emit_delete_profile_activity().await
 }
 
 #[ic_cdk::query]

@@ -44,6 +44,8 @@ pub enum SignUpError {
     InvalidHandle,
     /// Anonymous users are not allowed to sign up
     AnonymousPrincipal,
+    /// Handle is tombstoned (i.e. was recently used by a deleted account)
+    HandleTombstoned,
     /// Internal error
     InternalError(String),
 }
@@ -86,6 +88,8 @@ pub enum UserCanisterStatus {
     CreationPending,
     /// Creation failed
     CreationFailed,
+    /// Deletion pending
+    DeletionPending,
 }
 
 /// `who_am_i` method data to be returned in case the caller is registered in the directory.
@@ -278,15 +282,41 @@ pub enum SearchProfilesResponse {
 }
 
 /// Error types for the `delete_profile` method on the Directory Canister.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, CandidType, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, CandidType, Serialize, Deserialize)]
 pub enum DeleteProfileError {
     /// The caller has no account to delete.
     NotRegistered,
+    /// Deletion is already in progress for the caller.
+    DeletionAlreadyInProgress,
+    /// The caller's canister is not active (e.g. pending creation or failed).
+    CanisterNotActive,
+    /// Anonymous callers cannot delete.
+    AnonymousPrincipal,
+    /// Internal error occurred while deleting the profile.
+    Internal(String),
 }
 
 /// Response type for the `delete_profile` method on the Directory Canister.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, CandidType, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, CandidType, Serialize, Deserialize)]
 pub enum DeleteProfileResponse {
     Ok,
     Err(DeleteProfileError),
+}
+
+/// Error types for the `retry_delete_profile` method on the Directory Canister.
+#[derive(Debug, Clone, PartialEq, Eq, CandidType, Serialize, Deserialize)]
+pub enum RetryDeleteProfileError {
+    /// The caller has no account to delete.
+    NotRegistered,
+    /// The caller's account is not in a deletion-pending state, so retrying is not allowed.
+    CanisterNotInDeletionState,
+    /// Internal error occurred while retrying the profile deletion.
+    Internal(String),
+}
+
+/// Response type for the `retry_delete_profile` method on the Directory Canister.
+#[derive(Debug, Clone, PartialEq, Eq, CandidType, Serialize, Deserialize)]
+pub enum RetryDeleteProfileResponse {
+    Ok,
+    Err(RetryDeleteProfileError),
 }

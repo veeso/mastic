@@ -14,6 +14,21 @@ type AcceptFollowError = variant {
 };
 // Response type for the `accept_follow` method.
 type AcceptFollowResponse = variant { Ok; Err : AcceptFollowError };
+// Error types for the `emit_delete_profile_activity` method.
+// 
+// Called by the Directory Canister during delete_profile flow to aggregate and
+// dispatch `Delete(Person)` activities to followers before canister destruction.
+type EmitDeleteProfileActivityError = variant {
+  // Internal error occurred while emitting the delete activity.
+  Internal : text;
+  // The caller is not the directory canister.
+  Unauthorized;
+};
+// Response type for the `emit_delete_profile_activity` method.
+type EmitDeleteProfileActivityResponse = variant {
+  Ok;
+  Err : EmitDeleteProfileActivityError;
+};
 // A single entry in a user's feed. Wraps a [`Status`] and optionally indicates
 // that it was boosted (reblogged) by another user.
 type FeedItem = record {
@@ -256,6 +271,7 @@ type Visibility = variant {
 };
 service : (UserInstallArgs) -> {
   accept_follow : (AcceptFollowArgs) -> (AcceptFollowResponse);
+  emit_delete_profile_activity : () -> (EmitDeleteProfileActivityResponse);
   follow_user : (FollowUserArgs) -> (FollowUserResponse);
   get_follow_requests : (GetFollowRequestsArgs) -> (
       GetFollowRequestsResponse,

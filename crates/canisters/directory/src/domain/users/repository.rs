@@ -206,6 +206,61 @@ impl UserRepository {
         }
     }
 
+    /// Marks a user for deletion by setting their canister status to deletion pending.
+    /// The actual deletion of the user record and User Canister is handled asynchronously by the state machine.
+    pub fn mark_user_for_deletion(user_principal: Principal) -> CanisterResult<()> {
+        ic_utils::log!(
+            "UserRepository::mark_user_for_deletion: marking user {user_principal} for deletion"
+        );
+        let update = UserUpdateRequest {
+            canister_status: Some(UserCanisterStatus(
+                did::directory::UserCanisterStatus::DeletionPending,
+            )),
+            where_clause: Some(Filter::eq(
+                User::primary_key(),
+                ic_dbms_canister::prelude::Principal(user_principal).into(),
+            )),
+            ..Default::default()
+        };
+        let rows = DBMS_CONTEXT.with(|ctx| {
+            let dbms = WasmDbmsDatabase::oneshot(ctx, Schema);
+            dbms.update::<User>(update)
+        })?;
+
+        if rows == 0 {
+            return Err(CanisterError::SignUpFailed(format!(
+                "failed to mark user {user_principal} for deletion"
+            )));
+        }
+
+        Ok(())
+    }
+
+    /// Removes a user record from the database. Called by the delete_profile state machine
+    /// after the user canister has been stopped and deleted.
+    pub fn remove_user(user_principal: Principal) -> CanisterResult<()> {
+        ic_utils::log!("UserRepository::remove_user: removing user {user_principal}");
+
+        let deleted = DBMS_CONTEXT.with(|ctx| {
+            let dbms = WasmDbmsDatabase::oneshot(ctx, Schema);
+            dbms.delete::<User>(
+                DeleteBehavior::Restrict,
+                Some(Filter::eq(
+                    User::primary_key(),
+                    ic_dbms_canister::prelude::Principal(user_principal).into(),
+                )),
+            )
+        })?;
+
+        if deleted == 0 {
+            return Err(CanisterError::SignUpFailed(format!(
+                "no user record found for {user_principal}"
+            )));
+        }
+
+        Ok(())
+    }
+
     fn user_record_to_user(user: UserRecord) -> User {
         User {
             principal: user.principal.expect("principal cannot be empty"),

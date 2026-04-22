@@ -38,6 +38,22 @@ pub trait ManagementCanister: Send + Sync + Sized {
         arg: Vec<u8>,
     ) -> impl Future<Output = Result<(), ManagementCanisterError>>;
 
+    /// Stops a running canister.
+    ///
+    /// Idempotent: stopping an already-stopped canister must succeed.
+    fn stop_canister(
+        &self,
+        canister_id: Principal,
+    ) -> impl Future<Output = Result<(), ManagementCanisterError>>;
+
+    /// Deletes a stopped canister, reclaiming its cycles and canister ID.
+    ///
+    /// Idempotent: deleting a non-existent canister must succeed.
+    fn delete_canister(
+        &self,
+        canister_id: Principal,
+    ) -> impl Future<Output = Result<(), ManagementCanisterError>>;
+
     /// Returns the current canister version.
     fn canister_version(&self) -> u64;
 
@@ -140,6 +156,74 @@ impl ManagementCanister for IcManagementCanisterClient {
         );
 
         Ok(())
+    }
+
+    async fn stop_canister(&self, canister_id: Principal) -> Result<(), ManagementCanisterError> {
+        ic_utils::log!(
+            "IcManagementCanisterClient::stop_canister: stopping canister {canister_id}"
+        );
+        let args = ic_management_canister_types::StopCanisterArgs { canister_id };
+
+        match ic_cdk::call::Call::bounded_wait(Principal::management_canister(), "stop_canister")
+            .with_arg(args)
+            .await
+        {
+            Ok(_) => {
+                ic_utils::log!(
+                    "IcManagementCanisterClient::stop_canister: stopped canister {canister_id}"
+                );
+                Ok(())
+            }
+            Err(e) => {
+                let msg = format!("{e:?}");
+                if msg.contains("CanisterNotFound")
+                    || msg.contains("Canister has already been stopped")
+                {
+                    ic_utils::log!(
+                        "IcManagementCanisterClient::stop_canister: treating as success for {canister_id}: {msg}"
+                    );
+                    Ok(())
+                } else {
+                    ic_utils::log!(
+                        "IcManagementCanisterClient::stop_canister: call failed for {canister_id}: {msg}"
+                    );
+                    Err(ManagementCanisterError::CallFailed(msg))
+                }
+            }
+        }
+    }
+
+    async fn delete_canister(&self, canister_id: Principal) -> Result<(), ManagementCanisterError> {
+        ic_utils::log!(
+            "IcManagementCanisterClient::delete_canister: deleting canister {canister_id}"
+        );
+        let args = ic_management_canister_types::DeleteCanisterArgs { canister_id };
+
+        match ic_cdk::call::Call::bounded_wait(Principal::management_canister(), "delete_canister")
+            .with_arg(args)
+            .await
+        {
+            Ok(_) => {
+                ic_utils::log!(
+                    "IcManagementCanisterClient::delete_canister: deleted canister {canister_id}"
+                );
+                Ok(())
+            }
+            Err(e) => {
+                let msg = format!("{e:?}");
+                if msg.contains("CanisterNotFound") {
+                    ic_utils::log!(
+                        "IcManagementCanisterClient::delete_canister: canister {canister_id} not found; treating as success"
+                    );
+                    Ok(())
+                } else {
+                    ic_utils::log!(
+                        "IcManagementCanisterClient::delete_canister: call failed for {canister_id}: {msg}"
+                    );
+                    Err(ManagementCanisterError::CallFailed(msg))
+                }
+            }
+        }
     }
 
     fn canister_version(&self) -> u64 {

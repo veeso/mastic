@@ -14,6 +14,13 @@ pub fn is_federation_canister(principal: Principal) -> bool {
             .expect("should read federation canister principal")
 }
 
+/// Inspect whether the provided [`Principal`] is the directory canister.
+pub fn is_directory_canister(principal: Principal) -> bool {
+    principal
+        == crate::settings::get_directory_canister()
+            .expect("should read directory canister principal")
+}
+
 #[cfg(test)]
 mod tests {
 

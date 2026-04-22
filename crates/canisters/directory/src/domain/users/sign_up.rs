@@ -6,6 +6,7 @@ use did::directory::{
     RetrySignUpError, RetrySignUpResponse, SignUpError, SignUpRequest, SignUpResponse,
 };
 
+use crate::domain::tombstone::TombstoneRepository;
 use crate::domain::users::repository::UserRepository;
 
 mod state;
@@ -23,11 +24,8 @@ mod state;
 /// 5. Spawn the state machine that will drive the user canister creation process, and return [`SignUpResponse::Ok`].
 ///
 /// Any internal error is returned as [`SignUpError::InternalError`] with a message describing the error.
-pub fn sign_up(user_id: Principal, request: SignUpRequest) -> SignUpResponse {
-    ic_utils::log!(
-        "sign_up: starting for user {user_id} with handle {:?}",
-        request.handle
-    );
+pub fn sign_up(user_id: Principal, SignUpRequest { handle }: SignUpRequest) -> SignUpResponse {
+    ic_utils::log!("sign_up: starting for user {user_id} with handle {handle}");
 
     // 0. Check if the caller's principal is anonymous, if it is, return [`SignUpError::AnonymousPrincipal`].
     if user_id == Principal::anonymous() {
@@ -51,44 +49,62 @@ pub fn sign_up(user_id: Principal, request: SignUpRequest) -> SignUpResponse {
     };
 
     // 2. Sanitize and validate the handle. See `handles.md` document for specs.
-    let handle = HandleSanitizer::sanitize_handle(&request.handle);
-    ic_utils::log!(
-        "sign_up: sanitized handle {:?} -> {handle:?}",
-        request.handle
-    );
-    if HandleValidator::check_handle(&handle).is_err() {
-        ic_utils::log!("sign_up: handle {handle:?} is invalid");
+    let sanitized_handle: String = HandleSanitizer::sanitize_handle(&handle);
+    ic_utils::log!("sign_up: sanitized handle {handle} -> {sanitized_handle}",);
+    if HandleValidator::check_handle(&sanitized_handle).is_err() {
+        ic_utils::log!("sign_up: handle {sanitized_handle} is invalid");
         return SignUpResponse::Err(SignUpError::InvalidHandle);
     }
 
-    // 3. Check if the handle is already taken by another user in the database, if it is, return [`SignUpError::HandleTaken`].
-    match UserRepository::get_user_by_handle(&handle) {
+    // 3. check whether is tombstoned
+    match TombstoneRepository::is_tombstoned(&sanitized_handle) {
+        Ok(true) => {
+            ic_utils::log!("sign_up: handle {sanitized_handle} is currently tombstoned");
+            return SignUpResponse::Err(SignUpError::HandleTombstoned);
+        }
+        Ok(false) => {
+            ic_utils::log!(
+                "sign_up: handle {sanitized_handle} is not tombstoned, proceeding with sign up"
+            );
+        }
         Err(err) => {
-            ic_utils::log!("sign_up: internal error checking handle {handle:?}: {err}");
+            ic_utils::log!(
+                "sign_up: internal error checking tombstone for handle {sanitized_handle}: {err}"
+            );
+            return SignUpResponse::Err(SignUpError::InternalError(format!(
+                "Failed to check tombstone for handle: {err}"
+            )));
+        }
+    }
+
+    // 4. Check if the handle is already taken by another user in the database, if it is, return [`SignUpError::HandleTaken`].
+    match UserRepository::get_user_by_handle(&sanitized_handle) {
+        Err(err) => {
+            ic_utils::log!("sign_up: internal error checking handle {sanitized_handle}: {err}");
             return SignUpResponse::Err(SignUpError::InternalError(format!(
                 "Failed to check existing user by handle: {err}"
             )));
         }
         Ok(Some(_)) => {
-            ic_utils::log!("sign_up: handle {handle:?} is already taken");
+            ic_utils::log!("sign_up: handle {sanitized_handle:?} is already taken");
             return SignUpResponse::Err(SignUpError::HandleTaken);
         }
         Ok(None) => (),
     };
 
-    // 4. Insert the new user in the database with the canister status set to [`did::directory::UserCanisterStatus::CreationPending`].
-    if let Err(err) = UserRepository::sign_up(user_id, handle.clone()) {
+    // 5. Insert the new user in the database with the canister status set to [`did::directory::UserCanisterStatus::CreationPending`].
+    if let Err(err) = UserRepository::sign_up(user_id, sanitized_handle.clone()) {
         ic_utils::log!("sign_up: failed to insert user {user_id} in the database: {err}");
         return SignUpResponse::Err(SignUpError::InternalError(format!(
             "Failed to insert new user in the database: {err}"
         )));
     }
 
-    // 5. Spawn the state machine that will drive the user canister creation process, and return [`SignUpResponse::Ok`].
+    // 6. Spawn the state machine that will drive the user canister creation process, and return [`SignUpResponse::Ok`].
     ic_utils::log!(
-        "sign_up: user {user_id} registered with handle {handle:?}, starting canister creation"
+        "sign_up: user {user_id} registered with handle {sanitized_handle:?}, starting canister creation"
     );
-    start_sign_up_state_machine(user_id, handle);
+    start_sign_up_state_machine(user_id, sanitized_handle);
 
     SignUpResponse::Ok
 }

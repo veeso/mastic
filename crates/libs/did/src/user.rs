@@ -68,6 +68,25 @@ pub enum UpdateProfileResponse {
     Err(UpdateProfileError),
 }
 
+/// Error types for the `emit_delete_profile_activity` method.
+///
+/// Called by the Directory Canister during delete_profile flow to aggregate and
+/// dispatch `Delete(Person)` activities to followers before canister destruction.
+#[derive(Debug, Clone, PartialEq, Eq, CandidType, Serialize, Deserialize)]
+pub enum EmitDeleteProfileActivityError {
+    /// The caller is not the directory canister.
+    Unauthorized,
+    /// Internal error occurred while emitting the delete activity.
+    Internal(String),
+}
+
+/// Response type for the `emit_delete_profile_activity` method.
+#[derive(Debug, Clone, PartialEq, Eq, CandidType, Serialize, Deserialize)]
+pub enum EmitDeleteProfileActivityResponse {
+    Ok,
+    Err(EmitDeleteProfileActivityError),
+}
+
 /// Request arguments for the `follow_user` method.
 #[derive(Debug, Clone, PartialEq, Eq, CandidType, Serialize, Deserialize)]
 pub struct FollowUserArgs {

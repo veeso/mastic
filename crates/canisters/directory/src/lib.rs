@@ -11,8 +11,9 @@ mod test_utils;
 
 use candid::Principal;
 use did::directory::{
-    DirectoryInstallArgs, GetUserArgs, GetUserResponse, RetrySignUpResponse, SignUpRequest,
-    SignUpResponse, UserCanisterResponse, WhoAmIResponse,
+    DeleteProfileResponse, DirectoryInstallArgs, GetUserArgs, GetUserResponse,
+    RetryDeleteProfileResponse, RetrySignUpResponse, SignUpRequest, SignUpResponse,
+    UserCanisterResponse, WhoAmIResponse,
 };
 
 #[ic_cdk::init]
@@ -30,6 +31,11 @@ fn inspect_message() {
     inspect::inspect();
 }
 
+#[ic_cdk::update]
+fn delete_profile() -> DeleteProfileResponse {
+    api::delete_profile()
+}
+
 #[ic_cdk::query]
 fn get_user(args: GetUserArgs) -> GetUserResponse {
     api::get_user(args)
@@ -38,6 +44,11 @@ fn get_user(args: GetUserArgs) -> GetUserResponse {
 #[ic_cdk::update]
 fn retry_sign_up() -> RetrySignUpResponse {
     api::retry_sign_up()
+}
+
+#[ic_cdk::update]
+fn retry_delete_profile() -> RetryDeleteProfileResponse {
+    api::retry_delete_profile()
 }
 
 #[ic_cdk::update]

@@ -28,6 +28,15 @@ pub fn inspect() {
                 return;
             }
         }
+        "emit_delete_profile_activity" => {
+            let caller = ic_utils::caller();
+            if !crate::api::inspect::is_directory_canister(caller) {
+                ic_cdk::api::msg_reject(
+                    "Unauthorized caller. Only the directory canister can call this method.",
+                );
+                return;
+            }
+        }
         _ => {}
     }
 
