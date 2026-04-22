@@ -10,6 +10,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::actor::Actor;
 use crate::object::{BaseObject, Object, Reference};
 
 /// The ActivityPub activity family of type discriminators.
@@ -56,6 +57,8 @@ pub enum ActivityObject {
     Id(String),
     /// An embedded nested activity, for example `Accept(Follow)` or `Undo(Like)`.
     Activity(Box<Activity>),
+    /// An embedded ActivityPub actor, for example the `Person` payload of `Update(Person)`.
+    Actor(Box<Actor>),
     /// An embedded ActivityStreams object such as a `Note`.
     Object(Box<Object>),
 }
@@ -85,4 +88,55 @@ pub struct Activity {
     /// Instrument used to perform the activity.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub instrument: Option<Reference<Object>>,
+}
+
+#[cfg(test)]
+mod activity_object_tests {
+    use super::*;
+    use crate::actor::{Actor, ActorType};
+
+    fn person_actor() -> Actor {
+        Actor {
+            base: BaseObject::<ActorType> {
+                id: Some("https://mastic.social/users/alice".to_string()),
+                kind: ActorType::Person,
+                name: Some("Alice".to_string()),
+                summary: Some("hello".to_string()),
+                ..Default::default()
+            },
+            inbox: "https://mastic.social/users/alice/inbox".to_string(),
+            outbox: "https://mastic.social/users/alice/outbox".to_string(),
+            following: "https://mastic.social/users/alice/following".to_string(),
+            followers: "https://mastic.social/users/alice/followers".to_string(),
+            liked: "https://mastic.social/users/alice/liked".to_string(),
+            preferred_username: Some("alice".to_string()),
+            public_key: None,
+            endpoints: None,
+            manually_approves_followers: None,
+            discoverable: None,
+            indexable: None,
+            suspended: None,
+            memorial: None,
+            featured: None,
+            featured_tags: None,
+            also_known_as: None,
+            attribution_domains: None,
+            icon: None,
+            image: None,
+        }
+    }
+
+    #[test]
+    fn test_activity_object_roundtrips_actor() {
+        let actor = person_actor();
+        let payload = ActivityObject::Actor(Box::new(actor.clone()));
+
+        let json = serde_json::to_string(&payload).expect("serialize");
+        let back: ActivityObject = serde_json::from_str(&json).expect("deserialize");
+
+        match back {
+            ActivityObject::Actor(boxed) => assert_eq!(*boxed, actor),
+            other => panic!("expected Actor variant, got {other:?}"),
+        }
+    }
 }

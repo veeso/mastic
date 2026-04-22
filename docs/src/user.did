@@ -26,6 +26,20 @@ type FeedItem = record {
   // then a new Feed Item is created with `boosted_by` set to Bob's actor URI.
   boosted_by : opt text;
 };
+// A helper enum for update operations on optional fields.
+// For example, when updating a user profile,
+// the client can specify
+// - [`FieldUpdate::Clear`] to remove the value (set it to `None`),
+// - [`FieldUpdate::Leave`] to keep the existing value,
+// - [`FieldUpdate::Set`] to update it to a new value.
+type FieldUpdate = variant {
+  // Set the field to a new value
+  Set : text;
+  // Leave the field unchanged
+  Leave;
+  // Clear the field (set it to `None`)
+  Clear;
+};
 // Request arguments for the `follow_user` method.
 type FollowUserArgs = record {
   // Handle of the user to follow.
@@ -180,6 +194,21 @@ type Status = record {
   // The visibility setting of the status, controlling its audience.
   visibility : Visibility;
 };
+// Request arguments for the `update_profile` method.
+// All fields are optional; only provided fields are updated.
+type UpdateProfileArgs = record {
+  // New biography, or `Leave` to leave unchanged.
+  bio : FieldUpdate;
+  // New display name, or `Leave` to leave unchanged.
+  display_name : FieldUpdate;
+};
+// Error types for the `update_profile` method.
+type UpdateProfileError = variant {
+  // The caller is not the canister owner.
+  Internal : text;
+};
+// Response type for the `update_profile` method.
+type UpdateProfileResponse = variant { Ok; Err : UpdateProfileError };
 // Install arguments for the User Canister.
 type UserInstallArgs = variant {
   // Upgrade argument, provided on `upgrade`.
@@ -239,4 +268,5 @@ service : (UserInstallArgs) -> {
   read_feed : (ReadFeedArgs) -> (ReadFeedResponse) query;
   receive_activity : (ReceiveActivityArgs) -> (ReceiveActivityResponse);
   reject_follow : (AcceptFollowArgs) -> (AcceptFollowResponse);
+  update_profile : (UpdateProfileArgs) -> (UpdateProfileResponse);
 }

@@ -6,7 +6,7 @@ mod tests;
 use candid::CandidType;
 use serde::{Deserialize, Serialize};
 
-use crate::common::{FeedItem, Status, UserProfile, Visibility};
+use crate::common::{FeedItem, FieldUpdate, Status, UserProfile, Visibility};
 
 /// Install arguments for the User Canister.
 #[derive(Debug, Clone, PartialEq, Eq, CandidType, Serialize, Deserialize)]
@@ -48,23 +48,21 @@ pub enum GetProfileResponse {
 /// All fields are optional; only provided fields are updated.
 #[derive(Debug, Clone, PartialEq, Eq, CandidType, Serialize, Deserialize)]
 pub struct UpdateProfileArgs {
-    /// New display name, or `None` to leave unchanged.
-    pub display_name: Option<String>,
-    /// New biography, or `None` to leave unchanged.
-    pub bio: Option<String>,
-    /// New avatar URL, or `None` to leave unchanged.
-    pub avatar_url: Option<String>,
+    /// New display name, or `Leave` to leave unchanged.
+    pub display_name: FieldUpdate<String>,
+    /// New biography, or `Leave` to leave unchanged.
+    pub bio: FieldUpdate<String>,
 }
 
 /// Error types for the `update_profile` method.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, CandidType, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, CandidType, Serialize, Deserialize)]
 pub enum UpdateProfileError {
     /// The caller is not the canister owner.
-    Unauthorized,
+    Internal(String),
 }
 
 /// Response type for the `update_profile` method.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, CandidType, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, CandidType, Serialize, Deserialize)]
 pub enum UpdateProfileResponse {
     Ok,
     Err(UpdateProfileError),

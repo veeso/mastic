@@ -32,8 +32,11 @@ pub fn handle_incoming(
         ActivityType::Accept => handle_accept(&activity),
         ActivityType::Reject => handle_reject(&activity),
         other => {
-            ic_utils::log!("handle_incoming: unsupported activity type: {other:?}");
-            Err(ReceiveActivityError::ProcessingFailed)
+            // Unknown / not-yet-implemented activity types are silently accepted.
+            // ActivityPub receivers should not reject deliveries they can't act
+            // on — unknown verbs are absorbed so the sender does not retry.
+            ic_utils::log!("handle_incoming: ignoring unsupported activity type: {other:?}");
+            Ok(())
         }
     };
 

@@ -8,7 +8,7 @@ use did::user::{
     GetFollowingArgs, GetFollowingResponse, GetProfileResponse, GetStatusesArgs,
     GetStatusesResponse, PublishStatusArgs, PublishStatusResponse, ReadFeedArgs, ReadFeedResponse,
     ReceiveActivityArgs, ReceiveActivityResponse, RejectFollowArgs, RejectFollowResponse,
-    UserInstallArgs,
+    UpdateProfileArgs, UpdateProfileResponse, UserInstallArgs,
 };
 use ic_dbms_canister::prelude::DBMS_CONTEXT;
 
@@ -170,6 +170,15 @@ pub async fn reject_follow(args: RejectFollowArgs) -> RejectFollowResponse {
     }
 
     crate::domain::follower::reject_follow(args).await
+}
+
+/// Updates the user's profile.
+pub async fn update_profile(args: UpdateProfileArgs) -> UpdateProfileResponse {
+    if !inspect::is_owner(ic_utils::caller()) {
+        ic_utils::trap!("Only the owner can update their profile");
+    }
+
+    crate::domain::profile::update_profile(args).await
 }
 
 #[cfg(test)]

@@ -51,19 +51,17 @@ impl UserRepository {
             "UserRepository::set_user_canister: setting canister {canister_id} for user {user_principal}"
         );
         let update = UserUpdateRequest {
-            principal: None,
-            handle: None,
             canister_id: Some(Nullable::Value(ic_dbms_canister::prelude::Principal(
                 canister_id,
             ))),
             canister_status: Some(UserCanisterStatus::from(
                 did::directory::UserCanisterStatus::Active,
             )),
-            created_at: None,
             where_clause: Some(Filter::eq(
                 User::primary_key(),
                 ic_dbms_canister::prelude::Principal(user_principal).into(),
             )),
+            ..Default::default()
         };
 
         let rows = DBMS_CONTEXT.with(|ctx| {
@@ -93,17 +91,14 @@ impl UserRepository {
             "UserRepository::set_failed_user_canister_create: marking user {user_principal} as failed"
         );
         let update = UserUpdateRequest {
-            principal: None,
-            handle: None,
-            canister_id: None,
             canister_status: Some(UserCanisterStatus::from(
                 did::directory::UserCanisterStatus::CreationFailed,
             )),
-            created_at: None,
             where_clause: Some(Filter::eq(
                 User::primary_key(),
                 ic_dbms_canister::prelude::Principal(user_principal).into(),
             )),
+            ..Default::default()
         };
 
         let rows = DBMS_CONTEXT.with(|ctx| {
@@ -133,17 +128,14 @@ impl UserRepository {
             "UserRepository::retry_user_canister_creation: retrying for user {user_principal}"
         );
         let update = UserUpdateRequest {
-            principal: None,
-            handle: None,
-            canister_id: None,
             canister_status: Some(UserCanisterStatus::from(
                 did::directory::UserCanisterStatus::CreationPending,
             )),
-            created_at: None,
             where_clause: Some(Filter::eq(
                 User::primary_key(),
                 ic_dbms_canister::prelude::Principal(user_principal).into(),
             )),
+            ..Default::default()
         };
 
         let rows = DBMS_CONTEXT.with(|ctx| {

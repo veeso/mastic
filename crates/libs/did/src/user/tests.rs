@@ -50,9 +50,8 @@ fn test_should_roundtrip_get_profile_response_err() {
 #[test]
 fn test_should_roundtrip_update_profile_args() {
     let args = UpdateProfileArgs {
-        display_name: Some("Alice".to_string()),
-        bio: None,
-        avatar_url: Some("https://example.com/avatar.png".to_string()),
+        display_name: FieldUpdate::Set("Alice".to_string()),
+        bio: FieldUpdate::Clear,
     };
     let bytes = Encode!(&args).unwrap();
     let decoded = Decode!(&bytes, UpdateProfileArgs).unwrap();
@@ -69,7 +68,7 @@ fn test_should_roundtrip_update_profile_response_ok() {
 
 #[test]
 fn test_should_roundtrip_update_profile_response_err() {
-    let resp = UpdateProfileResponse::Err(UpdateProfileError::Unauthorized);
+    let resp = UpdateProfileResponse::Err(UpdateProfileError::Internal("db error".to_string()));
     let bytes = Encode!(&resp).unwrap();
     let decoded = Decode!(&bytes, UpdateProfileResponse).unwrap();
     assert_eq!(resp, decoded);

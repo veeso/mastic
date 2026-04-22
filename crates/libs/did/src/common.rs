@@ -68,3 +68,29 @@ pub struct FeedItem {
     /// then a new Feed Item is created with `boosted_by` set to Bob's actor URI.
     pub boosted_by: Option<String>,
 }
+
+/// A helper enum for update operations on optional fields.
+/// For example, when updating a user profile,
+/// the client can specify
+/// - [`FieldUpdate::Clear`] to remove the value (set it to `None`),
+/// - [`FieldUpdate::Leave`] to keep the existing value,
+/// - [`FieldUpdate::Set`] to update it to a new value.
+#[derive(Debug, Clone, PartialEq, Eq, CandidType, Serialize, Deserialize)]
+pub enum FieldUpdate<T> {
+    /// Clear the field (set it to `None`)
+    Clear,
+    /// Leave the field unchanged
+    Leave,
+    /// Set the field to a new value
+    Set(T),
+}
+
+impl<T> FieldUpdate<T> {
+    pub fn map<U, F: FnOnce(T) -> U>(self, f: F) -> FieldUpdate<U> {
+        match self {
+            FieldUpdate::Clear => FieldUpdate::Clear,
+            FieldUpdate::Leave => FieldUpdate::Leave,
+            FieldUpdate::Set(value) => FieldUpdate::Set(f(value)),
+        }
+    }
+}
