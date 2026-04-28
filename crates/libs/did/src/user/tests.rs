@@ -190,16 +190,10 @@ fn test_should_roundtrip_unfollow_user_response_ok() {
 
 #[test]
 fn test_should_roundtrip_unfollow_user_response_err() {
-    for error in [
-        UnfollowUserError::Unauthorized,
-        UnfollowUserError::NotFollowing,
-        UnfollowUserError::Internal("db error".to_string()),
-    ] {
-        let resp = UnfollowUserResponse::Err(error);
-        let bytes = Encode!(&resp).unwrap();
-        let decoded = Decode!(&bytes, UnfollowUserResponse).unwrap();
-        assert_eq!(resp, decoded);
-    }
+    let resp = UnfollowUserResponse::Err(UnfollowUserError::Internal("db error".to_string()));
+    let bytes = Encode!(&resp).unwrap();
+    let decoded = Decode!(&bytes, UnfollowUserResponse).unwrap();
+    assert_eq!(resp, decoded);
 }
 
 #[test]

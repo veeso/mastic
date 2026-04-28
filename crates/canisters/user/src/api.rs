@@ -8,7 +8,8 @@ use did::user::{
     GetFollowersResponse, GetFollowingArgs, GetFollowingResponse, GetProfileResponse,
     GetStatusesArgs, GetStatusesResponse, PublishStatusArgs, PublishStatusResponse, ReadFeedArgs,
     ReadFeedResponse, ReceiveActivityArgs, ReceiveActivityResponse, RejectFollowArgs,
-    RejectFollowResponse, UpdateProfileArgs, UpdateProfileResponse, UserInstallArgs,
+    RejectFollowResponse, UnfollowUserArgs, UnfollowUserResponse, UpdateProfileArgs,
+    UpdateProfileResponse, UserInstallArgs,
 };
 use ic_dbms_canister::prelude::DBMS_CONTEXT;
 
@@ -185,6 +186,15 @@ pub async fn emit_delete_profile_activity() -> EmitDeleteProfileActivityResponse
     }
 
     crate::domain::profile::emit_delete_profile_activity().await
+}
+
+/// Unfollows a user.
+pub async fn unfollow_user(args: UnfollowUserArgs) -> UnfollowUserResponse {
+    if !inspect::is_owner(ic_utils::caller()) {
+        ic_utils::trap!("Only the owner can unfollow other users");
+    }
+
+    crate::domain::following::unfollow_user(args).await
 }
 
 /// Updates the user's profile.

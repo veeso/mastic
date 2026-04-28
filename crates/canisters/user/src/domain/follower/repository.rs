@@ -56,6 +56,23 @@ impl FollowerRepository {
         })
     }
 
+    /// Delete a follower entry by actor URI.
+    ///
+    /// Returns `true` if an entry was deleted, `false` if no entry was found
+    /// with the given actor URI.
+    pub fn delete_by_actor_uri(actor_uri: &str) -> CanisterResult<bool> {
+        DBMS_CONTEXT.with(|ctx| {
+            let db = WasmDbmsDatabase::oneshot(ctx, Schema);
+
+            db.delete::<Follower>(
+                DeleteBehavior::Restrict,
+                Some(Filter::eq("actor_uri", Value::from(actor_uri.to_string()))),
+            )
+            .map(|entries| entries > 0)
+            .map_err(CanisterError::from)
+        })
+    }
+
     /// Get the list of [`Follower`]s of the user.
     pub fn get_paginated(offset: usize, limit: usize) -> CanisterResult<Vec<Follower>> {
         DBMS_CONTEXT.with(|ctx| {
