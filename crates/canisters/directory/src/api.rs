@@ -8,6 +8,8 @@ use did::directory::{
 };
 use ic_dbms_canister::prelude::DBMS_CONTEXT;
 
+use crate::schema::Schema;
+
 /// Initializes the canister.
 pub fn init(args: DirectoryInstallArgs) {
     ic_utils::log!("Initializing directory canister");
@@ -53,6 +55,8 @@ pub fn post_upgrade(args: DirectoryInstallArgs) {
     let DirectoryInstallArgs::Upgrade { .. } = args else {
         ic_utils::trap!("Invalid post-upgrade arguments");
     };
+
+    db_utils::migration::run_post_upgrade_migration(&DBMS_CONTEXT, Schema);
 
     ic_utils::log!("Directory canister post-upgrade completed successfully");
 }

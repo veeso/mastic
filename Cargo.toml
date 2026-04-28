@@ -17,7 +17,7 @@ edition = "2024"
 authors = ["Christian Visintin <christian.visintin@veeso.dev>"]
 license = "MIT"
 repository = "https://github.com/veeso/mastic"
-rust-version = "1.91.1"
+rust-version = "1.92.0"
 
 [workspace.dependencies]
 activitypub = { path = "crates/libs/activitypub" }
@@ -28,7 +28,7 @@ did = { path = "crates/libs/did" }
 ic-cdk = "0.20"
 ic-cdk-macros = "0.20"
 ic-cdk-timers = "1"
-ic-dbms-canister = "0.8"
+ic-dbms-canister = "0.9"
 ic-management-canister-types = "0.7"
 ic-stable-structures = "0.7"
 ic-utils = { path = "crates/libs/ic-utils" }
@@ -40,6 +40,6 @@ serde_json = "1"
 thiserror = "2"
 tokio = { version = "1", features = ["full"] }
 url = "2"
-wasm-dbms = "0.8"
-wasm-dbms-api = "0.8"
-wasm-dbms-memory = "0.8"
+wasm-dbms = "0.9"
+wasm-dbms-api = "0.9"
+wasm-dbms-memory = "0.9"

@@ -12,6 +12,8 @@ use did::user::{
 };
 use ic_dbms_canister::prelude::DBMS_CONTEXT;
 
+use crate::schema::Schema;
+
 /// Initializes the canister with the given arguments.
 pub fn init(args: UserInstallArgs) {
     ic_utils::log!("Initializing user canister");
@@ -75,6 +77,8 @@ pub fn post_upgrade(args: UserInstallArgs) {
     let UserInstallArgs::Upgrade { .. } = args else {
         ic_utils::trap!("Invalid post-upgrade arguments");
     };
+
+    db_utils::migration::run_post_upgrade_migration(&DBMS_CONTEXT, Schema);
 
     ic_utils::log!("User canister post-upgrade completed successfully");
 }
