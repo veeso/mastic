@@ -398,7 +398,7 @@ pub struct ProfileMetadata {
     pub value: Text,
 }
 
-#[derive(DatabaseSchema)]
+#[derive(DatabaseSchema, Clone)]
 #[tables(
     Settings = "settings",
     Profile = "profiles",
