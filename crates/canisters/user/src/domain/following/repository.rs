@@ -64,7 +64,9 @@ impl FollowingRepository {
     }
 
     /// Delete a following entry by actor URI.
-    pub fn delete_by_actor_uri(actor_uri: &str) -> CanisterResult<()> {
+    ///
+    /// Returns `true` if an entry was deleted, `false` if no entry was found with the given actor URI.
+    pub fn delete_by_actor_uri(actor_uri: &str) -> CanisterResult<bool> {
         DBMS_CONTEXT.with(|ctx| {
             let db = WasmDbmsDatabase::oneshot(ctx, Schema);
 
@@ -72,7 +74,7 @@ impl FollowingRepository {
                 DeleteBehavior::Restrict,
                 Some(Filter::eq("actor_uri", Value::from(actor_uri.to_string()))),
             )
-            .map(|_| ())
+            .map(|entries| entries > 0)
             .map_err(CanisterError::from)
         })
     }

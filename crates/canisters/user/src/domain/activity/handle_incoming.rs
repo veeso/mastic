@@ -6,6 +6,7 @@ use did::user::{ReceiveActivityArgs, ReceiveActivityError, ReceiveActivityRespon
 use wasm_dbms_api::prelude::{Database, Nullable};
 
 use crate::domain::follow_request::FollowRequestRepository;
+use crate::domain::follower::FollowerRepository;
 use crate::domain::following::FollowingRepository;
 use crate::domain::snowflake::Snowflake;
 use crate::error::CanisterError;
@@ -31,6 +32,7 @@ pub fn handle_incoming(
         ActivityType::Follow => handle_follow(&activity),
         ActivityType::Accept => handle_accept(&activity),
         ActivityType::Reject => handle_reject(&activity),
+        ActivityType::Undo => handle_undo(&activity),
         other => {
             // Unknown / not-yet-implemented activity types are silently accepted.
             // ActivityPub receivers should not reject deliveries they can't act
@@ -179,13 +181,54 @@ fn handle_reject(activity: &Activity) -> Result<(), ReceiveActivityError> {
 
     ic_utils::log!("handle_incoming: rejecting following for {remote_actor_uri}, removing entry");
 
-    FollowingRepository::delete_by_actor_uri(remote_actor_uri).map_err(|e| {
-        ic_utils::log!("handle_incoming: failed to delete following entry: {e}");
-        match e {
-            CanisterError::Database(_) => ReceiveActivityError::ProcessingFailed,
-            _ => ReceiveActivityError::Internal(e.to_string()),
-        }
-    })
+    FollowingRepository::delete_by_actor_uri(remote_actor_uri)
+        .map_err(|e| {
+            ic_utils::log!("handle_incoming: failed to delete following entry: {e}");
+            match e {
+                CanisterError::Database(_) => ReceiveActivityError::ProcessingFailed,
+                _ => ReceiveActivityError::Internal(e.to_string()),
+            }
+        })
+        .map(|_| ())
+}
+
+/// Handle an incoming `Undo(Follow)` activity.
+///
+/// Removes the sender from the `followers` table (accepted inbound follow)
+/// and from the `follow_requests` table (pending inbound follow). Idempotent:
+/// missing entries do not produce an error. `Undo` of any inner activity
+/// other than `Follow` is silently ignored (out of scope here).
+fn handle_undo(activity: &Activity) -> Result<(), ReceiveActivityError> {
+    let sender_uri = activity
+        .actor
+        .as_deref()
+        .ok_or(ReceiveActivityError::ProcessingFailed)?;
+
+    let Some(ActivityObject::Activity(inner)) = &activity.object else {
+        ic_utils::log!("handle_incoming: Undo missing inner activity");
+        return Err(ReceiveActivityError::ProcessingFailed);
+    };
+
+    if inner.base.kind != ActivityType::Follow {
+        ic_utils::log!(
+            "handle_incoming: ignoring Undo of unsupported inner type: {:?}",
+            inner.base.kind
+        );
+        return Ok(());
+    }
+
+    ic_utils::log!("handle_incoming: Undo(Follow) from {sender_uri}");
+
+    FollowerRepository::delete_by_actor_uri(sender_uri).map_err(|e| {
+        ic_utils::log!("handle_incoming: failed to delete follower: {e}");
+        ReceiveActivityError::Internal(e.to_string())
+    })?;
+    FollowRequestRepository::delete_by_actor_uri(sender_uri).map_err(|e| {
+        ic_utils::log!("handle_incoming: failed to delete follow request: {e}");
+        ReceiveActivityError::Internal(e.to_string())
+    })?;
+
+    Ok(())
 }
 
 #[cfg(test)]
@@ -197,6 +240,7 @@ mod tests {
 
     use super::handle_incoming;
     use crate::domain::follow_request::FollowRequestRepository;
+    use crate::domain::follower::FollowerRepository;
     use crate::domain::following::FollowingRepository;
     use crate::schema::FollowStatus;
     use crate::test_utils::setup;
@@ -453,5 +497,158 @@ mod tests {
             response,
             ReceiveActivityResponse::Err(ReceiveActivityError::ProcessingFailed)
         );
+    }
+
+    fn make_undo_follow_json(unfollower_actor_uri: &str, target_actor_uri: &str) -> String {
+        let activity = Activity {
+            base: BaseObject {
+                kind: ActivityType::Undo,
+                ..Default::default()
+            },
+            actor: Some(unfollower_actor_uri.to_string()),
+            object: Some(ActivityObject::Activity(Box::new(Activity {
+                base: BaseObject {
+                    kind: ActivityType::Follow,
+                    ..Default::default()
+                },
+                actor: Some(unfollower_actor_uri.to_string()),
+                object: Some(ActivityObject::Id(target_actor_uri.to_string())),
+                target: None,
+                result: None,
+                origin: None,
+                instrument: None,
+            }))),
+            target: None,
+            result: None,
+            origin: None,
+            instrument: None,
+        };
+        serde_json::to_string(&activity).unwrap()
+    }
+
+    #[test]
+    fn test_should_remove_follower_on_undo_follow() {
+        setup();
+
+        FollowerRepository::insert("https://mastic.social/users/alice").expect("should insert");
+
+        let json = make_undo_follow_json(
+            "https://mastic.social/users/alice",
+            "https://mastic.social/users/rey_canisteryo",
+        );
+
+        let response = handle_incoming(ReceiveActivityArgs {
+            activity_json: json,
+        });
+        assert_eq!(response, ReceiveActivityResponse::Ok);
+
+        let followers = FollowerRepository::get_followers().expect("should query");
+        assert!(followers.is_empty(), "follower entry should be deleted");
+    }
+
+    #[test]
+    fn test_should_remove_pending_follow_request_on_undo_follow() {
+        setup();
+
+        FollowRequestRepository::insert("https://mastic.social/users/alice")
+            .expect("should insert");
+
+        let json = make_undo_follow_json(
+            "https://mastic.social/users/alice",
+            "https://mastic.social/users/rey_canisteryo",
+        );
+
+        let response = handle_incoming(ReceiveActivityArgs {
+            activity_json: json,
+        });
+        assert_eq!(response, ReceiveActivityResponse::Ok);
+
+        let request =
+            FollowRequestRepository::find_by_actor_uri("https://mastic.social/users/alice")
+                .expect("should query");
+        assert!(request.is_none(), "follow request should be deleted");
+    }
+
+    #[test]
+    fn test_should_succeed_undo_follow_when_no_entry_exists() {
+        setup();
+
+        let json = make_undo_follow_json(
+            "https://mastic.social/users/alice",
+            "https://mastic.social/users/rey_canisteryo",
+        );
+
+        let response = handle_incoming(ReceiveActivityArgs {
+            activity_json: json,
+        });
+        assert_eq!(response, ReceiveActivityResponse::Ok);
+    }
+
+    #[test]
+    fn test_should_fail_undo_when_missing_inner_activity() {
+        setup();
+
+        let activity = Activity {
+            base: BaseObject {
+                kind: ActivityType::Undo,
+                ..Default::default()
+            },
+            actor: Some("https://mastic.social/users/alice".to_string()),
+            object: Some(ActivityObject::Id(
+                "https://mastic.social/users/rey_canisteryo".to_string(),
+            )),
+            target: None,
+            result: None,
+            origin: None,
+            instrument: None,
+        };
+        let json = serde_json::to_string(&activity).unwrap();
+
+        let response = handle_incoming(ReceiveActivityArgs {
+            activity_json: json,
+        });
+
+        assert_eq!(
+            response,
+            ReceiveActivityResponse::Err(ReceiveActivityError::ProcessingFailed)
+        );
+    }
+
+    #[test]
+    fn test_should_ignore_undo_of_unsupported_inner_type() {
+        setup();
+
+        let activity = Activity {
+            base: BaseObject {
+                kind: ActivityType::Undo,
+                ..Default::default()
+            },
+            actor: Some("https://mastic.social/users/alice".to_string()),
+            object: Some(ActivityObject::Activity(Box::new(Activity {
+                base: BaseObject {
+                    kind: ActivityType::Like,
+                    ..Default::default()
+                },
+                actor: Some("https://mastic.social/users/alice".to_string()),
+                object: Some(ActivityObject::Id(
+                    "https://mastic.social/statuses/1".to_string(),
+                )),
+                target: None,
+                result: None,
+                origin: None,
+                instrument: None,
+            }))),
+            target: None,
+            result: None,
+            origin: None,
+            instrument: None,
+        };
+        let json = serde_json::to_string(&activity).unwrap();
+
+        let response = handle_incoming(ReceiveActivityArgs {
+            activity_json: json,
+        });
+
+        assert_eq!(response, ReceiveActivityResponse::Ok);
     }
 }

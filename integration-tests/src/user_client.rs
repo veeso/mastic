@@ -5,7 +5,8 @@ use did::user::{
     GetFollowRequestsArgs, GetFollowRequestsResponse, GetFollowersArgs, GetFollowersResponse,
     GetFollowingArgs, GetFollowingResponse, GetProfileResponse, GetStatusesArgs,
     GetStatusesResponse, PublishStatusArgs, PublishStatusResponse, ReadFeedArgs, ReadFeedResponse,
-    RejectFollowArgs, RejectFollowResponse, UpdateProfileArgs, UpdateProfileResponse,
+    RejectFollowArgs, RejectFollowResponse, UnfollowUserArgs, UnfollowUserResponse,
+    UpdateProfileArgs, UpdateProfileResponse,
 };
 use pocket_ic_harness::PocketIcTestEnv;
 
@@ -159,6 +160,24 @@ impl UserClient<'_> {
             )
             .await
             .expect("Failed to call reject_follow")
+    }
+
+    pub async fn unfollow_user(
+        &self,
+        caller: Principal,
+        actor_uri: String,
+    ) -> UnfollowUserResponse {
+        let args = UnfollowUserArgs { actor_uri };
+
+        self.env
+            .update(
+                self.canister_id,
+                caller,
+                "unfollow_user",
+                Encode!(&args).expect("Failed to encode unfollow_user arguments"),
+            )
+            .await
+            .expect("Failed to call unfollow_user")
     }
 
     pub async fn read_feed(&self, caller: Principal, offset: u64, limit: u64) -> ReadFeedResponse {

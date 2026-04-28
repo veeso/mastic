@@ -174,10 +174,6 @@ pub struct UnfollowUserArgs {
 /// Error types for the `unfollow_user` method.
 #[derive(Debug, Clone, PartialEq, Eq, CandidType, Serialize, Deserialize)]
 pub enum UnfollowUserError {
-    /// The caller is not the canister owner.
-    Unauthorized,
-    /// The caller does not currently follow the target user.
-    NotFollowing,
     /// Internal error occurred while processing the unfollow request.
     Internal(String),
 }

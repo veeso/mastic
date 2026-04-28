@@ -209,6 +209,13 @@ type Status = record {
   // The visibility setting of the status, controlling its audience.
   visibility : Visibility;
 };
+// Error types for the `unfollow_user` method.
+type UnfollowUserError = variant {
+  // Internal error occurred while processing the unfollow request.
+  Internal : text;
+};
+// Response type for the `unfollow_user` method.
+type UnfollowUserResponse = variant { Ok; Err : UnfollowUserError };
 // Request arguments for the `update_profile` method.
 // All fields are optional; only provided fields are updated.
 type UpdateProfileArgs = record {
@@ -217,13 +224,6 @@ type UpdateProfileArgs = record {
   // New display name, or `Leave` to leave unchanged.
   display_name : FieldUpdate;
 };
-// Error types for the `update_profile` method.
-type UpdateProfileError = variant {
-  // The caller is not the canister owner.
-  Internal : text;
-};
-// Response type for the `update_profile` method.
-type UpdateProfileResponse = variant { Ok; Err : UpdateProfileError };
 // Install arguments for the User Canister.
 type UserInstallArgs = variant {
   // Upgrade argument, provided on `upgrade`.
@@ -284,5 +284,6 @@ service : (UserInstallArgs) -> {
   read_feed : (ReadFeedArgs) -> (ReadFeedResponse) query;
   receive_activity : (ReceiveActivityArgs) -> (ReceiveActivityResponse);
   reject_follow : (AcceptFollowArgs) -> (AcceptFollowResponse);
-  update_profile : (UpdateProfileArgs) -> (UpdateProfileResponse);
+  unfollow_user : (AcceptFollowArgs) -> (UnfollowUserResponse);
+  update_profile : (UpdateProfileArgs) -> (UnfollowUserResponse);
 }
