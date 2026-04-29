@@ -39,6 +39,7 @@ impl fmt::Display for UserCanisterStatus {
             DidUserCanisterStatus::CreationPending => "creation_pending",
             DidUserCanisterStatus::CreationFailed => "creation_failed",
             DidUserCanisterStatus::DeletionPending => "deletion_pending",
+            DidUserCanisterStatus::Suspended => "suspended",
         };
         write!(f, "{}", activity_str)
     }
@@ -55,6 +56,7 @@ impl Encode for UserCanisterStatus {
             DidUserCanisterStatus::CreationPending => 1,
             DidUserCanisterStatus::CreationFailed => 2,
             DidUserCanisterStatus::DeletionPending => 3,
+            DidUserCanisterStatus::Suspended => 4,
         }])
     }
 
@@ -72,6 +74,7 @@ impl Encode for UserCanisterStatus {
             1 => DidUserCanisterStatus::CreationPending,
             2 => DidUserCanisterStatus::CreationFailed,
             3 => DidUserCanisterStatus::DeletionPending,
+            4 => DidUserCanisterStatus::Suspended,
             _ => {
                 return Err(MemoryError::DecodeError(DecodeError::InvalidDiscriminant(
                     byte,
@@ -111,6 +114,8 @@ mod tests {
             DidUserCanisterStatus::Active,
             DidUserCanisterStatus::CreationPending,
             DidUserCanisterStatus::CreationFailed,
+            DidUserCanisterStatus::DeletionPending,
+            DidUserCanisterStatus::Suspended,
         ];
 
         for ap_type in cases {
@@ -137,6 +142,16 @@ mod tests {
             )),
             DidUserCanisterStatus::CreationFailed
         );
+        assert_eq!(
+            DidUserCanisterStatus::from(UserCanisterStatus::from(
+                DidUserCanisterStatus::DeletionPending
+            )),
+            DidUserCanisterStatus::DeletionPending
+        );
+        assert_eq!(
+            DidUserCanisterStatus::from(UserCanisterStatus::from(DidUserCanisterStatus::Suspended)),
+            DidUserCanisterStatus::Suspended
+        );
     }
 
     #[test]
@@ -153,6 +168,14 @@ mod tests {
             UserCanisterStatus::from(DidUserCanisterStatus::CreationFailed).to_string(),
             "creation_failed"
         );
+        assert_eq!(
+            UserCanisterStatus::from(DidUserCanisterStatus::DeletionPending).to_string(),
+            "deletion_pending"
+        );
+        assert_eq!(
+            UserCanisterStatus::from(DidUserCanisterStatus::Suspended).to_string(),
+            "suspended"
+        );
     }
 
     #[test]
@@ -161,6 +184,8 @@ mod tests {
             DidUserCanisterStatus::Active,
             DidUserCanisterStatus::CreationPending,
             DidUserCanisterStatus::CreationFailed,
+            DidUserCanisterStatus::DeletionPending,
+            DidUserCanisterStatus::Suspended,
         ];
 
         for ap_type in cases {
@@ -190,6 +215,18 @@ mod tests {
                 .encode()
                 .as_ref(),
             &[2]
+        );
+        assert_eq!(
+            UserCanisterStatus::from(DidUserCanisterStatus::DeletionPending)
+                .encode()
+                .as_ref(),
+            &[3]
+        );
+        assert_eq!(
+            UserCanisterStatus::from(DidUserCanisterStatus::Suspended)
+                .encode()
+                .as_ref(),
+            &[4]
         );
     }
 
@@ -228,9 +265,13 @@ mod tests {
         let active = UserCanisterStatus::from(DidUserCanisterStatus::Active);
         let pending = UserCanisterStatus::from(DidUserCanisterStatus::CreationPending);
         let failed = UserCanisterStatus::from(DidUserCanisterStatus::CreationFailed);
+        let deletion_pending = UserCanisterStatus::from(DidUserCanisterStatus::DeletionPending);
+        let suspended = UserCanisterStatus::from(DidUserCanisterStatus::Suspended);
 
         assert!(active < pending);
         assert!(pending < failed);
+        assert!(failed < deletion_pending);
+        assert!(deletion_pending < suspended);
     }
 
     #[test]

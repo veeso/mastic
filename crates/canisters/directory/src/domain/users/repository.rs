@@ -261,6 +261,36 @@ impl UserRepository {
         Ok(())
     }
 
+    /// Searches for user profiles based on a query string that matches the handle, with pagination support using offset and limit.
+    ///
+    /// Search only those which are `Active` and have a canister id.
+    pub fn search_profiles(handle: &str, offset: usize, limit: usize) -> CanisterResult<Vec<User>> {
+        ic_utils::log!(
+            "UserRepository::search_profiles: searching for handle {handle:?} with offset {offset} and limit {limit}"
+        );
+        let rows = DBMS_CONTEXT.with(|ctx| {
+            let dbms = WasmDbmsDatabase::oneshot(ctx, Schema);
+            dbms.select::<User>(
+                Query::builder()
+                    .all()
+                    .offset(offset)
+                    .limit(limit)
+                    .and_where(Filter::like("handle", &format!("%{handle}%")))
+                    .and_where(Filter::eq(
+                        "canister_status",
+                        crate::schema::UserCanisterStatus(
+                            did::directory::UserCanisterStatus::Active,
+                        )
+                        .into(),
+                    ))
+                    .and_where(Filter::not_null("canister_id"))
+                    .build(),
+            )
+        })?;
+
+        Ok(rows.into_iter().map(Self::user_record_to_user).collect())
+    }
+
     fn user_record_to_user(user: UserRecord) -> User {
         User {
             principal: user.principal.expect("principal cannot be empty"),
@@ -451,5 +481,156 @@ mod tests {
 
         let user = UserRepository::get_user_by_handle("nonexistent").expect("should query");
         assert!(user.is_none(), "should return None for unknown handle");
+    }
+
+    /// Sets the canister status of a user to an arbitrary value (test-only helper).
+    fn set_canister_status(principal: Principal, status: did::directory::UserCanisterStatus) {
+        let update = UserUpdateRequest {
+            canister_status: Some(UserCanisterStatus::from(status)),
+            where_clause: Some(Filter::eq(
+                User::primary_key(),
+                ic_dbms_canister::prelude::Principal(principal).into(),
+            )),
+            ..Default::default()
+        };
+
+        let rows = DBMS_CONTEXT
+            .with(|ctx| {
+                let dbms = WasmDbmsDatabase::oneshot(ctx, Schema);
+                dbms.update::<User>(update)
+            })
+            .expect("update should succeed");
+        assert_eq!(rows, 1, "should update exactly one row");
+    }
+
+    fn alice_user() -> Principal {
+        Principal::self_authenticating([10u8; 32])
+    }
+
+    fn other_user() -> Principal {
+        Principal::self_authenticating([11u8; 32])
+    }
+
+    fn canister(seed: u8) -> Principal {
+        Principal::self_authenticating([seed; 32])
+    }
+
+    /// Seeds two Active users named `alice` and `alicia`, both with a canister id.
+    /// Used by tests that exercise matching/pagination behavior.
+    fn seed_two_active_alikes() {
+        UserRepository::sign_up(alice_user(), "alice".to_string()).unwrap();
+        UserRepository::set_user_canister(alice_user(), canister(100)).unwrap();
+        UserRepository::sign_up(other_user(), "alicia".to_string()).unwrap();
+        UserRepository::set_user_canister(other_user(), canister(101)).unwrap();
+    }
+
+    #[test]
+    fn test_search_profiles_should_match_exact_handle() {
+        setup();
+        seed_two_active_alikes();
+
+        let users = UserRepository::search_profiles("alice", 0, 50).expect("search should succeed");
+        let handles: Vec<_> = users.iter().map(|u| u.handle.0.as_str()).collect();
+        assert!(handles.contains(&"alice"));
+    }
+
+    #[test]
+    fn test_search_profiles_should_match_prefix_substring() {
+        setup();
+        seed_two_active_alikes();
+
+        let users = UserRepository::search_profiles("ali", 0, 50).expect("search should succeed");
+        let handles: Vec<_> = users.iter().map(|u| u.handle.0.as_str()).collect();
+        assert!(handles.contains(&"alice"));
+        assert!(handles.contains(&"alicia"));
+        assert_eq!(handles.len(), 2);
+    }
+
+    #[test]
+    fn test_search_profiles_should_match_middle_substring() {
+        setup();
+        seed_two_active_alikes();
+
+        let users = UserRepository::search_profiles("lic", 0, 50).expect("search should succeed");
+        let handles: Vec<_> = users.iter().map(|u| u.handle.0.as_str()).collect();
+        assert!(handles.contains(&"alice"));
+        assert!(handles.contains(&"alicia"));
+    }
+
+    #[test]
+    fn test_search_profiles_empty_query_returns_all_active() {
+        setup();
+        seed_two_active_alikes();
+
+        let users = UserRepository::search_profiles("", 0, 50).expect("search should succeed");
+        assert_eq!(users.len(), 2);
+    }
+
+    #[test]
+    fn test_search_profiles_pagination() {
+        setup();
+        seed_two_active_alikes();
+
+        let page1 = UserRepository::search_profiles("", 0, 1).expect("search should succeed");
+        assert_eq!(page1.len(), 1);
+
+        let page2 = UserRepository::search_profiles("", 1, 1).expect("search should succeed");
+        assert_eq!(page2.len(), 1);
+        assert_ne!(page1[0].handle.0, page2[0].handle.0);
+
+        let page3 = UserRepository::search_profiles("", 2, 1).expect("search should succeed");
+        assert!(page3.is_empty());
+    }
+
+    #[test]
+    fn test_search_profiles_no_match_returns_empty() {
+        setup();
+        seed_two_active_alikes();
+
+        let users =
+            UserRepository::search_profiles("zorblax", 0, 50).expect("search should succeed");
+        assert!(users.is_empty());
+    }
+
+    #[test]
+    fn test_search_profiles_should_exclude_creation_pending() {
+        setup();
+        // CreationPending: signed up, no canister set yet.
+        UserRepository::sign_up(alice_user(), "alice".to_string()).unwrap();
+
+        let users = UserRepository::search_profiles("alice", 0, 50).expect("search should succeed");
+        assert!(users.is_empty(), "CreationPending users must be excluded");
+    }
+
+    #[test]
+    fn test_search_profiles_should_exclude_creation_failed() {
+        setup();
+        UserRepository::sign_up(alice_user(), "alice".to_string()).unwrap();
+        UserRepository::set_failed_user_canister_create(alice_user()).unwrap();
+
+        let users = UserRepository::search_profiles("alice", 0, 50).expect("search should succeed");
+        assert!(users.is_empty(), "CreationFailed users must be excluded");
+    }
+
+    #[test]
+    fn test_search_profiles_should_exclude_deletion_pending() {
+        setup();
+        UserRepository::sign_up(alice_user(), "alice".to_string()).unwrap();
+        UserRepository::set_user_canister(alice_user(), canister(100)).unwrap();
+        UserRepository::mark_user_for_deletion(alice_user()).unwrap();
+
+        let users = UserRepository::search_profiles("alice", 0, 50).expect("search should succeed");
+        assert!(users.is_empty(), "DeletionPending users must be excluded");
+    }
+
+    #[test]
+    fn test_search_profiles_should_exclude_suspended() {
+        setup();
+        UserRepository::sign_up(alice_user(), "alice".to_string()).unwrap();
+        UserRepository::set_user_canister(alice_user(), canister(100)).unwrap();
+        set_canister_status(alice_user(), did::directory::UserCanisterStatus::Suspended);
+
+        let users = UserRepository::search_profiles("alice", 0, 50).expect("search should succeed");
+        assert!(users.is_empty(), "Suspended users must be excluded");
     }
 }

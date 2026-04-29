@@ -96,7 +96,7 @@ Canonical `.did` files live in `docs/src/`. The build pipeline also auto-extract
 - `docs/src/architecture.md` contains sequence diagrams for all major flows.
 - `docs/src/activitypub.md` is the ActivityPub protocol reference with Mastic-specific mapping.
 - When adding a new flow, add both a sequence diagram in architecture and a user story in project.md.
-- When adding or removing documentation pages under `docs/src/`, always update `docs/src/SUMMARY.md` to keep the mdBook index in sync. New pages should be placed under the appropriate parent section (e.g. interface subtopics go under `interface/`, milestone plans under `milestones/`).
+- **ALWAYS** update `docs/src/SUMMARY.md` whenever a Markdown file is added to or removed from `docs/src/`. The mdBook index must stay in sync — pages absent from `SUMMARY.md` are not rendered. New pages go under the appropriate parent section (e.g. interface subtopics under `interface/`, milestone plans under `milestones/`).
 
 ## Local Development
 

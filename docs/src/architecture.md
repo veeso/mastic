@@ -86,8 +86,10 @@ moderation policies.
 - **Moderation** -- moderators (stored in the `moderators` table) can
   suspend users and manage the moderator list. The initial moderator is
   set at install time.
-- **Profile search** -- `search_profiles` provides full-text lookup over
-  registered handles.
+- **Profile search** -- `search_profiles` provides paginated,
+  case-insensitive substring lookup over registered handles. Only Active
+  users with a canister are returned; suspended, pending, failed, and
+  deletion-pending accounts are filtered out.
 
 ### Directory Storage
 

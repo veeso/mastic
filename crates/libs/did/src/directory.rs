@@ -90,6 +90,8 @@ pub enum UserCanisterStatus {
     CreationFailed,
     /// Deletion pending
     DeletionPending,
+    /// Suspended by moderators
+    Suspended,
 }
 
 /// `who_am_i` method data to be returned in case the caller is registered in the directory.
@@ -268,10 +270,12 @@ pub struct SearchProfileEntry {
 }
 
 /// Error types for the `search_profiles` method.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, CandidType, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, CandidType, Serialize, Deserialize)]
 pub enum SearchProfilesError {
-    /// The caller is not permitted to search profiles.
-    Unauthorized,
+    /// The search query is invalid (invalid limit or offset, or query string is too long).
+    BadArgs,
+    /// Internal error
+    Internal(String),
 }
 
 /// Response type for the `search_profiles` method.
