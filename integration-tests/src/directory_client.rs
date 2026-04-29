@@ -1,7 +1,8 @@
 use candid::{Encode, Principal};
 use did::directory::{
     DeleteProfileResponse, GetUserArgs, GetUserResponse, RetryDeleteProfileResponse,
-    RetrySignUpResponse, SignUpRequest, SignUpResponse, UserCanisterResponse, WhoAmIResponse,
+    RetrySignUpResponse, SearchProfilesArgs, SearchProfilesResponse, SignUpRequest, SignUpResponse,
+    UserCanisterResponse, WhoAmIResponse,
 };
 use pocket_ic_harness::PocketIcTestEnv;
 
@@ -79,6 +80,22 @@ impl DirectoryClient<'_> {
             )
             .await
             .expect("Failed to call user_canister")
+    }
+
+    pub async fn search_profiles(
+        &self,
+        caller: Principal,
+        args: SearchProfilesArgs,
+    ) -> SearchProfilesResponse {
+        self.env
+            .query(
+                self.canister_id(),
+                caller,
+                "search_profiles",
+                Encode!(&args).expect("Failed to encode search_profiles args"),
+            )
+            .await
+            .expect("Failed to call search_profiles")
     }
 
     pub async fn whoami(&self, user: Principal) -> WhoAmIResponse {

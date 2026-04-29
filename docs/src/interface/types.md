@@ -208,20 +208,25 @@ type RetrySignUpError = variant {
 
 ### UserCanisterStatus
 
-The status of a user's canister, indicating whether it is active, pending
-creation, or failed to create. Used in the
-[WhoAmI](#whoami) response.
+The lifecycle state of a user's canister. Used in the [WhoAmI](#whoami)
+response and as the eligibility filter for [SearchProfiles](#searchprofiles).
 
 - **Active**: the canister is created and operational.
 - **CreationPending**: canister creation is in progress.
 - **CreationFailed**: canister creation failed; the user may retry via
   `retry_sign_up`.
+- **DeletionPending**: the user has requested account deletion and the
+  canister is being torn down asynchronously.
+- **Suspended**: a moderator has suspended the user; the canister exists
+  but is hidden from public discovery.
 
 ```candid
 type UserCanisterStatus = variant {
   Active;
   CreationPending;
   CreationFailed;
+  DeletionPending;
+  Suspended;
 };
 ```
 
@@ -392,23 +397,41 @@ type SuspendError = variant {
 
 ### SearchProfiles
 
-Request, response, and error types for the `search_profiles` method. Searches
-registered user profiles by a text query with pagination support.
+Request, response, and error types for the `search_profiles` query. Searches
+registered user handles by case-insensitive substring match with pagination.
 
-| Field    | Description                                      |
-| -------- | ------------------------------------------------ |
-| `query`  | Free-text search string matched against handles. |
-| `offset` | Number of results to skip (for pagination).      |
-| `limit`  | Maximum number of results to return.             |
+The `query` is sanitized before matching: a leading `@` is stripped,
+whitespace is trimmed, and the string is lowercased — the same pipeline
+applied to handles on insert. So `@Alice`, `alice`, and `  ALICE  ` all
+match the handle `alice`.
+
+Only users with `canister_status = Active` and a non-null `canister_id`
+are returned. `CreationPending`, `CreationFailed`, `DeletionPending`, and
+`Suspended` users are excluded by construction.
+
+An empty `query` returns all eligible users, paginated.
+
+| Field    | Description                                              |
+| :------- | :------------------------------------------------------- |
+| `query`  | Free-text search string matched against handles.         |
+| `offset` | Number of results to skip (for pagination).              |
+| `limit`  | Maximum results to return; must be in `1..=50`.          |
 
 Each result entry contains:
 
 | Field         | Description                                |
-| ------------- | ------------------------------------------ |
+| :------------ | :----------------------------------------- |
 | `handle`      | The matched user's handle.                 |
 | `canister_id` | Principal of the matched user's canister.  |
 
-- **Unauthorized**: the caller is not permitted to search profiles.
+Errors:
+
+- **BadArgs**: the request was rejected (`limit == 0`, `limit > 50`, or
+  the sanitized query failed handle validation). In practice the canister
+  traps on these inputs at message-inspect time; the variant is reserved
+  for parity with other endpoints.
+- **Internal**: an internal storage error occurred while running the
+  query.
 
 ```candid
 type SearchProfilesArgs = record {
@@ -428,7 +451,8 @@ type SearchProfilesResponse = variant {
 };
 
 type SearchProfilesError = variant {
-  Unauthorized;
+  BadArgs;
+  Internal : text;
 };
 ```
 

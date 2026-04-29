@@ -1,10 +1,12 @@
 //! Canister implementation
 
+pub mod inspect;
+
 use candid::Principal;
 use did::directory::{
     DeleteProfileResponse, DirectoryInstallArgs, GetUserArgs, GetUserResponse,
-    RetryDeleteProfileResponse, RetrySignUpResponse, SignUpRequest, SignUpResponse,
-    UserCanisterResponse, WhoAmIResponse,
+    RetryDeleteProfileResponse, RetrySignUpResponse, SearchProfilesArgs, SearchProfilesResponse,
+    SignUpRequest, SignUpResponse, UserCanisterResponse, WhoAmIResponse,
 };
 use ic_dbms_canister::prelude::DBMS_CONTEXT;
 
@@ -89,6 +91,23 @@ pub fn retry_sign_up() -> RetrySignUpResponse {
     ic_utils::log!("retry_sign_up called by {caller}");
 
     crate::domain::users::retry_sign_up(caller)
+}
+
+/// Handles the `search_profiles` Directory query (UC8).
+///
+/// Validates the request via [`crate::api::inspect::inspect_search_profiles`]
+/// (limit bounds + sanitized handle validity). On invalid arguments it traps,
+/// since `inspect_message` does not gate query calls — this is the defensive
+/// path for direct query invocations.
+///
+/// Returns matching Active users with a canister id; substring case-insensitive
+/// match over `users.handle`. See [`crate::domain::users::search_profiles`].
+pub fn search_profiles(args: SearchProfilesArgs) -> SearchProfilesResponse {
+    if let Err(err) = crate::api::inspect::inspect_search_profiles(&args) {
+        ic_utils::trap!("Invalid search profiles arguments: {err}");
+    }
+
+    crate::domain::users::search_profiles(args)
 }
 
 /// Handles the `sign_up` method call to register a new user in the directory, creating a User Canister

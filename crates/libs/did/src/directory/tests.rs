@@ -241,7 +241,7 @@ fn test_should_roundtrip_search_profiles_response_ok() {
 
 #[test]
 fn test_should_roundtrip_search_profiles_response_err() {
-    let resp = SearchProfilesResponse::Err(SearchProfilesError::Unauthorized);
+    let resp = SearchProfilesResponse::Err(SearchProfilesError::Internal("err".to_string()));
     let bytes = Encode!(&resp).unwrap();
     let decoded = Decode!(&bytes, SearchProfilesResponse).unwrap();
     assert_eq!(resp, decoded);
