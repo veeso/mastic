@@ -2,15 +2,7 @@
 
 pub mod inspect;
 
-use did::user::{
-    AcceptFollowArgs, AcceptFollowResponse, EmitDeleteProfileActivityResponse, FollowUserArgs,
-    FollowUserResponse, GetFollowRequestsArgs, GetFollowRequestsResponse, GetFollowersArgs,
-    GetFollowersResponse, GetFollowingArgs, GetFollowingResponse, GetProfileResponse,
-    GetStatusesArgs, GetStatusesResponse, PublishStatusArgs, PublishStatusResponse, ReadFeedArgs,
-    ReadFeedResponse, ReceiveActivityArgs, ReceiveActivityResponse, RejectFollowArgs,
-    RejectFollowResponse, UnfollowUserArgs, UnfollowUserResponse, UpdateProfileArgs,
-    UpdateProfileResponse, UserInstallArgs,
-};
+use did::user::*;
 use ic_dbms_canister::prelude::DBMS_CONTEXT;
 
 use crate::schema::Schema;
@@ -95,6 +87,17 @@ pub async fn accept_follow(args: AcceptFollowArgs) -> AcceptFollowResponse {
     crate::domain::follower::accept_follow(args).await
 }
 
+/// Emit a `Delete(Person)` activity to followers on profile deletion.
+///
+/// This function can only be called by the directory canister.
+pub async fn emit_delete_profile_activity() -> EmitDeleteProfileActivityResponse {
+    if !inspect::is_directory_canister(ic_utils::caller()) {
+        ic_utils::trap!("Only the directory canister can emit delete profile activity");
+    }
+
+    crate::domain::profile::emit_delete_profile_activity().await
+}
+
 /// Follows another user.
 ///
 /// This function can only be called by the owner of the canister.
@@ -125,6 +128,11 @@ pub fn get_following(args: GetFollowingArgs) -> GetFollowingResponse {
     crate::domain::following::get_following(args)
 }
 
+/// Likes a status.
+pub fn get_liked(args: GetLikedArgs) -> GetLikedResponse {
+    crate::domain::liked::get_liked(args)
+}
+
 /// Gets the user profile.
 pub fn get_profile() -> GetProfileResponse {
     crate::domain::profile::get_profile()
@@ -135,6 +143,16 @@ pub async fn get_statuses(args: GetStatusesArgs) -> GetStatusesResponse {
     let caller = ic_utils::caller();
 
     crate::domain::status::get_statuses(args, caller).await
+}
+
+/// Likes a status.
+pub async fn like_status(args: LikeStatusArgs) -> LikeStatusResponse {
+    let caller = ic_utils::caller();
+    if !inspect::is_owner(caller) {
+        ic_utils::trap!("Only the owner can like statuses");
+    }
+
+    crate::domain::liked::like_status(args).await
 }
 
 /// Publishes a new status.
@@ -177,17 +195,6 @@ pub async fn reject_follow(args: RejectFollowArgs) -> RejectFollowResponse {
     crate::domain::follower::reject_follow(args).await
 }
 
-/// Emit a `Delete(Person)` activity to followers on profile deletion.
-///
-/// This function can only be called by the directory canister.
-pub async fn emit_delete_profile_activity() -> EmitDeleteProfileActivityResponse {
-    if !inspect::is_directory_canister(ic_utils::caller()) {
-        ic_utils::trap!("Only the directory canister can emit delete profile activity");
-    }
-
-    crate::domain::profile::emit_delete_profile_activity().await
-}
-
 /// Unfollows a user.
 pub async fn unfollow_user(args: UnfollowUserArgs) -> UnfollowUserResponse {
     if !inspect::is_owner(ic_utils::caller()) {
@@ -195,6 +202,16 @@ pub async fn unfollow_user(args: UnfollowUserArgs) -> UnfollowUserResponse {
     }
 
     crate::domain::following::unfollow_user(args).await
+}
+
+/// Unlikes a status.
+pub async fn unlike_status(args: UnlikeStatusArgs) -> UnlikeStatusResponse {
+    let caller = ic_utils::caller();
+    if !inspect::is_owner(caller) {
+        ic_utils::trap!("Only the owner can unlike statuses");
+    }
+
+    crate::domain::liked::unlike_status(args).await
 }
 
 /// Updates the user's profile.

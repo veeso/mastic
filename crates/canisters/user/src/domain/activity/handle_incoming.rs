@@ -9,6 +9,7 @@ use crate::domain::follow_request::FollowRequestRepository;
 use crate::domain::follower::FollowerRepository;
 use crate::domain::following::FollowingRepository;
 use crate::domain::snowflake::Snowflake;
+use crate::domain::status::StatusRepository;
 use crate::error::CanisterError;
 use crate::schema::{
     ActivityType as DbActivityType, FeedEntry, FeedEntryInsertRequest, FeedSource, FollowStatus,
@@ -32,6 +33,7 @@ pub fn handle_incoming(
         ActivityType::Follow => handle_follow(&activity),
         ActivityType::Accept => handle_accept(&activity),
         ActivityType::Reject => handle_reject(&activity),
+        ActivityType::Like => handle_like(&activity),
         ActivityType::Undo => handle_undo(&activity),
         other => {
             // Unknown / not-yet-implemented activity types are silently accepted.
@@ -192,12 +194,15 @@ fn handle_reject(activity: &Activity) -> Result<(), ReceiveActivityError> {
         .map(|_| ())
 }
 
-/// Handle an incoming `Undo(Follow)` activity.
+/// Handle an incoming `Undo(Follow)` or `Undo(Like)` activity.
 ///
-/// Removes the sender from the `followers` table (accepted inbound follow)
-/// and from the `follow_requests` table (pending inbound follow). Idempotent:
-/// missing entries do not produce an error. `Undo` of any inner activity
-/// other than `Follow` is silently ignored (out of scope here).
+/// - `Undo(Follow)`: removes the sender from the `followers` table
+///   (accepted inbound follow) and from the `follow_requests` table
+///   (pending inbound follow). Idempotent: missing entries do not produce
+///   an error.
+/// - `Undo(Like)`: decrements the cached `like_count` of the targeted local
+///   status when the URI points at one of our statuses; ignored otherwise.
+/// - Any other inner activity is silently accepted but not acted on.
 fn handle_undo(activity: &Activity) -> Result<(), ReceiveActivityError> {
     let sender_uri = activity
         .actor
@@ -209,26 +214,119 @@ fn handle_undo(activity: &Activity) -> Result<(), ReceiveActivityError> {
         return Err(ReceiveActivityError::ProcessingFailed);
     };
 
-    if inner.base.kind != ActivityType::Follow {
-        ic_utils::log!(
-            "handle_incoming: ignoring Undo of unsupported inner type: {:?}",
-            inner.base.kind
-        );
+    match inner.base.kind {
+        ActivityType::Follow => {
+            ic_utils::log!("handle_incoming: Undo(Follow) from {sender_uri}");
+
+            FollowerRepository::delete_by_actor_uri(sender_uri).map_err(|e| {
+                ic_utils::log!("handle_incoming: failed to delete follower: {e}");
+                ReceiveActivityError::Internal(e.to_string())
+            })?;
+            FollowRequestRepository::delete_by_actor_uri(sender_uri).map_err(|e| {
+                ic_utils::log!("handle_incoming: failed to delete follow request: {e}");
+                ReceiveActivityError::Internal(e.to_string())
+            })?;
+            Ok(())
+        }
+        ActivityType::Like => handle_undo_like(inner, sender_uri),
+        other => {
+            ic_utils::log!("handle_incoming: ignoring Undo of unsupported inner type: {other:?}");
+            Ok(())
+        }
+    }
+}
+
+/// Extract the status URI targeted by a `Like` activity, accepting either
+/// `object` as a bare id string or a wrapped object whose `id` is the URI.
+fn extract_like_target_uri(activity: &Activity) -> Option<String> {
+    match activity.object.as_ref()? {
+        ActivityObject::Id(uri) => Some(uri.clone()),
+        ActivityObject::Object(obj) => obj.id.clone(),
+        ActivityObject::Activity(_) | ActivityObject::Actor(_) => None,
+    }
+}
+
+/// Handle an incoming `Like` activity.
+///
+/// Increments the cached `like_count` on the targeted local status. The
+/// status URI is parsed against this canister's `public_url`; URIs that
+/// point at a different host or a different local handle are ignored.
+/// We cannot authoritatively prove that a remote sender's `Like` actually
+/// references a status we own beyond URI matching, so the count is
+/// best-effort.
+///
+/// Idempotency note: ActivityPub does not require unique delivery, so the
+/// same `Like` may be received multiple times. We have no `(actor, status)`
+/// table to deduplicate against — the cached count is a hint, not a
+/// reconciled total.
+fn handle_like(activity: &Activity) -> Result<(), ReceiveActivityError> {
+    let actor_uri = activity
+        .actor
+        .as_deref()
+        .ok_or(ReceiveActivityError::ProcessingFailed)?;
+    let Some(status_uri) = extract_like_target_uri(activity) else {
+        ic_utils::log!("handle_incoming: Like missing object URI");
+        return Err(ReceiveActivityError::ProcessingFailed);
+    };
+    ic_utils::log!("handle_incoming: Like from {actor_uri} on {status_uri}");
+
+    let Some((_handle, id)) = parse_local_status(&status_uri)? else {
+        ic_utils::log!("handle_incoming: Like target {status_uri} is not a local status");
         return Ok(());
+    };
+
+    if !StatusRepository::increment_like_count(id).map_err(|e| {
+        ic_utils::log!("handle_incoming: failed to increment like_count: {e}");
+        ReceiveActivityError::Internal(e.to_string())
+    })? {
+        ic_utils::log!("handle_incoming: Like target status {id} not found, ignoring");
+    }
+    Ok(())
+}
+
+/// Handle an `Undo(Like)` body: decrement the cached `like_count` if the
+/// inner activity refers to a local status. Ignored otherwise.
+fn handle_undo_like(inner: &Activity, sender_uri: &str) -> Result<(), ReceiveActivityError> {
+    let Some(status_uri) = extract_like_target_uri(inner) else {
+        ic_utils::log!("handle_incoming: Undo(Like) missing object URI");
+        return Err(ReceiveActivityError::ProcessingFailed);
+    };
+    ic_utils::log!("handle_incoming: Undo(Like) from {sender_uri} on {status_uri}");
+
+    let Some((_handle, id)) = parse_local_status(&status_uri)? else {
+        ic_utils::log!("handle_incoming: Undo(Like) target {status_uri} is not local");
+        return Ok(());
+    };
+
+    if !StatusRepository::decrement_like_count(id).map_err(|e| {
+        ic_utils::log!("handle_incoming: failed to decrement like_count: {e}");
+        ReceiveActivityError::Internal(e.to_string())
+    })? {
+        ic_utils::log!("handle_incoming: Undo(Like) target status {id} not found, ignoring");
+    }
+    Ok(())
+}
+
+/// Confirm the status URI is hosted on this canister's instance and points
+/// at this user's handle, returning `(handle, id)` when so.
+fn parse_local_status(status_uri: &str) -> Result<Option<(String, u64)>, ReceiveActivityError> {
+    let parsed = crate::domain::urls::parse_local_status_uri(status_uri).map_err(|e| {
+        ic_utils::log!("handle_incoming: failed to parse status URI: {e}");
+        ReceiveActivityError::Internal(e.to_string())
+    })?;
+    let Some((handle, id)) = parsed else {
+        return Ok(None);
+    };
+
+    let own = crate::domain::profile::ProfileRepository::get_profile().map_err(|e| {
+        ic_utils::log!("handle_incoming: failed to load own profile: {e}");
+        ReceiveActivityError::Internal(e.to_string())
+    })?;
+    if handle != own.handle.0 {
+        return Ok(None);
     }
 
-    ic_utils::log!("handle_incoming: Undo(Follow) from {sender_uri}");
-
-    FollowerRepository::delete_by_actor_uri(sender_uri).map_err(|e| {
-        ic_utils::log!("handle_incoming: failed to delete follower: {e}");
-        ReceiveActivityError::Internal(e.to_string())
-    })?;
-    FollowRequestRepository::delete_by_actor_uri(sender_uri).map_err(|e| {
-        ic_utils::log!("handle_incoming: failed to delete follow request: {e}");
-        ReceiveActivityError::Internal(e.to_string())
-    })?;
-
-    Ok(())
+    Ok(Some((handle, id)))
 }
 
 #[cfg(test)]
@@ -242,6 +340,7 @@ mod tests {
     use crate::domain::follow_request::FollowRequestRepository;
     use crate::domain::follower::FollowerRepository;
     use crate::domain::following::FollowingRepository;
+    use crate::domain::status::StatusRepository;
     use crate::schema::FollowStatus;
     use crate::test_utils::setup;
 
@@ -618,6 +717,7 @@ mod tests {
     fn test_should_ignore_undo_of_unsupported_inner_type() {
         setup();
 
+        // Undo(Block) is not implemented; expected to be silently accepted.
         let activity = Activity {
             base: BaseObject {
                 kind: ActivityType::Undo,
@@ -626,12 +726,12 @@ mod tests {
             actor: Some("https://mastic.social/users/alice".to_string()),
             object: Some(ActivityObject::Activity(Box::new(Activity {
                 base: BaseObject {
-                    kind: ActivityType::Like,
+                    kind: ActivityType::Block,
                     ..Default::default()
                 },
                 actor: Some("https://mastic.social/users/alice".to_string()),
                 object: Some(ActivityObject::Id(
-                    "https://mastic.social/statuses/1".to_string(),
+                    "https://mastic.social/users/rey_canisteryo".to_string(),
                 )),
                 target: None,
                 result: None,
@@ -650,5 +750,206 @@ mod tests {
         });
 
         assert_eq!(response, ReceiveActivityResponse::Ok);
+    }
+
+    fn make_like_json(actor_uri: &str, status_uri: &str) -> String {
+        let activity = Activity {
+            base: BaseObject {
+                kind: ActivityType::Like,
+                ..Default::default()
+            },
+            actor: Some(actor_uri.to_string()),
+            object: Some(ActivityObject::Id(status_uri.to_string())),
+            target: None,
+            result: None,
+            origin: None,
+            instrument: None,
+        };
+        serde_json::to_string(&activity).unwrap()
+    }
+
+    fn make_undo_like_json(actor_uri: &str, status_uri: &str) -> String {
+        let activity = Activity {
+            base: BaseObject {
+                kind: ActivityType::Undo,
+                ..Default::default()
+            },
+            actor: Some(actor_uri.to_string()),
+            object: Some(ActivityObject::Activity(Box::new(Activity {
+                base: BaseObject {
+                    kind: ActivityType::Like,
+                    ..Default::default()
+                },
+                actor: Some(actor_uri.to_string()),
+                object: Some(ActivityObject::Id(status_uri.to_string())),
+                target: None,
+                result: None,
+                origin: None,
+                instrument: None,
+            }))),
+            target: None,
+            result: None,
+            origin: None,
+            instrument: None,
+        };
+        serde_json::to_string(&activity).unwrap()
+    }
+
+    #[test]
+    fn test_should_increment_like_count_on_local_like() {
+        setup();
+        crate::test_utils::insert_status(42, "Hello", did::common::Visibility::Public, 1_000_000);
+
+        let json = make_like_json(
+            "https://mastic.social/users/alice",
+            "https://mastic.social/users/rey_canisteryo/statuses/42",
+        );
+        let response = handle_incoming(ReceiveActivityArgs {
+            activity_json: json,
+        });
+        assert_eq!(response, ReceiveActivityResponse::Ok);
+
+        let status = StatusRepository::find_by_id(42)
+            .expect("should query")
+            .expect("should find");
+        assert_eq!(status.like_count.0, 1);
+    }
+
+    #[test]
+    fn test_should_decrement_like_count_on_undo_like() {
+        setup();
+        crate::test_utils::insert_status(42, "Hello", did::common::Visibility::Public, 1_000_000);
+
+        // Increment first via Like, then decrement via Undo(Like).
+        let like_json = make_like_json(
+            "https://mastic.social/users/alice",
+            "https://mastic.social/users/rey_canisteryo/statuses/42",
+        );
+        assert_eq!(
+            handle_incoming(ReceiveActivityArgs {
+                activity_json: like_json,
+            }),
+            ReceiveActivityResponse::Ok
+        );
+
+        let undo_json = make_undo_like_json(
+            "https://mastic.social/users/alice",
+            "https://mastic.social/users/rey_canisteryo/statuses/42",
+        );
+        assert_eq!(
+            handle_incoming(ReceiveActivityArgs {
+                activity_json: undo_json,
+            }),
+            ReceiveActivityResponse::Ok
+        );
+
+        let status = StatusRepository::find_by_id(42)
+            .expect("should query")
+            .expect("should find");
+        assert_eq!(status.like_count.0, 0);
+    }
+
+    #[test]
+    fn test_should_ignore_like_targeting_remote_status() {
+        setup();
+
+        let json = make_like_json(
+            "https://mastic.social/users/alice",
+            "https://other.example/users/bob/statuses/99",
+        );
+        let response = handle_incoming(ReceiveActivityArgs {
+            activity_json: json,
+        });
+        // Acknowledged but no local effect since URI is not on this instance.
+        assert_eq!(response, ReceiveActivityResponse::Ok);
+    }
+
+    #[test]
+    fn test_should_ignore_like_targeting_other_local_handle() {
+        setup();
+        crate::test_utils::insert_status(42, "Hello", did::common::Visibility::Public, 1_000_000);
+
+        let json = make_like_json(
+            "https://mastic.social/users/alice",
+            "https://mastic.social/users/someone_else/statuses/42",
+        );
+        assert_eq!(
+            handle_incoming(ReceiveActivityArgs {
+                activity_json: json,
+            }),
+            ReceiveActivityResponse::Ok
+        );
+
+        let status = StatusRepository::find_by_id(42)
+            .expect("should query")
+            .expect("should find");
+        assert_eq!(
+            status.like_count.0, 0,
+            "like_count must not change when handle does not match"
+        );
+    }
+
+    #[test]
+    fn test_should_succeed_like_when_target_status_missing() {
+        setup();
+
+        let json = make_like_json(
+            "https://mastic.social/users/alice",
+            "https://mastic.social/users/rey_canisteryo/statuses/9999",
+        );
+        assert_eq!(
+            handle_incoming(ReceiveActivityArgs {
+                activity_json: json,
+            }),
+            ReceiveActivityResponse::Ok
+        );
+    }
+
+    #[test]
+    fn test_should_saturate_undo_like_at_zero() {
+        setup();
+        crate::test_utils::insert_status(42, "Hello", did::common::Visibility::Public, 1_000_000);
+
+        let json = make_undo_like_json(
+            "https://mastic.social/users/alice",
+            "https://mastic.social/users/rey_canisteryo/statuses/42",
+        );
+        assert_eq!(
+            handle_incoming(ReceiveActivityArgs {
+                activity_json: json,
+            }),
+            ReceiveActivityResponse::Ok
+        );
+
+        let status = StatusRepository::find_by_id(42)
+            .expect("should query")
+            .expect("should find");
+        assert_eq!(status.like_count.0, 0);
+    }
+
+    #[test]
+    fn test_should_fail_like_with_missing_object() {
+        setup();
+
+        let activity = Activity {
+            base: BaseObject {
+                kind: ActivityType::Like,
+                ..Default::default()
+            },
+            actor: Some("https://mastic.social/users/alice".to_string()),
+            object: None,
+            target: None,
+            result: None,
+            origin: None,
+            instrument: None,
+        };
+        let json = serde_json::to_string(&activity).unwrap();
+
+        assert_eq!(
+            handle_incoming(ReceiveActivityArgs {
+                activity_json: json,
+            }),
+            ReceiveActivityResponse::Err(ReceiveActivityError::ProcessingFailed)
+        );
     }
 }

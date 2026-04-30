@@ -266,7 +266,7 @@ reject\_follow : (*RejectFollowArgs*) -> (*RejectFollowResponse*);
 
 undo\_boost : (*UndoBoostArgs*) -> (*UndoBoostResponse*);
 
-undo\_like : (*UndoLikeArgs*) -> (*UndoLikeResponse*);
+undo\_like : (*UnlikeStatusArgs*) -> (*UnlikeStatusResponse*);
 
 unfollow\_user : (*UnfollowUserArgs*) -> (*UnfollowUserResponse*);
 
@@ -357,10 +357,11 @@ update\_profile : (*UpdateProfileArgs*) -> (*UpdateProfileResponse*)
 ### UC10: As a User, I should be able to like a Status
 
 - **Alice** signs in and obtains her **User Canister** principal via the **Directory Canister**
-- **Alice** calls *like\_status* on her **User Canister** with the status ID
-- The **User Canister** records the like in Alice’s outbox
+- **Alice** calls *like\_status* on her **User Canister** with the status URL
+- The **User Canister** records the like in Alice’s liked collection
 - The **User Canister** sends a *Like* activity to the **Federation Canister**
 - The **Federation Canister** routes the activity to the status author’s **User Canister** (local) or forwards it via HTTP (remote)
+- *like\_status* is **idempotent**: if Alice has already liked the status, the call returns `Ok` without inserting a duplicate or re-sending the *Like* activity
 
 ### UC11: As a User, I should be able to boost a Status
 

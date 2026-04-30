@@ -86,6 +86,8 @@ async fn save_status_and_publish_to_federation(
         author: owner_actor_uri,
         created_at,
         visibility,
+        like_count: 0,
+        boost_count: 0,
     };
 
     let recipients = match visibility {
@@ -480,6 +482,8 @@ mod tests {
             author: "https://mastic.social/users/rey_canisteryo".to_string(),
             created_at: 0,
             visibility,
+            like_count: 0,
+            boost_count: 0,
         }
     }
 
@@ -491,6 +495,8 @@ mod tests {
             author: "https://mastic.social/users/rey_canisteryo".to_string(),
             created_at: 1_000_000,
             visibility: Visibility::Public,
+            like_count: 0,
+            boost_count: 0,
         };
 
         let args = make_activity(BOB_URI, &status, &[]);

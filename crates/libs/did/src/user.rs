@@ -347,23 +347,18 @@ pub enum DeleteStatusResponse {
 /// Request arguments for the `like_status` method.
 #[derive(Debug, Clone, PartialEq, Eq, CandidType, Serialize, Deserialize)]
 pub struct LikeStatusArgs {
-    /// The unique ID of the status to like.
-    pub status_id: String,
-    /// Principal of the User Canister that authored the status.
-    pub author_canister: candid::Principal,
+    /// ActivityPub URI of the status to like.
+    pub status_url: String,
 }
 
 /// Error types for the `like_status` method.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, CandidType, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, CandidType, Serialize, Deserialize)]
 pub enum LikeStatusError {
-    /// The caller is not the canister owner.
-    Unauthorized,
-    /// The caller has already liked this status.
-    AlreadyLiked,
+    Internal(String),
 }
 
 /// Response type for the `like_status` method.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, CandidType, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, CandidType, Serialize, Deserialize)]
 pub enum LikeStatusResponse {
     Ok,
     Err(LikeStatusError),
@@ -371,27 +366,23 @@ pub enum LikeStatusResponse {
 
 /// Request arguments for the `undo_like` method.
 #[derive(Debug, Clone, PartialEq, Eq, CandidType, Serialize, Deserialize)]
-pub struct UndoLikeArgs {
-    /// The unique ID of the status to unlike.
-    pub status_id: String,
-    /// Principal of the User Canister that authored the status.
-    pub author_canister: candid::Principal,
+pub struct UnlikeStatusArgs {
+    /// ActivityPub URI of the status to unlike.
+    pub status_url: String,
 }
 
 /// Error types for the `undo_like` method.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, CandidType, Serialize, Deserialize)]
-pub enum UndoLikeError {
-    /// The caller is not the canister owner.
-    Unauthorized,
-    /// No like exists for the given status.
-    NotFound,
+#[derive(Debug, Clone, PartialEq, Eq, CandidType, Serialize, Deserialize)]
+pub enum UnlikeStatusError {
+    /// Internal error occurred while undoing the like.
+    Internal(String),
 }
 
 /// Response type for the `undo_like` method.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, CandidType, Serialize, Deserialize)]
-pub enum UndoLikeResponse {
+#[derive(Debug, Clone, PartialEq, Eq, CandidType, Serialize, Deserialize)]
+pub enum UnlikeStatusResponse {
     Ok,
-    Err(UndoLikeError),
+    Err(UnlikeStatusError),
 }
 
 /// Request arguments for the `boost_status` method.
@@ -454,10 +445,9 @@ pub struct GetLikedArgs {
 }
 
 /// Error types for the `get_liked` method.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, CandidType, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, CandidType, Serialize, Deserialize)]
 pub enum GetLikedError {
-    /// The caller is not the canister owner.
-    Unauthorized,
+    Internal(String),
 }
 
 /// Response type for the `get_liked` method.

@@ -170,17 +170,20 @@ via an Undo(Follow) activity.
   - Record the like in the user's liked collection (stable memory)
   - Build a `Like` activity targeting the status
   - Send the activity to the Federation Canister
+  - **Idempotent**: if the caller has already liked the status, return
+    `Ok` without inserting a duplicate row and without re-sending the
+    `Like` activity
 - Implement `get_liked(GetLikedArgs)` query:
   - Return the paginated list of statuses liked by the user
-- Implement `undo_like(UndoLikeArgs)`:
+- Implement `undo_like(UnlikeStatusArgs)`:
   - Remove the like from the liked collection
   - Send an `Undo(Like)` activity to the Federation Canister
 - **User Canister** `receive_activity` handler: handle incoming `Like`:
   - Increment the like count on the target status
 - Handle incoming `Undo(Like)`:
   - Decrement the like count on the target status
-- Define `LikeStatusArgs`, `LikeStatusResponse`, `UndoLikeArgs`,
-  `UndoLikeResponse`, `GetLikedArgs`, `GetLikedResponse` in the `did` crate
+- Define `LikeStatusArgs`, `LikeStatusResponse`, `UnlikeStatusArgs`,
+  `UnlikeStatusResponse`, `GetLikedArgs`, `GetLikedResponse` in the `did` crate
 - Add `Like` to `ActivityType`
 
 **Acceptance Criteria:**
@@ -190,8 +193,12 @@ via an Undo(Follow) activity.
 - The author's status like count is incremented
 - `get_liked` returns the correct list
 - Undoing a like removes it and sends an `Undo(Like)` activity
-- Cannot like the same status twice
+- Liking a status the caller already liked is idempotent: returns `Ok`,
+  does not insert a duplicate, and does not re-send the `Like` activity
 - Integration test: Alice likes Bob's status, verify like count and liked list
+- Integration test: Alice calls `like_status` twice on the same status,
+  verify second call returns `Ok`, liked list contains a single entry,
+  and Bob's status like count is incremented exactly once
 
 ### WI-1.7: Implement User Canister - boost status (UC11)
 

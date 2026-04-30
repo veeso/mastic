@@ -103,6 +103,9 @@ fn hydrate_outbox(db: &impl Database, id: u64, owner_actor_uri: &str) -> Option<
     let db_vis: DbVisibility = find_value(row, "visibility")?.as_custom_type()?;
     let created_at = find_value(row, "created_at")?.as_uint64()?.0;
 
+    let like_count = find_value(row, "like_count")?.as_uint64()?.0;
+    let boost_count = find_value(row, "boost_count")?.as_uint64()?.0;
+
     Some(FeedItem {
         status: Status {
             id,
@@ -110,6 +113,8 @@ fn hydrate_outbox(db: &impl Database, id: u64, owner_actor_uri: &str) -> Option<
             author: owner_actor_uri.to_string(),
             created_at,
             visibility: db_vis.into(),
+            like_count,
+            boost_count,
         },
         boosted_by: None, // FIXME: eventually support boosts in M1
     })
@@ -149,6 +154,8 @@ fn hydrate_inbox(db: &impl Database, id: u64, owner_actor_uri: &str) -> Option<F
             author: author_uri,
             created_at,
             visibility,
+            like_count: 0,
+            boost_count: 0,
         },
         boosted_by: None, // FIXME: eventually support boosts in M1
     })

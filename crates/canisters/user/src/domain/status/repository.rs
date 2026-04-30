@@ -9,7 +9,7 @@ use crate::domain::snowflake::Snowflake;
 use crate::error::CanisterResult;
 use crate::schema::{
     FeedEntry, FeedEntryInsertRequest, FeedSource, Schema, Status, StatusInsertRequest,
-    StatusRecord,
+    StatusRecord, StatusUpdateRequest,
 };
 
 /// Interface for the [`Status`] repository.
@@ -85,6 +85,66 @@ impl StatusRepository {
             let results = db.select::<Status>(query.build())?;
             Ok(results.into_iter().map(Self::record_to_status).collect())
         })
+    }
+
+    /// Look up a single [`Status`] by its [`Snowflake`] id, returning [`None`]
+    /// if no row matches.
+    pub fn find_by_id(id: u64) -> CanisterResult<Option<Status>> {
+        DBMS_CONTEXT.with(|ctx| {
+            let db = WasmDbmsDatabase::oneshot(ctx, Schema);
+            let rows = db.select::<Status>(
+                Query::builder()
+                    .all()
+                    .and_where(Filter::eq(Status::primary_key(), Value::from(id)))
+                    .limit(1)
+                    .build(),
+            )?;
+            Ok(rows.into_iter().next().map(Self::record_to_status))
+        })
+    }
+
+    /// Increment the cached `like_count` of the [`Status`] with the given id.
+    ///
+    /// Returns `Ok(true)` when the row exists and was updated, `Ok(false)`
+    /// when no row matched (silently ignored: a missing target means we are
+    /// not the author of that status, so the counter does not concern us).
+    pub fn increment_like_count(id: u64) -> CanisterResult<bool> {
+        Self::adjust_like_count(id, 1, true)
+    }
+
+    /// Saturating-decrement the cached `like_count` of the [`Status`] with the
+    /// given id. Decrementing from `0` is a no-op rather than an underflow.
+    ///
+    /// Returns `Ok(true)` when the row exists, `Ok(false)` when no row matched.
+    pub fn decrement_like_count(id: u64) -> CanisterResult<bool> {
+        Self::adjust_like_count(id, 1, false)
+    }
+
+    fn adjust_like_count(id: u64, delta: u64, increment: bool) -> CanisterResult<bool> {
+        let Some(status) = Self::find_by_id(id)? else {
+            return Ok(false);
+        };
+        let current = status.like_count.0;
+        let next = if increment {
+            current.saturating_add(delta)
+        } else {
+            current.saturating_sub(delta)
+        };
+        if next == current {
+            return Ok(true);
+        }
+
+        let patch = StatusUpdateRequest {
+            like_count: Some(next.into()),
+            where_clause: Some(Filter::eq(Status::primary_key(), Value::from(id))),
+            ..Default::default()
+        };
+
+        DBMS_CONTEXT.with(|ctx| {
+            let db = WasmDbmsDatabase::oneshot(ctx, Schema);
+            db.update::<Status>(patch)
+        })?;
+        Ok(true)
     }
 
     fn record_to_status(record: StatusRecord) -> Status {
