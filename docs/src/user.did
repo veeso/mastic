@@ -108,6 +108,17 @@ type GetFollowersError = variant {
 };
 // Response type for the `get_followers` method.
 type GetFollowersResponse = variant { Ok : vec text; Err : GetFollowersError };
+// Request arguments for the `get_liked` method.
+type GetLikedArgs = record {
+  // Number of results to skip (for pagination).
+  offset : nat64;
+  // Maximum number of results to return.
+  limit : nat64;
+};
+// Error types for the `get_liked` method.
+type GetLikedError = variant { Internal : text };
+// Response type for the `get_liked` method.
+type GetLikedResponse = variant { Ok : vec text; Err : GetLikedError };
 // Error types for the `get_profile` method.
 type GetProfileError = variant {
   // Internal error occurred while fetching the profile.
@@ -117,13 +128,6 @@ type GetProfileError = variant {
 };
 // Response type for the `get_profile` method.
 type GetProfileResponse = variant { Ok : UserProfile; Err : GetProfileError };
-// Request arguments for the `get_statuses` method.
-type GetStatusesArgs = record {
-  // Number of results to skip (for pagination).
-  offset : nat64;
-  // Maximum number of results to return.
-  limit : nat64;
-};
 // Error types for the `get_statuses` method.
 type GetStatusesError = variant {
   // Internal error occurred while fetching statuses.
@@ -133,6 +137,13 @@ type GetStatusesError = variant {
 };
 // Response type for the `get_statuses` method.
 type GetStatusesResponse = variant { Ok : vec Status; Err : GetStatusesError };
+// Request arguments for the `like_status` method.
+type LikeStatusArgs = record {
+  // ActivityPub URI of the status to like.
+  status_url : text;
+};
+// Response type for the `like_status` method.
+type LikeStatusResponse = variant { Ok; Err : GetLikedError };
 // Request arguments for the `publish_status` method.
 type PublishStatusArgs = record {
   // The text content of the new post.
@@ -162,13 +173,6 @@ type PublishStatusError = variant {
 // Response type for the `publish_status` method.
 // On success, returns the created [`Status`] with its assigned ID and timestamp.
 type PublishStatusResponse = variant { Ok : Status; Err : PublishStatusError };
-// Request arguments for the `read_feed` method.
-type ReadFeedArgs = record {
-  // Number of results to skip (for pagination).
-  offset : nat64;
-  // Maximum number of results to return.
-  limit : nat64;
-};
 // Error types for the `read_feed` method.
 type ReadFeedError = variant {
   // Internal error occurred while reading the feed.
@@ -202,20 +206,17 @@ type Status = record {
   id : nat64;
   // The text content of the status.
   content : text;
+  // Cached count of `Like` activities received for this status.
+  like_count : nat64;
   // Timestamp (milliseconds since epoch) of when the status was created.
   created_at : nat64;
   // The actor URI of the status author (e.g. `https://mastic.social/users/alice`).
   author : text;
   // The visibility setting of the status, controlling its audience.
   visibility : Visibility;
+  // Cached count of `Announce` (boost) activities received for this status.
+  boost_count : nat64;
 };
-// Error types for the `unfollow_user` method.
-type UnfollowUserError = variant {
-  // Internal error occurred while processing the unfollow request.
-  Internal : text;
-};
-// Response type for the `unfollow_user` method.
-type UnfollowUserResponse = variant { Ok; Err : UnfollowUserError };
 // Request arguments for the `update_profile` method.
 // All fields are optional; only provided fields are updated.
 type UpdateProfileArgs = record {
@@ -278,12 +279,15 @@ service : (UserInstallArgs) -> {
     ) query;
   get_followers : (GetFollowersArgs) -> (GetFollowersResponse) query;
   get_following : (GetFollowersArgs) -> (GetFollowersResponse) query;
+  get_liked : (GetLikedArgs) -> (GetLikedResponse) query;
   get_profile : () -> (GetProfileResponse) query;
-  get_statuses : (GetStatusesArgs) -> (GetStatusesResponse) composite_query;
+  get_statuses : (GetLikedArgs) -> (GetStatusesResponse) composite_query;
+  like_status : (LikeStatusArgs) -> (LikeStatusResponse);
   publish_status : (PublishStatusArgs) -> (PublishStatusResponse);
-  read_feed : (ReadFeedArgs) -> (ReadFeedResponse) query;
+  read_feed : (GetLikedArgs) -> (ReadFeedResponse) query;
   receive_activity : (ReceiveActivityArgs) -> (ReceiveActivityResponse);
   reject_follow : (AcceptFollowArgs) -> (AcceptFollowResponse);
-  unfollow_user : (AcceptFollowArgs) -> (UnfollowUserResponse);
-  update_profile : (UpdateProfileArgs) -> (UnfollowUserResponse);
+  unfollow_user : (AcceptFollowArgs) -> (LikeStatusResponse);
+  unlike_status : (LikeStatusArgs) -> (LikeStatusResponse);
+  update_profile : (UpdateProfileArgs) -> (LikeStatusResponse);
 }

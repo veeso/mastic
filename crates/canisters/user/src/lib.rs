@@ -8,15 +8,7 @@ mod settings;
 #[cfg(test)]
 mod test_utils;
 
-use did::user::{
-    AcceptFollowArgs, AcceptFollowResponse, EmitDeleteProfileActivityResponse, FollowUserArgs,
-    FollowUserResponse, GetFollowRequestsArgs, GetFollowRequestsResponse, GetFollowersArgs,
-    GetFollowersResponse, GetFollowingArgs, GetFollowingResponse, GetProfileResponse,
-    GetStatusesArgs, GetStatusesResponse, PublishStatusArgs, PublishStatusResponse, ReadFeedArgs,
-    ReadFeedResponse, ReceiveActivityArgs, ReceiveActivityResponse, RejectFollowArgs,
-    RejectFollowResponse, UnfollowUserArgs, UnfollowUserResponse, UpdateProfileArgs,
-    UpdateProfileResponse, UserInstallArgs,
-};
+use did::user::*;
 
 #[ic_cdk::init]
 fn init(args: UserInstallArgs) {
@@ -64,6 +56,11 @@ fn get_following(args: GetFollowingArgs) -> GetFollowingResponse {
 }
 
 #[ic_cdk::query]
+fn get_liked(args: GetLikedArgs) -> GetLikedResponse {
+    api::get_liked(args)
+}
+
+#[ic_cdk::query]
 fn get_profile() -> GetProfileResponse {
     api::get_profile()
 }
@@ -71,6 +68,11 @@ fn get_profile() -> GetProfileResponse {
 #[ic_cdk::query(composite = true)]
 async fn get_statuses(args: GetStatusesArgs) -> GetStatusesResponse {
     api::get_statuses(args).await
+}
+
+#[ic_cdk::update]
+async fn like_status(args: LikeStatusArgs) -> LikeStatusResponse {
+    api::like_status(args).await
 }
 
 #[ic_cdk::update]
@@ -96,6 +98,11 @@ async fn reject_follow(args: RejectFollowArgs) -> RejectFollowResponse {
 #[ic_cdk::update]
 async fn unfollow_user(args: UnfollowUserArgs) -> UnfollowUserResponse {
     api::unfollow_user(args).await
+}
+
+#[ic_cdk::update]
+async fn unlike_status(args: UnlikeStatusArgs) -> UnlikeStatusResponse {
+    api::unlike_status(args).await
 }
 
 #[ic_cdk::update]

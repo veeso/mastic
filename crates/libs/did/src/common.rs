@@ -53,6 +53,10 @@ pub struct Status {
     pub created_at: u64,
     /// The visibility setting of the status, controlling its audience.
     pub visibility: Visibility,
+    /// Cached count of `Like` activities received for this status.
+    pub like_count: u64,
+    /// Cached count of `Announce` (boost) activities received for this status.
+    pub boost_count: u64,
 }
 
 /// A single entry in a user's feed. Wraps a [`Status`] and optionally indicates

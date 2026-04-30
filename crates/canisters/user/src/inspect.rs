@@ -7,10 +7,12 @@ pub fn inspect() {
         "accept_follow"
         | "follow_user"
         | "get_follow_requests"
+        | "like_status"
         | "publish_status"
         | "read_feed"
         | "reject_follow"
         | "unfollow_user"
+        | "unlike_status"
         | "update_profile" => {
             let caller = ic_utils::caller();
             if !crate::api::inspect::is_owner(caller) {

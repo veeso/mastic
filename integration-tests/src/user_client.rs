@@ -3,9 +3,10 @@ use did::common::Visibility;
 use did::user::{
     AcceptFollowArgs, AcceptFollowResponse, FollowUserArgs, FollowUserResponse,
     GetFollowRequestsArgs, GetFollowRequestsResponse, GetFollowersArgs, GetFollowersResponse,
-    GetFollowingArgs, GetFollowingResponse, GetProfileResponse, GetStatusesArgs,
-    GetStatusesResponse, PublishStatusArgs, PublishStatusResponse, ReadFeedArgs, ReadFeedResponse,
-    RejectFollowArgs, RejectFollowResponse, UnfollowUserArgs, UnfollowUserResponse,
+    GetFollowingArgs, GetFollowingResponse, GetLikedArgs, GetLikedResponse, GetProfileResponse,
+    GetStatusesArgs, GetStatusesResponse, LikeStatusArgs, LikeStatusResponse, PublishStatusArgs,
+    PublishStatusResponse, ReadFeedArgs, ReadFeedResponse, RejectFollowArgs, RejectFollowResponse,
+    UnfollowUserArgs, UnfollowUserResponse, UnlikeStatusArgs, UnlikeStatusResponse,
     UpdateProfileArgs, UpdateProfileResponse,
 };
 use pocket_ic_harness::PocketIcTestEnv;
@@ -211,6 +212,52 @@ impl UserClient<'_> {
             )
             .await
             .expect("Failed to call get_statuses")
+    }
+
+    pub async fn like_status(&self, caller: Principal, status_url: String) -> LikeStatusResponse {
+        let args = LikeStatusArgs { status_url };
+
+        self.env
+            .update(
+                self.canister_id,
+                caller,
+                "like_status",
+                Encode!(&args).expect("Failed to encode like_status arguments"),
+            )
+            .await
+            .expect("Failed to call like_status")
+    }
+
+    pub async fn unlike_status(
+        &self,
+        caller: Principal,
+        status_url: String,
+    ) -> UnlikeStatusResponse {
+        let args = UnlikeStatusArgs { status_url };
+
+        self.env
+            .update(
+                self.canister_id,
+                caller,
+                "unlike_status",
+                Encode!(&args).expect("Failed to encode unlike_status arguments"),
+            )
+            .await
+            .expect("Failed to call unlike_status")
+    }
+
+    pub async fn get_liked(&self, caller: Principal, offset: u64, limit: u64) -> GetLikedResponse {
+        let args = GetLikedArgs { offset, limit };
+
+        self.env
+            .query(
+                self.canister_id,
+                caller,
+                "get_liked",
+                Encode!(&args).expect("Failed to encode get_liked arguments"),
+            )
+            .await
+            .expect("Failed to call get_liked")
     }
 
     pub async fn update_profile(

@@ -33,7 +33,7 @@
     - [PublishStatus](#publishstatus)
     - [DeleteStatus](#deletestatus)
     - [LikeStatus](#likestatus)
-    - [UndoLike](#undolike)
+    - [UnlikeStatus](#undolike)
     - [BoostStatus](#booststatus)
     - [UndoBoost](#undoboost)
     - [GetLiked](#getliked)
@@ -93,21 +93,25 @@ type UserProfile = record {
 A single post authored by a user. Each status has a unique ID, content body,
 author principal, creation timestamp, and visibility setting.
 
-| Field        | Description                                                       |
-| ------------ | ----------------------------------------------------------------- |
-| `id`         | Unique identifier for this status (UUID).                         |
-| `content`    | The text content of the post.                                     |
-| `author`     | Principal of the User Canister that authored the status.          |
-| `created_at` | Timestamp (nanoseconds since epoch) when the status was created.  |
-| `visibility` | Audience control for this status (see [Visibility](#visibility)). |
+| Field         | Description                                                        |
+| ------------- | ------------------------------------------------------------------ |
+| `id`          | Snowflake identifier of the status assigned by the User Canister.  |
+| `content`     | The text content of the post.                                      |
+| `author`      | ActivityPub actor URI of the status author.                        |
+| `created_at`  | Timestamp (milliseconds since epoch) when the status was created.  |
+| `visibility`  | Audience control for this status (see [Visibility](#visibility)).  |
+| `like_count`  | Cached count of `Like` activities received for this status.        |
+| `boost_count` | Cached count of `Announce` (boost) activities received.            |
 
 ```candid
 type Status = record {
-  id : text;
+  id : nat64;
   content : text;
-  author : principal;
+  author : text;
   created_at : nat64;
   visibility : Visibility;
+  like_count : nat64;
+  boost_count : nat64;
 };
 ```
 
@@ -829,18 +833,22 @@ type DeleteStatusError = variant {
 Request, response, and error types for the `like_status` method. Records a
 like on a status authored by another user.
 
-| Field              | Description                                              |
-| ------------------ | -------------------------------------------------------- |
-| `status_id`        | The unique ID of the status to like.                     |
-| `author_canister`  | Principal of the User Canister that authored the status. |
+`like_status` is **idempotent**: calling it for a status the caller has
+already liked returns `Ok` without recording a duplicate row in the
+liked collection and without re-emitting a `Like` activity. Only the
+caller (canister owner) is authorized; non-owner calls are rejected at
+the inspect layer.
 
-- **Unauthorized**: the caller is not the canister owner.
-- **AlreadyLiked**: the caller has already liked this status.
+| Field        | Description                              |
+| ------------ | ---------------------------------------- |
+| `status_url` | ActivityPub URI of the status to like.   |
+
+- **Internal**: an unexpected internal error occurred (database access
+  failure, federation dispatch failure, etc.).
 
 ```candid
 type LikeStatusArgs = record {
-  status_id : text;
-  author_canister : principal;
+  status_url : text;
 };
 
 type LikeStatusResponse = variant {
@@ -849,36 +857,33 @@ type LikeStatusResponse = variant {
 };
 
 type LikeStatusError = variant {
-  Unauthorized;
-  AlreadyLiked;
+  Internal : text;
 };
 ```
 
-### UndoLike
+### UnlikeStatus
 
 Request, response, and error types for the `undo_like` method. Removes a
 previously recorded like from a status.
 
-| Field              | Description                                              |
-| ------------------ | -------------------------------------------------------- |
-| `status_id`        | The unique ID of the status to unlike.                   |
-| `author_canister`  | Principal of the User Canister that authored the status. |
+| Field        | Description                              |
+| ------------ | ---------------------------------------- |
+| `status_url` | ActivityPub URI of the status to unlike. |
 
 - **Unauthorized**: the caller is not the canister owner.
 - **NotFound**: no like exists for the given status.
 
 ```candid
-type UndoLikeArgs = record {
-  status_id : text;
-  author_canister : principal;
+type UnlikeStatusArgs = record {
+  status_url : text;
 };
 
-type UndoLikeResponse = variant {
+type UnlikeStatusResponse = variant {
   Ok;
-  Err : UndoLikeError;
+  Err : UnlikeStatusError;
 };
 
-type UndoLikeError = variant {
+type UnlikeStatusError = variant {
   Unauthorized;
   NotFound;
 };

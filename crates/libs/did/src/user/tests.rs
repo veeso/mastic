@@ -343,6 +343,8 @@ fn test_should_roundtrip_publish_status_response_ok() {
         author: "https://mastic.social/users/alice".to_string(),
         created_at: 42,
         visibility: crate::common::Visibility::Public,
+        like_count: 0,
+        boost_count: 0,
     });
     let bytes = Encode!(&resp).unwrap();
     let decoded = Decode!(&bytes, PublishStatusResponse).unwrap();
@@ -396,8 +398,7 @@ fn test_should_roundtrip_delete_status_response_err() {
 #[test]
 fn test_should_roundtrip_like_status_args() {
     let args = LikeStatusArgs {
-        status_id: "test-id".to_string(),
-        author_canister: candid::Principal::anonymous(),
+        status_url: "https://example.com/users/alice/statuses/123".to_string(),
     };
     let bytes = Encode!(&args).unwrap();
     let decoded = Decode!(&bytes, LikeStatusArgs).unwrap();
@@ -414,41 +415,36 @@ fn test_should_roundtrip_like_status_response_ok() {
 
 #[test]
 fn test_should_roundtrip_like_status_response_err() {
-    for error in [LikeStatusError::Unauthorized, LikeStatusError::AlreadyLiked] {
-        let resp = LikeStatusResponse::Err(error);
-        let bytes = Encode!(&resp).unwrap();
-        let decoded = Decode!(&bytes, LikeStatusResponse).unwrap();
-        assert_eq!(resp, decoded);
-    }
+    let resp = LikeStatusResponse::Err(LikeStatusError::Internal("err".to_string()));
+    let bytes = Encode!(&resp).unwrap();
+    let decoded = Decode!(&bytes, LikeStatusResponse).unwrap();
+    assert_eq!(resp, decoded);
 }
 
 #[test]
 fn test_should_roundtrip_undo_like_args() {
-    let args = UndoLikeArgs {
-        status_id: "test-id".to_string(),
-        author_canister: candid::Principal::anonymous(),
+    let args = UnlikeStatusArgs {
+        status_url: "https://example.com/users/alice/statuses/123".to_string(),
     };
     let bytes = Encode!(&args).unwrap();
-    let decoded = Decode!(&bytes, UndoLikeArgs).unwrap();
+    let decoded = Decode!(&bytes, UnlikeStatusArgs).unwrap();
     assert_eq!(args, decoded);
 }
 
 #[test]
 fn test_should_roundtrip_undo_like_response_ok() {
-    let resp = UndoLikeResponse::Ok;
+    let resp = UnlikeStatusResponse::Ok;
     let bytes = Encode!(&resp).unwrap();
-    let decoded = Decode!(&bytes, UndoLikeResponse).unwrap();
+    let decoded = Decode!(&bytes, UnlikeStatusResponse).unwrap();
     assert_eq!(resp, decoded);
 }
 
 #[test]
 fn test_should_roundtrip_undo_like_response_err() {
-    for error in [UndoLikeError::Unauthorized, UndoLikeError::NotFound] {
-        let resp = UndoLikeResponse::Err(error);
-        let bytes = Encode!(&resp).unwrap();
-        let decoded = Decode!(&bytes, UndoLikeResponse).unwrap();
-        assert_eq!(resp, decoded);
-    }
+    let resp = UnlikeStatusResponse::Err(UnlikeStatusError::Internal("test".to_string()));
+    let bytes = Encode!(&resp).unwrap();
+    let decoded = Decode!(&bytes, UnlikeStatusResponse).unwrap();
+    assert_eq!(resp, decoded);
 }
 
 #[test]
@@ -533,7 +529,7 @@ fn test_should_roundtrip_get_liked_response_ok() {
 
 #[test]
 fn test_should_roundtrip_get_liked_response_err() {
-    let resp = GetLikedResponse::Err(GetLikedError::Unauthorized);
+    let resp = GetLikedResponse::Err(GetLikedError::Internal("test".to_string()));
     let bytes = Encode!(&resp).unwrap();
     let decoded = Decode!(&bytes, GetLikedResponse).unwrap();
     assert_eq!(resp, decoded);
@@ -558,6 +554,8 @@ fn test_should_roundtrip_get_statuses_response_ok() {
         author: "https://mastic.social/users/alice".to_string(),
         created_at: 42,
         visibility: crate::common::Visibility::Public,
+        like_count: 0,
+        boost_count: 0,
     }]);
     let bytes = Encode!(&resp).unwrap();
     let decoded = Decode!(&bytes, GetStatusesResponse).unwrap();
@@ -597,6 +595,8 @@ fn test_should_roundtrip_read_feed_response_ok() {
             author: "https://mastic.social/users/alice".to_string(),
             created_at: 42,
             visibility: crate::common::Visibility::Public,
+            like_count: 0,
+            boost_count: 0,
         },
         boosted_by: None,
     }]);

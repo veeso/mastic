@@ -54,6 +54,8 @@ fn test_should_roundtrip_status() {
         author: "https://mastic.social/users/alice".to_string(),
         created_at: 1_000_000_000,
         visibility: Visibility::Public,
+        like_count: 0,
+        boost_count: 0,
     };
     let bytes = Encode!(&status).unwrap();
     let decoded = Decode!(&bytes, Status).unwrap();
@@ -69,6 +71,8 @@ fn test_should_roundtrip_feed_item() {
             author: "https://mastic.social/users/alice".to_string(),
             created_at: 42,
             visibility: Visibility::FollowersOnly,
+            like_count: 0,
+            boost_count: 0,
         },
         boosted_by: Some("https://mastic.social/users/bob".to_string()),
     };
@@ -86,6 +90,8 @@ fn test_should_roundtrip_feed_item_without_boost() {
             author: "https://mastic.social/users/alice".to_string(),
             created_at: 42,
             visibility: Visibility::Unlisted,
+            like_count: 0,
+            boost_count: 0,
         },
         boosted_by: None,
     };

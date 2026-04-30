@@ -10,6 +10,7 @@ pub mod feed;
 pub mod follow_request;
 pub mod follower;
 pub mod following;
+pub mod liked;
 pub mod profile;
 pub mod snowflake;
 pub mod status;
