@@ -38,13 +38,17 @@ pub struct HashtagValidator;
 impl HashtagValidator {
     /// Check that a tag is valid according to the following rules:
     ///
-    /// | Rule               | Value                        |
-    /// | :----------------- | :--------------------------- |
-    /// | Allowed characters | `a-z`, `0-9`, `_`            |
-    /// | Minimum length     | 1                            |
-    /// | Maximum length     | 30 Unicode scalar values     |
-    /// | Case sensitivity   | Case-insensitive             |
-    /// | Storage            | Stored as lowercase, no `#`  |
+    /// | Rule               | Value                                            |
+    /// | :----------------- | :----------------------------------------------- |
+    /// | Allowed characters | Unicode letters, Unicode numbers, `_`            |
+    /// | Minimum length     | 1                                                |
+    /// | Maximum length     | 30 Unicode scalar values                         |
+    /// | Case sensitivity   | Case-insensitive (Unicode-aware)                 |
+    /// | Storage            | Stored as lowercase, no `#`                      |
+    ///
+    /// Cased letters must be lowercase (the [`HashtagSanitizer`] handles
+    /// this prior to validation). Non-cased scripts (e.g. Han, Myanmar,
+    /// Arabic) are accepted as-is.
     pub fn check_tag(tag: &str) -> Result<(), String> {
         let len = tag.chars().count();
         if len == 0 || len > MAX_HASHTAG_LENGTH {
@@ -55,10 +59,11 @@ impl HashtagValidator {
 
         if !tag
             .chars()
-            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_')
+            .all(|c| (c.is_alphanumeric() && !c.is_uppercase()) || c == '_')
         {
             return Err(
-                "tag can only contain lowercase letters, digits, and underscores".to_string(),
+                "tag can only contain Unicode letters, digits, and underscores, all lowercase"
+                    .to_string(),
             );
         }
 
@@ -210,6 +215,44 @@ mod tests {
         let validator = HashtagValidator;
         let value: Value = "rust-lang".to_string().into();
         assert!(validator.validate(&value).is_err());
+    }
+
+    #[test]
+    fn test_should_validate_tag_with_unicode_letters() {
+        let validator = HashtagValidator;
+        // Cyrillic, Greek, accented Latin, Han, Myanmar Shan letter, Arabic
+        for tag in ["русский", "ελληνικά", "café", "汉字", "ꩰ", "العربية"]
+        {
+            let value: Value = tag.to_string().into();
+            assert!(
+                validator.validate(&value).is_ok(),
+                "expected `{tag}` to be valid"
+            );
+        }
+    }
+
+    #[test]
+    fn test_should_validate_tag_with_unicode_digits() {
+        let validator = HashtagValidator;
+        // Arabic-Indic digit 5, Devanagari digit 9
+        let value: Value = "rust٥९".to_string().into();
+        assert!(validator.validate(&value).is_ok());
+    }
+
+    #[test]
+    fn test_should_reject_tag_with_uppercase_unicode_letters() {
+        let validator = HashtagValidator;
+        // Greek capital alpha
+        let value: Value = "Ελληνικά".to_string().into();
+        assert!(validator.validate(&value).is_err());
+    }
+
+    #[test]
+    fn test_should_sanitize_tag_lowercasing_unicode() {
+        let sanitizer = HashtagSanitizer;
+        let value: Value = "Ελληνικά".to_string().into();
+        let result = sanitizer.sanitize(value).unwrap();
+        assert_eq!(result, Value::Text("ελληνικά".into()));
     }
 
     #[test]

@@ -15,23 +15,32 @@ across the instance.
 A **tag** is the text portion of a hashtag, stripped of the leading `#`.
 For example, the hashtag `#rust` has tag `rust`.
 
-| Rule               | Value                       |
-| :----------------- | :-------------------------- |
-| Allowed characters | `a-z`, `0-9`, `_`           |
-| Minimum length     | 1                           |
-| Maximum length     | 30 Unicode scalar values    |
-| Case sensitivity   | Case-insensitive            |
-| Storage            | Stored as lowercase, no `#` |
+| Rule               | Value                                                  |
+| :----------------- | :----------------------------------------------------- |
+| Allowed characters | Unicode letters, Unicode numbers, `_`                  |
+| Minimum length     | 1                                                      |
+| Maximum length     | 30 Unicode scalar values                               |
+| Case sensitivity   | Case-insensitive (Unicode-aware lowercasing)           |
+| Storage            | Stored as lowercase, no `#`                            |
 
-**Regex**: `^[a-z0-9_]{1,30}$`
+**Pattern** (PCRE-style): `^[\p{L}\p{N}_]{1,30}$`, with the additional
+constraint that no character may be in uppercase form after sanitization.
 
 Underscores are allowed in any position, including leading, trailing, and
-consecutive.
+consecutive. Cased Unicode letters (Latin, Greek, Cyrillic, etc.) are
+folded to lowercase by the sanitizer; non-cased scripts (Han, Arabic,
+Myanmar, etc.) are accepted as-is.
 
-Hyphens (`-`), dots (`.`), whitespace, and any non-ASCII characters are
-**not** allowed. Strict ASCII enforcement keeps the uniqueness constraint
-on the `hashtags.tag` column well-defined and avoids Unicode
-normalization ambiguity.
+Hyphens (`-`), dots (`.`), whitespace, punctuation, and emoji are **not**
+allowed.
+
+### Unicode normalization
+
+Mastic does **not** currently apply Unicode Normalization Form C (NFC) to
+incoming tags. Producers SHOULD send tags in NFC form. Two visually
+identical tags that differ only in normalization (e.g. precomposed `é`
+vs `e + COMBINING ACUTE`) will be treated as distinct values until
+normalization is added (tracked separately).
 
 ## Sanitization
 
@@ -46,17 +55,21 @@ validation to fail.
 
 ### Examples
 
-| Input          | Sanitized | Valid |
-| :------------- | :-------- | :---- |
-| `rust`         | `rust`    | yes   |
-| `Rust`         | `rust`    | yes   |
-| `  #Rust  `    | `rust`    | yes   |
-| `web3`         | `web3`    | yes   |
-| `rust_lang`    | `rust_lang` | yes |
-| `rust-lang`    | `rust-lang` | no (hyphen) |
-| `#rust#2`      | `rust#2`  | no (`#` in middle) |
-| `` (empty)     | ``        | no (too short) |
-| `a` × 31       | `a` × 31  | no (too long) |
+| Input         | Sanitized   | Valid              |
+| :------------ | :---------- | :----------------- |
+| `rust`        | `rust`      | yes                |
+| `Rust`        | `rust`      | yes                |
+| `  #Rust  `   | `rust`      | yes                |
+| `web3`        | `web3`      | yes                |
+| `rust_lang`   | `rust_lang` | yes                |
+| `汉字`        | `汉字`      | yes (Han)          |
+| `Café`        | `café`      | yes                |
+| `Ελληνικά`    | `ελληνικά`  | yes (Greek)        |
+| `rust-lang`   | `rust-lang` | no (hyphen)        |
+| `#rust#2`     | `rust#2`    | no (`#` in middle) |
+| `🦀`          | `🦀`        | no (emoji)         |
+| `` (empty)    | ``          | no (too short)     |
+| `a` × 31      | `a` × 31    | no (too long)      |
 
 ## Implementation
 
