@@ -110,7 +110,8 @@ async fn boost_status_inner(status_url: String) -> CanisterResult<()> {
 /// - For a third-party boost, include the author unconditionally
 ///   (deduplication via sort + dedup handles overlap with followers).
 fn compute_recipients(fetched: &Status, own_actor_uri: &str) -> CanisterResult<Vec<String>> {
-    let mut recipients: Vec<String> = FollowerRepository::get_followers()?
+    let mut recipients: Vec<String> = FollowerRepository::oneshot()
+        .get_followers()?
         .into_iter()
         .map(|f| f.actor_uri.0)
         .collect();
@@ -189,7 +190,9 @@ mod tests {
     }
 
     fn insert_follower(uri: &str) {
-        FollowerRepository::insert(uri).expect("insert follower");
+        FollowerRepository::oneshot()
+            .insert(uri)
+            .expect("insert follower");
     }
 
     #[tokio::test]

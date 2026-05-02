@@ -95,7 +95,8 @@ async fn save_status_and_publish_to_federation(
     let recipients = match visibility {
         Visibility::Direct => mentions.clone(),
         Visibility::Public | Visibility::Unlisted | Visibility::FollowersOnly => {
-            FollowerRepository::get_followers()?
+            FollowerRepository::oneshot()
+                .get_followers()?
                 .into_iter()
                 .map(|f| f.actor_uri.0)
                 .collect()

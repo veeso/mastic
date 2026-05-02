@@ -22,7 +22,8 @@ pub fn get_followers(args: GetFollowersArgs) -> GetFollowersResponse {
 fn inner_get_followers(
     GetFollowersArgs { offset, limit }: GetFollowersArgs,
 ) -> CanisterResult<Vec<String>> {
-    FollowerRepository::get_paginated(offset as usize, limit as usize)
+    FollowerRepository::oneshot()
+        .get_paginated(offset as usize, limit as usize)
         .map(|followers| followers.into_iter().map(|f| f.actor_uri.0).collect())
 }
 
@@ -82,8 +83,12 @@ mod tests {
     fn test_should_return_followers() {
         setup();
 
-        FollowerRepository::insert("https://mastic.social/users/alice").expect("should insert");
-        FollowerRepository::insert("https://mastic.social/users/bob").expect("should insert");
+        FollowerRepository::oneshot()
+            .insert("https://mastic.social/users/alice")
+            .expect("should insert");
+        FollowerRepository::oneshot()
+            .insert("https://mastic.social/users/bob")
+            .expect("should insert");
 
         let response = get_followers(GetFollowersArgs {
             offset: 0,
@@ -102,9 +107,15 @@ mod tests {
     fn test_should_paginate_followers_with_limit() {
         setup();
 
-        FollowerRepository::insert("https://mastic.social/users/alice").expect("should insert");
-        FollowerRepository::insert("https://mastic.social/users/bob").expect("should insert");
-        FollowerRepository::insert("https://mastic.social/users/charlie").expect("should insert");
+        FollowerRepository::oneshot()
+            .insert("https://mastic.social/users/alice")
+            .expect("should insert");
+        FollowerRepository::oneshot()
+            .insert("https://mastic.social/users/bob")
+            .expect("should insert");
+        FollowerRepository::oneshot()
+            .insert("https://mastic.social/users/charlie")
+            .expect("should insert");
 
         let response = get_followers(GetFollowersArgs {
             offset: 0,
@@ -121,9 +132,15 @@ mod tests {
     fn test_should_paginate_followers_with_offset() {
         setup();
 
-        FollowerRepository::insert("https://mastic.social/users/alice").expect("should insert");
-        FollowerRepository::insert("https://mastic.social/users/bob").expect("should insert");
-        FollowerRepository::insert("https://mastic.social/users/charlie").expect("should insert");
+        FollowerRepository::oneshot()
+            .insert("https://mastic.social/users/alice")
+            .expect("should insert");
+        FollowerRepository::oneshot()
+            .insert("https://mastic.social/users/bob")
+            .expect("should insert");
+        FollowerRepository::oneshot()
+            .insert("https://mastic.social/users/charlie")
+            .expect("should insert");
 
         let response = get_followers(GetFollowersArgs {
             offset: 2,
@@ -140,7 +157,9 @@ mod tests {
     fn test_should_return_empty_list_when_offset_exceeds_total() {
         setup();
 
-        FollowerRepository::insert("https://mastic.social/users/alice").expect("should insert");
+        FollowerRepository::oneshot()
+            .insert("https://mastic.social/users/alice")
+            .expect("should insert");
 
         let response = get_followers(GetFollowersArgs {
             offset: 10,

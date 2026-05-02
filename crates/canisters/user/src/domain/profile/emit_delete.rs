@@ -85,7 +85,7 @@ async fn dispatch() -> CanisterResult<()> {
 }
 
 fn followers_minus_blocked() -> CanisterResult<Vec<String>> {
-    let followers = FollowerRepository::get_followers()?;
+    let followers = FollowerRepository::oneshot().get_followers()?;
     let blocked = BlockRepository::oneshot().list_blocked_uris()?;
     Ok(followers
         .into_iter()
