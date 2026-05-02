@@ -52,7 +52,10 @@ impl From<CanisterError> for AcceptFollowDomainError {
 
 async fn accept_follow_inner(actor_uri: &str) -> Result<(), AcceptFollowDomainError> {
     // check that the follow request exists
-    if FollowRequestRepository::find_by_actor_uri(actor_uri)?.is_none() {
+    if FollowRequestRepository::oneshot()
+        .find_by_actor_uri(actor_uri)?
+        .is_none()
+    {
         ic_utils::log!("accept_follow: no pending request from {actor_uri}");
         return Err(AcceptFollowDomainError::RequestNotFound);
     }
@@ -147,7 +150,8 @@ mod tests {
         setup();
 
         // insert a pending follow request
-        FollowRequestRepository::insert("https://mastic.social/users/alice")
+        FollowRequestRepository::oneshot()
+            .insert("https://mastic.social/users/alice")
             .expect("should insert follow request");
 
         let response = accept_follow(AcceptFollowArgs {
@@ -158,9 +162,9 @@ mod tests {
         assert_eq!(response, AcceptFollowResponse::Ok);
 
         // follow request should be removed
-        let request =
-            FollowRequestRepository::find_by_actor_uri("https://mastic.social/users/alice")
-                .expect("should query");
+        let request = FollowRequestRepository::oneshot()
+            .find_by_actor_uri("https://mastic.social/users/alice")
+            .expect("should query");
         assert!(request.is_none(), "follow request should be deleted");
 
         // follower should be added

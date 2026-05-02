@@ -118,20 +118,24 @@ fn handle_follow(activity: &Activity) -> Result<(), ReceiveActivityError> {
     ic_utils::log!("handle_incoming: Follow from {actor_uri}");
 
     // Check for existing follow request to ensure idempotency (AP retries)
-    let existing = FollowRequestRepository::find_by_actor_uri(actor_uri).map_err(|e| {
-        ic_utils::log!("handle_incoming: failed to look up follow request: {e}");
-        ReceiveActivityError::Internal(e.to_string())
-    })?;
+    let existing = FollowRequestRepository::oneshot()
+        .find_by_actor_uri(actor_uri)
+        .map_err(|e| {
+            ic_utils::log!("handle_incoming: failed to look up follow request: {e}");
+            ReceiveActivityError::Internal(e.to_string())
+        })?;
 
     if existing.is_some() {
         ic_utils::log!("handle_incoming: follow request from {actor_uri} already exists, skipping");
         return Ok(());
     }
 
-    FollowRequestRepository::insert(actor_uri).map_err(|e| {
-        ic_utils::log!("handle_incoming: failed to insert follow request: {e}");
-        ReceiveActivityError::Internal(e.to_string())
-    })
+    FollowRequestRepository::oneshot()
+        .insert(actor_uri)
+        .map_err(|e| {
+            ic_utils::log!("handle_incoming: failed to insert follow request: {e}");
+            ReceiveActivityError::Internal(e.to_string())
+        })
 }
 
 /// Validate that the activity wraps an inner `Follow` activity and extract
@@ -225,10 +229,12 @@ fn handle_undo(activity: &Activity) -> Result<(), ReceiveActivityError> {
                     ic_utils::log!("handle_incoming: failed to delete follower: {e}");
                     ReceiveActivityError::Internal(e.to_string())
                 })?;
-            FollowRequestRepository::delete_by_actor_uri(sender_uri).map_err(|e| {
-                ic_utils::log!("handle_incoming: failed to delete follow request: {e}");
-                ReceiveActivityError::Internal(e.to_string())
-            })?;
+            FollowRequestRepository::oneshot()
+                .delete_by_actor_uri(sender_uri)
+                .map_err(|e| {
+                    ic_utils::log!("handle_incoming: failed to delete follow request: {e}");
+                    ReceiveActivityError::Internal(e.to_string())
+                })?;
             Ok(())
         }
         ActivityType::Like => handle_undo_like(inner, sender_uri),
@@ -576,10 +582,10 @@ mod tests {
 
         assert_eq!(response, ReceiveActivityResponse::Ok);
 
-        let request =
-            FollowRequestRepository::find_by_actor_uri("https://mastic.social/users/alice")
-                .expect("should query")
-                .expect("should find follow request");
+        let request = FollowRequestRepository::oneshot()
+            .find_by_actor_uri("https://mastic.social/users/alice")
+            .expect("should query")
+            .expect("should find follow request");
         assert_eq!(request.actor_uri.0, "https://mastic.social/users/alice");
     }
 
@@ -693,10 +699,10 @@ mod tests {
         assert_eq!(second, ReceiveActivityResponse::Ok);
 
         // only one follow request should exist
-        let request =
-            FollowRequestRepository::find_by_actor_uri("https://mastic.social/users/alice")
-                .expect("should query")
-                .expect("should find follow request");
+        let request = FollowRequestRepository::oneshot()
+            .find_by_actor_uri("https://mastic.social/users/alice")
+            .expect("should query")
+            .expect("should find follow request");
         assert_eq!(request.actor_uri.0, "https://mastic.social/users/alice");
     }
 
@@ -786,7 +792,8 @@ mod tests {
     fn test_should_remove_pending_follow_request_on_undo_follow() {
         setup();
 
-        FollowRequestRepository::insert("https://mastic.social/users/alice")
+        FollowRequestRepository::oneshot()
+            .insert("https://mastic.social/users/alice")
             .expect("should insert");
 
         let json = make_undo_follow_json(
@@ -799,9 +806,9 @@ mod tests {
         });
         assert_eq!(response, ReceiveActivityResponse::Ok);
 
-        let request =
-            FollowRequestRepository::find_by_actor_uri("https://mastic.social/users/alice")
-                .expect("should query");
+        let request = FollowRequestRepository::oneshot()
+            .find_by_actor_uri("https://mastic.social/users/alice")
+            .expect("should query");
         assert!(request.is_none(), "follow request should be deleted");
     }
 

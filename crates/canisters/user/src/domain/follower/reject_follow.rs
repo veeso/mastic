@@ -47,7 +47,10 @@ impl From<CanisterError> for RejectFollowDomainError {
 
 async fn reject_follow_inner(actor_uri: &str) -> Result<(), RejectFollowDomainError> {
     // check that the follow request exists
-    if FollowRequestRepository::find_by_actor_uri(actor_uri)?.is_none() {
+    if FollowRequestRepository::oneshot()
+        .find_by_actor_uri(actor_uri)?
+        .is_none()
+    {
         ic_utils::log!("reject_follow: no pending request from {actor_uri}");
         return Err(RejectFollowDomainError::RequestNotFound);
     }
@@ -68,7 +71,7 @@ async fn reject_follow_inner(actor_uri: &str) -> Result<(), RejectFollowDomainEr
     crate::adapters::federation::send_activity(args).await?;
 
     // on success, delete the follow request
-    FollowRequestRepository::delete_by_actor_uri(actor_uri)?;
+    FollowRequestRepository::oneshot().delete_by_actor_uri(actor_uri)?;
 
     Ok(())
 }
@@ -115,7 +118,8 @@ mod tests {
         setup();
 
         // insert a pending follow request
-        FollowRequestRepository::insert("https://mastic.social/users/alice")
+        FollowRequestRepository::oneshot()
+            .insert("https://mastic.social/users/alice")
             .expect("should insert follow request");
 
         let response = reject_follow(RejectFollowArgs {
@@ -126,9 +130,9 @@ mod tests {
         assert_eq!(response, RejectFollowResponse::Ok);
 
         // follow request should be removed
-        let request =
-            FollowRequestRepository::find_by_actor_uri("https://mastic.social/users/alice")
-                .expect("should query");
+        let request = FollowRequestRepository::oneshot()
+            .find_by_actor_uri("https://mastic.social/users/alice")
+            .expect("should query");
         assert!(request.is_none(), "follow request should be deleted");
     }
 
