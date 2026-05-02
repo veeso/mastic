@@ -22,4 +22,7 @@ pub enum CanisterError {
     /// Settings error.
     #[error("Settings error: {0}")]
     Settings(#[from] db_utils::settings::SettingsError),
+    /// Internal error.
+    #[error("Internal error: {0}")]
+    Internal(String),
 }
