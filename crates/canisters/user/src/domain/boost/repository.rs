@@ -26,7 +26,6 @@ impl BoostRepository {
     }
 
     /// Deletes a boost from the database, identified by the boosted status URI.
-    #[allow(dead_code)] // wired up in Task 12 (undo_boost flow)
     pub fn unboost_status(original_status_uri: &str) -> CanisterResult<()> {
         DBMS_CONTEXT
             .with(|ctx| {
@@ -67,7 +66,6 @@ impl BoostRepository {
     /// Looks up a boost record by the URI of the original (boosted) status.
     ///
     /// Returns `Ok(None)` when no matching row exists.
-    #[allow(dead_code)] // wired up in Task 11 (boost_status flow rewrite)
     pub fn find_by_original_uri(uri: &str) -> CanisterResult<Option<BoostRecord>> {
         DBMS_CONTEXT
             .with(|ctx| {
@@ -86,7 +84,6 @@ impl BoostRepository {
     }
 
     /// Returns the URIs of statuses boosted by the user.
-    #[allow(dead_code)] // wired up in a later task (get_boosts API endpoint)
     pub fn get_boosts(offset: usize, limit: usize) -> CanisterResult<Vec<String>> {
         DBMS_CONTEXT
             .with(|ctx| {
