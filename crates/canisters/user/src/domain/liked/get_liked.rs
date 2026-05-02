@@ -19,7 +19,7 @@ use crate::domain::liked::repository::LikedRepository;
 pub fn get_liked(GetLikedArgs { offset, limit }: GetLikedArgs) -> GetLikedResponse {
     ic_utils::log!("Getting liked statuses with offset {offset} and limit {limit}");
 
-    match LikedRepository::get_liked(offset as usize, limit as usize) {
+    match LikedRepository::oneshot().get_liked(offset as usize, limit as usize) {
         Ok(liked) => GetLikedResponse::Ok(liked),
         Err(err) => {
             ic_utils::log!("Failed to get liked statuses: {err}");
@@ -54,9 +54,11 @@ mod tests {
     #[test]
     fn test_should_return_liked_status_uris() {
         setup();
-        LikedRepository::like_status("https://mastic.social/users/alice/statuses/1")
+        LikedRepository::oneshot()
+            .like_status("https://mastic.social/users/alice/statuses/1")
             .expect("should insert");
-        LikedRepository::like_status("https://mastic.social/users/bob/statuses/2")
+        LikedRepository::oneshot()
+            .like_status("https://mastic.social/users/bob/statuses/2")
             .expect("should insert");
 
         let response = get_liked(GetLikedArgs {
@@ -75,7 +77,8 @@ mod tests {
     fn test_should_paginate_liked_results() {
         setup();
         for i in 0..5 {
-            LikedRepository::like_status(&format!("https://mastic.social/users/a/statuses/{i}"))
+            LikedRepository::oneshot()
+                .like_status(&format!("https://mastic.social/users/a/statuses/{i}"))
                 .expect("should insert");
         }
 

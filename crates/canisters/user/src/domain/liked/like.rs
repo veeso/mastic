@@ -40,7 +40,7 @@ async fn like_status_inner(status_uri: String) -> CanisterResult<()> {
     ic_utils::log!("Liking status with URI: {status_uri}");
 
     // Idempotent: if already liked, do not duplicate or re-emit.
-    if LikedRepository::is_liked(&status_uri)? {
+    if LikedRepository::oneshot().is_liked(&status_uri)? {
         ic_utils::log!("Status already liked: {status_uri}");
         return Ok(());
     }
@@ -48,7 +48,7 @@ async fn like_status_inner(status_uri: String) -> CanisterResult<()> {
     // Insert the like into the database first; if federation dispatch
     // later fails, the user can re-trigger and the row already exists,
     // making the second call a no-op.
-    LikedRepository::like_status(&status_uri)?;
+    LikedRepository::oneshot().like_status(&status_uri)?;
 
     // Derive the author's actor URI and inbox from the status URI.
     let Some(author_actor_uri) = crate::domain::urls::actor_uri_from_status_uri(&status_uri) else {
@@ -117,7 +117,11 @@ mod tests {
         .await;
 
         assert_eq!(response, LikeStatusResponse::Ok);
-        assert!(LikedRepository::is_liked(STATUS_URI).expect("should query"));
+        assert!(
+            LikedRepository::oneshot()
+                .is_liked(STATUS_URI)
+                .expect("should query")
+        );
 
         let captured = captured();
         assert_eq!(captured.len(), 1, "exactly one activity dispatched");
