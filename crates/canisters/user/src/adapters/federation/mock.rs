@@ -7,7 +7,7 @@ use crate::adapters::federation::FederationCanister;
 
 thread_local! {
     static CAPTURED: RefCell<Vec<SendActivityArgs>> = const { RefCell::new(Vec::new()) };
-    static FETCH_STATUS_RESPONSES: RefCell<VecDeque<FetchStatusResponse>> = RefCell::new(VecDeque::new());
+    static FETCH_STATUS_RESPONSES: RefCell<VecDeque<FetchStatusResponse>> = const { RefCell::new(VecDeque::new()) };
     static FETCH_STATUS_CALLS: RefCell<Vec<FetchStatusArgs>> = const { RefCell::new(Vec::new()) };
 }
 

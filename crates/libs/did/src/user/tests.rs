@@ -469,12 +469,10 @@ fn test_should_roundtrip_boost_status_response_ok() {
 
 #[test]
 fn test_should_roundtrip_boost_status_response_err() {
-    for error in [BoostStatusError::Internal("err".to_string())] {
-        let resp = BoostStatusResponse::Err(error);
-        let bytes = Encode!(&resp).unwrap();
-        let decoded = Decode!(&bytes, BoostStatusResponse).unwrap();
-        assert_eq!(resp, decoded);
-    }
+    let resp = BoostStatusResponse::Err(BoostStatusError::Internal("err".to_string()));
+    let bytes = Encode!(&resp).unwrap();
+    let decoded = Decode!(&bytes, BoostStatusResponse).unwrap();
+    assert_eq!(resp, decoded);
 }
 
 #[test]
@@ -497,12 +495,10 @@ fn test_should_roundtrip_undo_boost_response_ok() {
 
 #[test]
 fn test_should_roundtrip_undo_boost_response_err() {
-    for error in [UndoBoostError::Internal("err".to_string())] {
-        let resp = UndoBoostResponse::Err(error);
-        let bytes = Encode!(&resp).unwrap();
-        let decoded = Decode!(&bytes, UndoBoostResponse).unwrap();
-        assert_eq!(resp, decoded);
-    }
+    let resp = UndoBoostResponse::Err(UndoBoostError::Internal("err".to_string()));
+    let bytes = Encode!(&resp).unwrap();
+    let decoded = Decode!(&bytes, UndoBoostResponse).unwrap();
+    assert_eq!(resp, decoded);
 }
 
 #[test]

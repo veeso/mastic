@@ -61,13 +61,13 @@ fn get_following(args: GetFollowingArgs) -> GetFollowingResponse {
 }
 
 #[ic_cdk::query]
-fn get_local_status(args: GetLocalStatusArgs) -> GetLocalStatusResponse {
-    api::get_local_status(args)
+fn get_liked(args: GetLikedArgs) -> GetLikedResponse {
+    api::get_liked(args)
 }
 
 #[ic_cdk::query]
-fn get_liked(args: GetLikedArgs) -> GetLikedResponse {
-    api::get_liked(args)
+fn get_local_status(args: GetLocalStatusArgs) -> GetLocalStatusResponse {
+    api::get_local_status(args)
 }
 
 #[ic_cdk::query]
