@@ -76,7 +76,7 @@ async fn save_status_and_publish_to_federation(
     ic_utils::log!("Status created with ID: {snowflake_id}");
 
     // build owner actor URI
-    let own_profile = crate::domain::profile::ProfileRepository::get_profile()?;
+    let own_profile = crate::domain::profile::ProfileRepository::oneshot().get_profile()?;
     let owner_actor_uri = crate::domain::urls::actor_uri(&own_profile.handle.0)?;
 
     // make status object

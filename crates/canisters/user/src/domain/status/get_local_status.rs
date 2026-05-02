@@ -56,7 +56,7 @@ fn get_local_status_inner(
         return Ok(None);
     }
 
-    let own_profile = crate::domain::profile::ProfileRepository::get_profile()?;
+    let own_profile = crate::domain::profile::ProfileRepository::oneshot().get_profile()?;
     let author_uri = urls::actor_uri(&own_profile.handle.0)?;
 
     Ok(Some(Status {

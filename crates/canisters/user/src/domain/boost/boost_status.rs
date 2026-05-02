@@ -53,7 +53,7 @@ async fn boost_status_inner(status_url: String) -> CanisterResult<()> {
         return Ok(());
     }
 
-    let own_profile = ProfileRepository::get_profile()?;
+    let own_profile = ProfileRepository::oneshot().get_profile()?;
     let own_actor_uri = urls::actor_uri(&own_profile.handle.0)?;
 
     let fetched = match crate::adapters::federation::fetch_status(FetchStatusArgs {

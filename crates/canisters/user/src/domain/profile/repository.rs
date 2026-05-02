@@ -4,22 +4,46 @@ use candid::Principal;
 use db_utils::field_update::field_update_to_nullable;
 use db_utils::settings::SettingsError;
 use did::common::FieldUpdate;
-use ic_dbms_canister::prelude::DBMS_CONTEXT;
+use ic_dbms_canister::prelude::{DBMS_CONTEXT, IcAccessControlList, IcMemoryProvider};
 use wasm_dbms::WasmDbmsDatabase;
+use wasm_dbms::prelude::DbmsContext;
 use wasm_dbms_api::prelude::*;
 
 use crate::error::{CanisterError, CanisterResult};
 use crate::schema::{Profile, ProfileInsertRequest, ProfileRecord, ProfileUpdateRequest, Schema};
 
-pub struct ProfileRepository;
+pub struct ProfileRepository {
+    tx: Option<TransactionId>,
+}
 
 impl ProfileRepository {
-    /// Get the profile of the current user.
-    pub fn get_profile() -> CanisterResult<Profile> {
-        let row = DBMS_CONTEXT.with(|ctx| {
-            let db = WasmDbmsDatabase::oneshot(ctx, Schema);
+    pub const fn oneshot() -> Self {
+        Self { tx: None }
+    }
 
-            let record = db.select::<Profile>(Query::builder().all().limit(1).build())?;
+    // Reserved for future cross-repo atomic flows that need to splice profile
+    // reads/writes into an externally-driven transaction. Not yet wired up.
+    #[allow(dead_code)]
+    pub const fn with_transaction(tx: TransactionId) -> Self {
+        Self { tx: Some(tx) }
+    }
+
+    fn db<'a>(
+        &self,
+        ctx: &'a DbmsContext<IcMemoryProvider, IcAccessControlList>,
+    ) -> WasmDbmsDatabase<'a, IcMemoryProvider, IcAccessControlList> {
+        match self.tx {
+            Some(id) => WasmDbmsDatabase::from_transaction(ctx, Schema, id),
+            None => WasmDbmsDatabase::oneshot(ctx, Schema),
+        }
+    }
+
+    /// Get the profile of the current user.
+    pub fn get_profile(&self) -> CanisterResult<Profile> {
+        let row = DBMS_CONTEXT.with(|ctx| {
+            let record = self
+                .db(ctx)
+                .select::<Profile>(Query::builder().all().limit(1).build())?;
 
             Ok::<Option<ProfileRecord>, CanisterError>(record.into_iter().next())
         })?;
@@ -32,7 +56,7 @@ impl ProfileRepository {
     }
 
     /// Create a new profile for the given principal and handle.
-    pub fn create_profile(principal: Principal, handle: &str) -> CanisterResult<()> {
+    pub fn create_profile(&self, principal: Principal, handle: &str) -> CanisterResult<()> {
         let insert_request = ProfileInsertRequest {
             principal: ic_dbms_canister::prelude::Principal(principal),
             handle: handle.into(),
@@ -45,9 +69,7 @@ impl ProfileRepository {
         };
 
         DBMS_CONTEXT.with(|ctx| {
-            let db = WasmDbmsDatabase::oneshot(ctx, Schema);
-
-            db.insert::<Profile>(insert_request)?;
+            self.db(ctx).insert::<Profile>(insert_request)?;
 
             Ok(())
         })
@@ -59,6 +81,7 @@ impl ProfileRepository {
     /// field is [`FieldUpdate::Leave`] (no-op). The caller can use the
     /// boolean to decide whether to fan out an activity.
     pub fn update_profile(
+        &self,
         bio: FieldUpdate<String>,
         display_name: FieldUpdate<String>,
     ) -> CanisterResult<bool> {
@@ -76,11 +99,7 @@ impl ProfileRepository {
             ..Default::default()
         };
 
-        DBMS_CONTEXT.with(|ctx| {
-            let db = WasmDbmsDatabase::oneshot(ctx, Schema);
-
-            db.update::<Profile>(patch)
-        })?;
+        DBMS_CONTEXT.with(|ctx| self.db(ctx).update::<Profile>(patch))?;
 
         Ok(true)
     }

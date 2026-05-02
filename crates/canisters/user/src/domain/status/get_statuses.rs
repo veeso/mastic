@@ -47,7 +47,7 @@ async fn get_statuses_inner(
     let relationship = determine_relationship(caller).await?;
 
     // build owner actor URI
-    let own_profile = crate::domain::profile::ProfileRepository::get_profile()?;
+    let own_profile = crate::domain::profile::ProfileRepository::oneshot().get_profile()?;
     let owner_actor_uri = crate::domain::urls::actor_uri(&own_profile.handle.0)?;
 
     // query statuses

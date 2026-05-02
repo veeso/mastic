@@ -33,10 +33,12 @@ pub async fn update_profile(args: UpdateProfileArgs) -> UpdateProfileResponse {
 async fn update_profile_inner(
     UpdateProfileArgs { bio, display_name }: UpdateProfileArgs,
 ) -> Result<(), UpdateProfileError> {
-    let written = ProfileRepository::update_profile(bio, display_name).map_err(|err| {
-        ic_utils::log!("Failed to update profile: {err}");
-        UpdateProfileError::Internal(err.to_string())
-    })?;
+    let written = ProfileRepository::oneshot()
+        .update_profile(bio, display_name)
+        .map_err(|err| {
+            ic_utils::log!("Failed to update profile: {err}");
+            UpdateProfileError::Internal(err.to_string())
+        })?;
 
     if !written {
         return Ok(());
@@ -48,7 +50,7 @@ async fn update_profile_inner(
 }
 
 async fn dispatch_update_activity() -> CanisterResult<()> {
-    let profile = ProfileRepository::get_profile()?;
+    let profile = ProfileRepository::oneshot().get_profile()?;
     let handle = profile.handle.0.clone();
     let owner_uri = urls::actor_uri(&handle)?;
 

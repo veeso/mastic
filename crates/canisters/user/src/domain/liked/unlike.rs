@@ -52,7 +52,7 @@ async fn unlike_status_inner(status_uri: String) -> CanisterResult<()> {
     };
     let target_inbox = crate::domain::urls::inbox_url_from_actor_uri(&author_actor_uri);
 
-    let own_profile = ProfileRepository::get_profile()?;
+    let own_profile = ProfileRepository::oneshot().get_profile()?;
     let own_actor_uri = crate::domain::urls::actor_uri(&own_profile.handle.0)?;
     let activity = make_undo_like_activity(&own_actor_uri, &author_actor_uri, &status_uri);
 

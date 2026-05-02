@@ -447,10 +447,12 @@ fn parse_local_status(status_uri: &str) -> Result<Option<(String, u64)>, Receive
         return Ok(None);
     };
 
-    let own = crate::domain::profile::ProfileRepository::get_profile().map_err(|e| {
-        ic_utils::log!("handle_incoming: failed to load own profile: {e}");
-        ReceiveActivityError::Internal(e.to_string())
-    })?;
+    let own = crate::domain::profile::ProfileRepository::oneshot()
+        .get_profile()
+        .map_err(|e| {
+            ic_utils::log!("handle_incoming: failed to load own profile: {e}");
+            ReceiveActivityError::Internal(e.to_string())
+        })?;
     if handle != own.handle.0 {
         return Ok(None);
     }

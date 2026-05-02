@@ -10,7 +10,7 @@ use crate::error::CanisterResult;
 /// This flow is called on canister init and just initialize the user with its handle.
 pub fn create_profile(principal: Principal, handle: &str) -> CanisterResult<()> {
     ic_utils::log!("Creating profile for principal {principal} with handle {handle}");
-    ProfileRepository::create_profile(principal, handle)
+    ProfileRepository::oneshot().create_profile(principal, handle)
 }
 
 #[cfg(test)]

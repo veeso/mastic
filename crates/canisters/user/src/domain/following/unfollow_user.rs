@@ -44,7 +44,7 @@ async fn unfollow_user_inner(target_actor_uri: &str) -> CanisterResult<()> {
     ic_utils::log!("unfollow_user: removed following entry for {target_actor_uri}");
 
     // Build own actor URI for the Undo(Follow) payload.
-    let own_profile = ProfileRepository::get_profile()?;
+    let own_profile = ProfileRepository::oneshot().get_profile()?;
     let own_actor_uri = crate::domain::urls::actor_uri(&own_profile.handle.0)?;
 
     let activity = make_undo_follow_activity(&own_actor_uri, target_actor_uri);
