@@ -1,13 +1,13 @@
 use candid::{Encode, Principal};
 use did::common::Visibility;
 use did::user::{
-    AcceptFollowArgs, AcceptFollowResponse, FollowUserArgs, FollowUserResponse,
-    GetFollowRequestsArgs, GetFollowRequestsResponse, GetFollowersArgs, GetFollowersResponse,
-    GetFollowingArgs, GetFollowingResponse, GetLikedArgs, GetLikedResponse, GetProfileResponse,
-    GetStatusesArgs, GetStatusesResponse, LikeStatusArgs, LikeStatusResponse, PublishStatusArgs,
-    PublishStatusResponse, ReadFeedArgs, ReadFeedResponse, RejectFollowArgs, RejectFollowResponse,
-    UnfollowUserArgs, UnfollowUserResponse, UnlikeStatusArgs, UnlikeStatusResponse,
-    UpdateProfileArgs, UpdateProfileResponse,
+    AcceptFollowArgs, AcceptFollowResponse, BoostStatusArgs, BoostStatusResponse, FollowUserArgs,
+    FollowUserResponse, GetFollowRequestsArgs, GetFollowRequestsResponse, GetFollowersArgs,
+    GetFollowersResponse, GetFollowingArgs, GetFollowingResponse, GetLikedArgs, GetLikedResponse,
+    GetProfileResponse, GetStatusesArgs, GetStatusesResponse, LikeStatusArgs, LikeStatusResponse,
+    PublishStatusArgs, PublishStatusResponse, ReadFeedArgs, ReadFeedResponse, RejectFollowArgs,
+    RejectFollowResponse, UndoBoostArgs, UndoBoostResponse, UnfollowUserArgs, UnfollowUserResponse,
+    UnlikeStatusArgs, UnlikeStatusResponse, UpdateProfileArgs, UpdateProfileResponse,
 };
 use pocket_ic_harness::PocketIcTestEnv;
 
@@ -244,6 +244,34 @@ impl UserClient<'_> {
             )
             .await
             .expect("Failed to call unlike_status")
+    }
+
+    pub async fn boost_status(&self, caller: Principal, status_url: String) -> BoostStatusResponse {
+        let args = BoostStatusArgs { status_url };
+
+        self.env
+            .update(
+                self.canister_id,
+                caller,
+                "boost_status",
+                Encode!(&args).expect("Failed to encode boost_status arguments"),
+            )
+            .await
+            .expect("Failed to call boost_status")
+    }
+
+    pub async fn undo_boost(&self, caller: Principal, status_url: String) -> UndoBoostResponse {
+        let args = UndoBoostArgs { status_url };
+
+        self.env
+            .update(
+                self.canister_id,
+                caller,
+                "undo_boost",
+                Encode!(&args).expect("Failed to encode undo_boost arguments"),
+            )
+            .await
+            .expect("Failed to call undo_boost")
     }
 
     pub async fn get_liked(&self, caller: Principal, offset: u64, limit: u64) -> GetLikedResponse {
