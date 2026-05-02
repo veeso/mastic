@@ -2,6 +2,7 @@
 
 use activitypub::Activity;
 use activitypub::activity::{ActivityObject, ActivityType};
+use db_utils::transaction::Transaction;
 use did::user::{ReceiveActivityArgs, ReceiveActivityError, ReceiveActivityResponse};
 use wasm_dbms_api::prelude::{Database, Nullable};
 
@@ -170,7 +171,11 @@ fn handle_accept(activity: &Activity) -> Result<(), ReceiveActivityError> {
 
     ic_utils::log!("handle_incoming: accepting following for {remote_actor_uri}");
 
-    FollowingRepository::update_status(remote_actor_uri, FollowStatus::Accepted).map_err(|e| {
+    Transaction::run::<_, _, _, CanisterError>(Schema, |tx| {
+        FollowingRepository::with_transaction(tx)
+            .update_status(remote_actor_uri, FollowStatus::Accepted)
+    })
+    .map_err(|e| {
         ic_utils::log!("handle_incoming: failed to update following status: {e}");
         match e {
             CanisterError::Database(_) => ReceiveActivityError::ProcessingFailed,
@@ -188,7 +193,8 @@ fn handle_reject(activity: &Activity) -> Result<(), ReceiveActivityError> {
 
     ic_utils::log!("handle_incoming: rejecting following for {remote_actor_uri}, removing entry");
 
-    FollowingRepository::delete_by_actor_uri(remote_actor_uri)
+    FollowingRepository::oneshot()
+        .delete_by_actor_uri(remote_actor_uri)
         .map_err(|e| {
             ic_utils::log!("handle_incoming: failed to delete following entry: {e}");
             match e {
@@ -594,7 +600,8 @@ mod tests {
         setup();
 
         // first, create a pending following entry (simulates follow_user having run)
-        FollowingRepository::insert_pending("https://mastic.social/users/bob")
+        FollowingRepository::oneshot()
+            .insert_pending("https://mastic.social/users/bob")
             .expect("should insert pending");
 
         let json = make_accept_follow_json(
@@ -608,7 +615,8 @@ mod tests {
 
         assert_eq!(response, ReceiveActivityResponse::Ok);
 
-        let entry = FollowingRepository::find_by_actor_uri("https://mastic.social/users/bob")
+        let entry = FollowingRepository::oneshot()
+            .find_by_actor_uri("https://mastic.social/users/bob")
             .expect("should query")
             .expect("should find following entry");
         assert_eq!(entry.status, FollowStatus::Accepted);
@@ -619,7 +627,8 @@ mod tests {
         setup();
 
         // first, create a pending following entry
-        FollowingRepository::insert_pending("https://mastic.social/users/bob")
+        FollowingRepository::oneshot()
+            .insert_pending("https://mastic.social/users/bob")
             .expect("should insert pending");
 
         let json = make_reject_follow_json(
@@ -634,7 +643,8 @@ mod tests {
         assert_eq!(response, ReceiveActivityResponse::Ok);
 
         // entry should be deleted, not updated to rejected
-        let entry = FollowingRepository::find_by_actor_uri("https://mastic.social/users/bob")
+        let entry = FollowingRepository::oneshot()
+            .find_by_actor_uri("https://mastic.social/users/bob")
             .expect("should query");
         assert!(
             entry.is_none(),

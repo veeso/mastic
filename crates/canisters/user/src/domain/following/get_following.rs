@@ -22,23 +22,32 @@ pub fn get_following(args: GetFollowingArgs) -> GetFollowingResponse {
 fn inner_get_following(
     GetFollowingArgs { offset, limit }: GetFollowingArgs,
 ) -> CanisterResult<Vec<String>> {
-    FollowingRepository::get_accepted_following(offset as usize, limit as usize)
+    FollowingRepository::oneshot()
+        .get_accepted_following(offset as usize, limit as usize)
         .map(|following| following.into_iter().map(|f| f.actor_uri.0).collect())
 }
 
 #[cfg(test)]
 mod tests {
 
+    use db_utils::transaction::Transaction;
+
     use super::*;
     use crate::domain::following::FollowingRepository;
-    use crate::schema::FollowStatus;
+    use crate::error::CanisterError;
+    use crate::schema::{FollowStatus, Schema};
     use crate::test_utils::setup;
 
     /// Helper: insert a pending entry and accept it.
     fn insert_accepted(actor_uri: &str) {
-        FollowingRepository::insert_pending(actor_uri).expect("should insert");
-        FollowingRepository::update_status(actor_uri, FollowStatus::Accepted)
-            .expect("should accept");
+        FollowingRepository::oneshot()
+            .insert_pending(actor_uri)
+            .expect("should insert");
+        Transaction::run::<_, _, _, CanisterError>(Schema, |tx| {
+            FollowingRepository::with_transaction(tx)
+                .update_status(actor_uri, FollowStatus::Accepted)
+        })
+        .expect("should accept");
     }
 
     #[test]
@@ -113,7 +122,8 @@ mod tests {
         // insert one accepted, one pending
         insert_accepted("https://mastic.social/users/alice");
 
-        FollowingRepository::insert_pending("https://mastic.social/users/bob")
+        FollowingRepository::oneshot()
+            .insert_pending("https://mastic.social/users/bob")
             .expect("should insert");
         // bob stays pending
 
