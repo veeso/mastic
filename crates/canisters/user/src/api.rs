@@ -87,6 +87,15 @@ pub async fn accept_follow(args: AcceptFollowArgs) -> AcceptFollowResponse {
     crate::domain::follower::accept_follow(args).await
 }
 
+/// Boost of a status.
+pub async fn boost_status(args: BoostStatusArgs) -> BoostStatusResponse {
+    if !inspect::is_owner(ic_utils::caller()) {
+        ic_utils::trap!("Only the owner can boost statuses");
+    }
+
+    crate::domain::boost::boost_status(args).await
+}
+
 /// Emit a `Delete(Person)` activity to followers on profile deletion.
 ///
 /// This function can only be called by the directory canister.
@@ -193,6 +202,15 @@ pub async fn reject_follow(args: RejectFollowArgs) -> RejectFollowResponse {
     }
 
     crate::domain::follower::reject_follow(args).await
+}
+
+/// Undoes a boost of a status.
+pub async fn undo_boost(args: UndoBoostArgs) -> UndoBoostResponse {
+    if !inspect::is_owner(ic_utils::caller()) {
+        ic_utils::trap!("Only the owner can undo boosts");
+    }
+
+    crate::domain::boost::undo_boost(args).await
 }
 
 /// Unfollows a user.

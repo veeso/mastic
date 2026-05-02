@@ -207,32 +207,91 @@ author and the user's followers.
 
 **What should be done:**
 
-- Implement `boost_status(BoostStatusArgs)`:
-  - Authorize the caller (owner only)
-  - Record the boost in the user's outbox
-  - Build an `Announce` activity
-  - Send the activity to the Federation Canister (targets: status author +
-    all of the booster's followers)
-- Implement `undo_boost(UndoBoostArgs)`:
-  - Remove the boost from the outbox
-  - Send an `Undo(Announce)` activity
+- Implement `boost_status(BoostStatusArgs { status_url })`:
+  - Authorize the caller (owner only) at the inspect layer
+  - **Idempotent**: if a boost row for `status_url` already exists, return
+    `Ok` without inserting a duplicate row and without re-dispatching the
+    activity
+  - Otherwise:
+    - Resolve the original status (content, author URI, visibility,
+      spoiler, sensitive flag) by looking up the local `statuses` table
+      when the target is local, or the local inbox row when the target
+      is remote
+    - Insert a wrapper row into `statuses` owned by the booster with a
+      **denormalized copy** of the original content fields. This is the
+      booster's outbox entry for the boost
+    - Insert a row into `boosts` linking the wrapper (`status_id`) to
+      the `original_status_uri`
+    - Insert a `feed` entry with `source = Outbox` for the wrapper so
+      the boost appears in the booster's own feed
+    - Build an `Announce` activity and send it to the Federation Canister
+      (targets: status author + all of the booster's followers)
+- Implement `undo_boost(UndoBoostArgs { status_url })`:
+  - Authorize the caller (owner only) at the inspect layer
+  - **Idempotent**: if no boost row for `status_url` exists, return `Ok`
+    without dispatching an `Undo(Announce)` activity
+  - Otherwise, remove the `boosts` row, the wrapper `statuses` row, and
+    the corresponding `feed` outbox entry. Then send an `Undo(Announce)`
+    activity to the same targets
 - **User Canister** `receive_activity` handler: handle incoming `Announce`:
-  - Store the boosted status in the inbox (as a boost, not a new status)
+  - Insert an `inbox` row with `is_boost = true`,
+    `original_status_uri = <target>`, `actor_uri = booster`,
+    `activity_type = Announce`
+  - Insert a `feed` entry with `source = Inbox` for that row so the
+    boost appears in the recipient's feed
+  - If the local target status exists, increment
+    `statuses.boost_count` (saturating)
 - Handle incoming `Undo(Announce)`:
-  - Remove the boosted status from the inbox
+  - Delete the matching inbox row and its `feed` entry
+  - If the local target status exists, decrement
+    `statuses.boost_count` (saturating at 0)
+- **Feed rendering** (`read_feed`):
+  - Outbox path: when a `statuses` row is referenced by a `boosts`
+    row, hydrate the feed item using the denormalized copy and set
+    `boosted_by = Some(owner_actor_uri)`, `author = original author URI`.
+    Closes the existing `boosted_by: None` FIXME in
+    `crates/canisters/user/src/domain/feed/read_feed.rs`
+  - Inbox path: when an `inbox` row has `is_boost = true`, hydrate the
+    feed item by resolving `original_status_uri` (local `statuses` if
+    present, otherwise from any cached inbox row), and set
+    `boosted_by = Some(actor_uri)`, `author = original author URI`.
+    Closes the corresponding inbox-side FIXME
 - Define `BoostStatusArgs`, `BoostStatusResponse`, `UndoBoostArgs`,
-  `UndoBoostResponse` in the `did` crate
+  `UndoBoostResponse` in the `did` crate. Both error enums expose only
+  `Internal(String)`; authorization failures are rejected at the inspect
+  layer (no `Unauthorized` variant)
+- Extend `Status` / `FeedItem` with `boosted_by: Option<Text>`
 - Add `Announce` to `ActivityType`
+
+**Edit propagation note:** the wrapper row holds a denormalized copy of
+the original status content. When the original author edits the status
+(WI-1.23), the resulting `Update(Note)` activity received by the
+booster's canister must overwrite the wrapper's `content`,
+`spoiler_text`, and `sensitive` fields in addition to the inbox row's
+`object_data`. WI-1.23 covers this propagation.
 
 **Acceptance Criteria:**
 
-- Boosting a status records it in the outbox
+- Boosting a status inserts a wrapper row into the booster's outbox
+  with a denormalized copy of the original content
+- A `boosts` row links the wrapper to `original_status_uri`
+- The booster sees their own boost in their feed with
+  `boosted_by = self` and `author = original author URI`
 - An `Announce` activity is sent to the author and the booster's followers
-- Followers see the boost in their feed
-- Undoing a boost removes it and sends an `Undo(Announce)` activity
-- Cannot boost the same status twice
-- Integration test: Alice boosts Bob's status, Charlie (Alice's follower) sees
-  it in their feed
+- Followers see the boost in their feed with
+  `boosted_by = booster` and `author = original author URI`
+- `boost_status` is idempotent: calling it twice for the same `status_url`
+  returns `Ok` both times, stores a single boost row + wrapper, and
+  dispatches the `Announce` activity only once
+- Undoing a boost removes the `boosts` row, the wrapper status, the
+  outbox feed entry, and dispatches an `Undo(Announce)` activity
+- Receivers delete the inbox boost row and feed entry on `Undo(Announce)`
+- `undo_boost` is idempotent: calling it for a status that is not
+  boosted returns `Ok` without dispatching a second `Undo(Announce)`
+- Self-boost is allowed
+- Integration test: Alice boosts Bob's status, Charlie (Alice's follower)
+  sees it in his feed with `boosted_by = alice` and `author = bob`;
+  Alice also sees the boost in her own feed; undo removes it from both
 
 ### WI-1.8: Implement User Canister - delete status (UC15)
 

@@ -5,6 +5,7 @@ pub const MAX_PAGE_LIMIT: u64 = 50;
 
 pub mod activity;
 pub mod block;
+pub mod boost;
 pub mod ed25519;
 pub mod feed;
 pub mod follow_request;

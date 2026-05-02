@@ -5,12 +5,14 @@ pub fn inspect() {
 
     match method_name.as_str() {
         "accept_follow"
+        | "boost_status"
         | "follow_user"
         | "get_follow_requests"
         | "like_status"
         | "publish_status"
         | "read_feed"
         | "reject_follow"
+        | "undo_boost"
         | "unfollow_user"
         | "unlike_status"
         | "update_profile" => {

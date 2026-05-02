@@ -388,23 +388,19 @@ pub enum UnlikeStatusResponse {
 /// Request arguments for the `boost_status` method.
 #[derive(Debug, Clone, PartialEq, Eq, CandidType, Serialize, Deserialize)]
 pub struct BoostStatusArgs {
-    /// The unique ID of the status to boost.
-    pub status_id: String,
-    /// Principal of the User Canister that authored the status.
-    pub author_canister: candid::Principal,
+    /// ActivityPub URI of the status to like.
+    pub status_url: String,
 }
 
 /// Error types for the `boost_status` method.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, CandidType, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, CandidType, Serialize, Deserialize)]
 pub enum BoostStatusError {
-    /// The caller is not the canister owner.
-    Unauthorized,
-    /// The caller has already boosted this status.
-    AlreadyBoosted,
+    /// Internal error occurred while boosting the status.
+    Internal(String),
 }
 
 /// Response type for the `boost_status` method.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, CandidType, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, CandidType, Serialize, Deserialize)]
 pub enum BoostStatusResponse {
     Ok,
     Err(BoostStatusError),
@@ -413,23 +409,19 @@ pub enum BoostStatusResponse {
 /// Request arguments for the `undo_boost` method.
 #[derive(Debug, Clone, PartialEq, Eq, CandidType, Serialize, Deserialize)]
 pub struct UndoBoostArgs {
-    /// The unique ID of the status to un-boost.
-    pub status_id: String,
-    /// Principal of the User Canister that authored the status.
-    pub author_canister: candid::Principal,
+    /// ActivityPub URI of the status to un-boost.
+    pub status_url: String,
 }
 
 /// Error types for the `undo_boost` method.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, CandidType, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, CandidType, Serialize, Deserialize)]
 pub enum UndoBoostError {
-    /// The caller is not the canister owner.
-    Unauthorized,
-    /// No boost exists for the given status.
-    NotFound,
+    /// Internal error occurred while un-boosting the status.
+    Internal(String),
 }
 
 /// Response type for the `undo_boost` method.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, CandidType, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, CandidType, Serialize, Deserialize)]
 pub enum UndoBoostResponse {
     Ok,
     Err(UndoBoostError),

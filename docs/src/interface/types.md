@@ -895,18 +895,22 @@ Request, response, and error types for the `boost_status` method. Boosts
 (reblogs) a status authored by another user, sharing it with the caller's
 followers.
 
-| Field              | Description                                              |
-| ------------------ | -------------------------------------------------------- |
-| `status_id`        | The unique ID of the status to boost.                    |
-| `author_canister`  | Principal of the User Canister that authored the status. |
+`boost_status` is **idempotent**: calling it for a status the caller has
+already boosted returns `Ok` without recording a duplicate row in the
+boosts collection and without re-emitting an `Announce` activity. Only the
+caller (canister owner) is authorized; non-owner calls are rejected at the
+inspect layer.
 
-- **Unauthorized**: the caller is not the canister owner.
-- **AlreadyBoosted**: the caller has already boosted this status.
+| Field        | Description                             |
+| ------------ | --------------------------------------- |
+| `status_url` | ActivityPub URI of the status to boost. |
+
+- **Internal**: an unexpected internal error occurred (database access
+  failure, federation dispatch failure, etc.).
 
 ```candid
 type BoostStatusArgs = record {
-  status_id : text;
-  author_canister : principal;
+  status_url : text;
 };
 
 type BoostStatusResponse = variant {
@@ -915,8 +919,7 @@ type BoostStatusResponse = variant {
 };
 
 type BoostStatusError = variant {
-  Unauthorized;
-  AlreadyBoosted;
+  Internal : text;
 };
 ```
 
@@ -925,18 +928,21 @@ type BoostStatusError = variant {
 Request, response, and error types for the `undo_boost` method. Removes a
 previously recorded boost from a status.
 
-| Field              | Description                                              |
-| ------------------ | -------------------------------------------------------- |
-| `status_id`        | The unique ID of the status to un-boost.                 |
-| `author_canister`  | Principal of the User Canister that authored the status. |
+`undo_boost` is **idempotent**: calling it for a status the caller has
+not boosted (or has already un-boosted) returns `Ok` without emitting a
+second `Undo(Announce)` activity. Only the caller (canister owner) is
+authorized; non-owner calls are rejected at the inspect layer.
 
-- **Unauthorized**: the caller is not the canister owner.
-- **NotFound**: no boost exists for the given status.
+| Field        | Description                                |
+| ------------ | ------------------------------------------ |
+| `status_url` | ActivityPub URI of the status to un-boost. |
+
+- **Internal**: an unexpected internal error occurred (database access
+  failure, federation dispatch failure, etc.).
 
 ```candid
 type UndoBoostArgs = record {
-  status_id : text;
-  author_canister : principal;
+  status_url : text;
 };
 
 type UndoBoostResponse = variant {
@@ -945,8 +951,7 @@ type UndoBoostResponse = variant {
 };
 
 type UndoBoostError = variant {
-  Unauthorized;
-  NotFound;
+  Internal : text;
 };
 ```
 
