@@ -1,9 +1,12 @@
 use ic_dbms_canister::prelude::DBMS_CONTEXT;
 use wasm_dbms::WasmDbmsDatabase;
-use wasm_dbms_api::prelude::{Database, DeleteBehavior, Filter, Query};
+use wasm_dbms_api::prelude::{Database, DeleteBehavior, Filter, Nullable, Query};
 
 use crate::error::{CanisterError, CanisterResult};
-use crate::schema::{Boost, BoostInsertRequest, BoostRecord, Schema};
+use crate::schema::{
+    Boost, BoostInsertRequest, BoostRecord, FeedEntry, FeedEntryInsertRequest, FeedSource, Schema,
+    Status, StatusInsertRequest, Visibility,
+};
 
 /// Repository for managing [`Boost`] records in the database.
 pub struct BoostRepository;
@@ -21,6 +24,58 @@ impl BoostRepository {
                     original_status_uri: original_status_uri.into(),
                     created_at: ic_utils::now().into(),
                 })
+            })
+            .map_err(CanisterError::from)
+    }
+
+    /// Transactionally insert a wrapper [`Status`] row, the corresponding
+    /// [`Boost`] row, and a `feed` entry with `source = Outbox`. The same
+    /// `snowflake_id` is used as the primary key in all three tables — this
+    /// makes the wrapper status URL `<actor>/statuses/<snowflake>` also serve
+    /// as the `Announce` activity id.
+    pub fn insert_boost_with_wrapper(
+        snowflake_id: u64,
+        original_status_uri: &str,
+        content: &str,
+        visibility: Visibility,
+        spoiler_text: Option<&str>,
+        sensitive: bool,
+        created_at: u64,
+    ) -> CanisterResult<()> {
+        DBMS_CONTEXT
+            .with(|ctx| {
+                let tx_id = ctx
+                    .begin_transaction(db_utils::transaction::transaction_caller(ic_utils::now()));
+                let mut db = WasmDbmsDatabase::from_transaction(ctx, Schema, tx_id);
+
+                db.insert::<Status>(StatusInsertRequest {
+                    id: snowflake_id.into(),
+                    content: content.into(),
+                    visibility,
+                    like_count: 0u64.into(),
+                    boost_count: 0u64.into(),
+                    in_reply_to_uri: Nullable::Null,
+                    spoiler_text: spoiler_text
+                        .map_or(Nullable::Null, |s| Nullable::Value(s.into())),
+                    sensitive: sensitive.into(),
+                    edited_at: Nullable::Null,
+                    created_at: created_at.into(),
+                })?;
+
+                db.insert::<Boost>(BoostInsertRequest {
+                    id: snowflake_id.into(),
+                    status_id: snowflake_id.into(),
+                    original_status_uri: original_status_uri.into(),
+                    created_at: created_at.into(),
+                })?;
+
+                db.insert::<FeedEntry>(FeedEntryInsertRequest {
+                    id: snowflake_id.into(),
+                    source: FeedSource::Outbox,
+                    created_at: created_at.into(),
+                })?;
+
+                db.commit()
             })
             .map_err(CanisterError::from)
     }
@@ -205,5 +260,50 @@ mod tests {
         setup();
         let found = BoostRepository::find_by_original_uri(STATUS_URI_A).expect("should query");
         assert!(found.is_none());
+    }
+
+    #[test]
+    fn test_should_insert_boost_with_wrapper_in_one_tx() {
+        setup();
+
+        BoostRepository::insert_boost_with_wrapper(
+            42,
+            STATUS_URI_A,
+            "boosted text",
+            crate::schema::Visibility::from(did::common::Visibility::Public),
+            Some("cw"),
+            true,
+            1_000_000,
+        )
+        .expect("insert");
+
+        // Wrapper Status row
+        let wrapper = crate::domain::status::StatusRepository::find_by_id(42)
+            .expect("query")
+            .expect("wrapper exists");
+        assert_eq!(wrapper.content.0, "boosted text");
+        assert_eq!(
+            wrapper
+                .spoiler_text
+                .clone()
+                .into_opt()
+                .expect("spoiler value")
+                .0,
+            "cw"
+        );
+        assert!(wrapper.sensitive.0);
+
+        // Boost row
+        let boost = BoostRepository::find_by_original_uri(STATUS_URI_A)
+            .expect("query")
+            .expect("boost exists");
+        assert_eq!(boost.id.expect("id").0, 42);
+        assert_eq!(
+            boost.original_status_uri.expect("uri").0,
+            STATUS_URI_A.to_string()
+        );
+
+        // Idempotency check picks it up
+        assert!(BoostRepository::is_boosted(STATUS_URI_A).expect("query"));
     }
 }
