@@ -66,6 +66,17 @@ pub fn actor_uri_from_status_uri(uri: &str) -> Option<String> {
     Some(head.to_string())
 }
 
+/// Parse the numeric id from any `…/statuses/<id>` URI, returning [`None`]
+/// when the URI does not end in `…/statuses/<digits>` (or has trailing
+/// path after the id).
+pub fn parse_status_id(uri: &str) -> Option<u64> {
+    let (_, tail) = uri.rsplit_once("/statuses/")?;
+    if tail.is_empty() || tail.contains('/') {
+        return None;
+    }
+    tail.parse::<u64>().ok()
+}
+
 /// Parse a local status URI of the form
 /// `{public_url}/users/{handle}/statuses/{id}`, returning `(handle, id)` when
 /// the URI is hosted on this instance and the path matches the canonical
@@ -175,6 +186,15 @@ mod tests {
     #[test]
     fn test_actor_uri_from_status_uri_rejects_missing_id() {
         assert!(actor_uri_from_status_uri("https://mastic.social/users/alice/statuses/").is_none());
+    }
+
+    #[test]
+    fn test_parse_status_id() {
+        assert_eq!(parse_status_id("https://x/users/a/statuses/42"), Some(42));
+        assert_eq!(parse_status_id("https://x/users/a/statuses/42/foo"), None);
+        assert_eq!(parse_status_id("https://x/users/a/statuses/"), None);
+        assert_eq!(parse_status_id("https://x/users/a"), None);
+        assert_eq!(parse_status_id("not-a-url/statuses/notnum"), None);
     }
 
     #[test]
