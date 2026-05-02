@@ -10,6 +10,28 @@ type FederationInstallArgs = variant {
     directory_canister : principal;
   };
 };
+// Request arguments for the `fetch_status` method.
+type FetchStatusArgs = record {
+  // ActivityPub URI of the status to fetch.
+  uri : text;
+  // Optional actor URI of the requester. Forwarded to the target user
+  // canister so it can apply visibility rules.
+  requester_actor_uri : opt text;
+};
+// Error type for the `fetch_status` method.
+type FetchStatusError = variant {
+  // Internal error occurred while fetching the status.
+  Internal : text;
+  // The status was not found, or the requester is not allowed to see it.
+  NotFound;
+  // The URI could not be parsed (host or path shape).
+  InvalidUri;
+  // The URI host is not local. M1 only supports local fetch; HTTPS
+  // outcalls land in M3.
+  Unsupported;
+};
+// Response type for the `fetch_status` method.
+type FetchStatusResponse = variant { Ok : Status; Err : FetchStatusError };
 // Arguments for the `register_user` method of the Federation canister.
 type RegisterUserArgs = record {
   user_handle : text;
@@ -65,7 +87,41 @@ type SendActivityResponse = variant {
 // Carries the delivery result for a single [`SendActivityArgsObject`]. Batch
 // calls return one result per input object, index-aligned with the request.
 type SendActivityResult = variant { Ok; Err : SendActivityError };
+// A single post authored by a user. Each status has a unique ID, content body,
+// author principal, creation timestamp, and visibility setting.
+type Status = record {
+  // Unique identifier for this status, assigned by the User Canister. (Snowflake id)
+  id : nat64;
+  // The text content of the status.
+  content : text;
+  // Cached count of `Like` activities received for this status.
+  like_count : nat64;
+  // Timestamp (milliseconds since epoch) of when the status was created.
+  created_at : nat64;
+  // The actor URI of the status author (e.g. `https://mastic.social/users/alice`).
+  author : text;
+  // The visibility setting of the status, controlling its audience.
+  visibility : Visibility;
+  // Optional content warning / spoiler text shown before content.
+  spoiler_text : opt text;
+  // Whether the status should be hidden behind a content warning by clients.
+  sensitive : bool;
+  // Cached count of `Announce` (boost) activities received for this status.
+  boost_count : nat64;
+};
+// Controls the audience of a status post. Maps to ActivityPub addressing
+type Visibility = variant {
+  // visible only to the author's followers
+  FollowersOnly;
+  // visible to everyone and included in public timelines
+  Public;
+  // visible to everyone via direct link, but excluded from public timelines
+  Unlisted;
+  // visible only to explicitly mentioned users
+  Direct;
+};
 service : (FederationInstallArgs) -> {
+  fetch_status : (FetchStatusArgs) -> (FetchStatusResponse);
   register_user : (RegisterUserArgs) -> (RegisterUserResponse);
   send_activity : (SendActivityArgs) -> (SendActivityResponse);
 }

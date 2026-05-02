@@ -3,8 +3,8 @@
 pub mod inspect;
 
 use did::federation::{
-    FederationInstallArgs, RegisterUserArgs, RegisterUserResponse, SendActivityArgs,
-    SendActivityResponse,
+    FederationInstallArgs, FetchStatusArgs, FetchStatusResponse, RegisterUserArgs,
+    RegisterUserResponse, SendActivityArgs, SendActivityResponse,
 };
 
 /// Initialize the canister with the given arguments
@@ -68,6 +68,10 @@ pub async fn send_activity(args: SendActivityArgs) -> SendActivityResponse {
     }
 
     crate::domain::activity::send_activity(args).await
+}
+
+pub async fn fetch_status(args: FetchStatusArgs) -> FetchStatusResponse {
+    crate::domain::fetch_status::fetch_status(args).await
 }
 
 #[cfg(test)]
