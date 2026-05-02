@@ -28,5 +28,6 @@ docs/book/
 .claude/plans/
 .claude/settings.local.json
 .claude/specs/
+.claude/*.lock
 
 docs/superpowers/
