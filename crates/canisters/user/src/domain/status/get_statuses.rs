@@ -128,6 +128,8 @@ fn status_to_did(owner_actor_uri: &str, status: crate::schema::Status) -> Status
         author: owner_actor_uri.to_string(),
         like_count: status.like_count.0,
         boost_count: status.boost_count.0,
+        spoiler_text: status.spoiler_text.into_opt().map(|t| t.0),
+        sensitive: status.sensitive.0,
     }
 }
 

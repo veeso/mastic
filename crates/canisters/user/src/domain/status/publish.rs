@@ -88,6 +88,8 @@ async fn save_status_and_publish_to_federation(
         visibility,
         like_count: 0,
         boost_count: 0,
+        spoiler_text: None,
+        sensitive: false,
     };
 
     let recipients = match visibility {
@@ -484,6 +486,8 @@ mod tests {
             visibility,
             like_count: 0,
             boost_count: 0,
+            spoiler_text: None,
+            sensitive: false,
         }
     }
 
@@ -497,6 +501,8 @@ mod tests {
             visibility: Visibility::Public,
             like_count: 0,
             boost_count: 0,
+            spoiler_text: None,
+            sensitive: false,
         };
 
         let args = make_activity(BOB_URI, &status, &[]);

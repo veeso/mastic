@@ -345,6 +345,8 @@ fn test_should_roundtrip_publish_status_response_ok() {
         visibility: crate::common::Visibility::Public,
         like_count: 0,
         boost_count: 0,
+        spoiler_text: None,
+        sensitive: false,
     });
     let bytes = Encode!(&resp).unwrap();
     let decoded = Decode!(&bytes, PublishStatusResponse).unwrap();
@@ -551,6 +553,8 @@ fn test_should_roundtrip_get_statuses_response_ok() {
         visibility: crate::common::Visibility::Public,
         like_count: 0,
         boost_count: 0,
+        spoiler_text: None,
+        sensitive: false,
     }]);
     let bytes = Encode!(&resp).unwrap();
     let decoded = Decode!(&bytes, GetStatusesResponse).unwrap();
@@ -592,6 +596,8 @@ fn test_should_roundtrip_read_feed_response_ok() {
             visibility: crate::common::Visibility::Public,
             like_count: 0,
             boost_count: 0,
+            spoiler_text: None,
+            sensitive: false,
         },
         boosted_by: None,
     }]);
