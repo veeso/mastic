@@ -28,7 +28,9 @@ async fn boost_status_impl(status_uri: String) -> CanisterResult<()> {
     // Insert the boost into the database first; if federation dispatch
     // later fails, the user can re-trigger and the row already exists,
     // making the second call a no-op.
-    BoostRepository::boost_status(&status_uri)?;
+    // TODO(Task 11): provide real `id` and `status_id` values.
+    #[allow(unreachable_code)]
+    BoostRepository::boost_status(todo!(), todo!(), &status_uri)?;
 
     Ok(())
 }

@@ -3,7 +3,7 @@ use wasm_dbms::WasmDbmsDatabase;
 use wasm_dbms_api::prelude::{Database, DeleteBehavior, Filter, Query};
 
 use crate::error::{CanisterError, CanisterResult};
-use crate::schema::{Boost, BoostInsertRequest, Schema};
+use crate::schema::{Boost, BoostInsertRequest, BoostRecord, Schema};
 
 /// Repository for managing [`Boost`] records in the database.
 pub struct BoostRepository;
@@ -26,6 +26,7 @@ impl BoostRepository {
     }
 
     /// Deletes a boost from the database, identified by the boosted status URI.
+    #[allow(dead_code)] // wired up in Task 12 (undo_boost flow)
     pub fn unboost_status(original_status_uri: &str) -> CanisterResult<()> {
         DBMS_CONTEXT
             .with(|ctx| {
@@ -63,7 +64,29 @@ impl BoostRepository {
             .map_err(CanisterError::from)
     }
 
+    /// Looks up a boost record by the URI of the original (boosted) status.
+    ///
+    /// Returns `Ok(None)` when no matching row exists.
+    #[allow(dead_code)] // wired up in Task 11 (boost_status flow rewrite)
+    pub fn find_by_original_uri(uri: &str) -> CanisterResult<Option<BoostRecord>> {
+        DBMS_CONTEXT
+            .with(|ctx| {
+                let db = WasmDbmsDatabase::oneshot(ctx, Schema);
+
+                db.select::<Boost>(
+                    Query::builder()
+                        .all()
+                        .and_where(Filter::eq("original_status_uri", uri.into()))
+                        .limit(1)
+                        .build(),
+                )
+            })
+            .map(|rows| rows.into_iter().next())
+            .map_err(CanisterError::from)
+    }
+
     /// Returns the URIs of statuses boosted by the user.
+    #[allow(dead_code)] // wired up in a later task (get_boosts API endpoint)
     pub fn get_boosts(offset: usize, limit: usize) -> CanisterResult<Vec<String>> {
         DBMS_CONTEXT
             .with(|ctx| {
@@ -162,5 +185,28 @@ mod tests {
 
         let boosts = BoostRepository::get_boosts(0, 10).expect("should query");
         assert!(boosts.is_empty());
+    }
+
+    #[test]
+    fn test_should_find_by_original_uri() {
+        setup();
+        seed_status(10);
+        BoostRepository::boost_status(100, 10, STATUS_URI_A).expect("should insert boost");
+
+        let found = BoostRepository::find_by_original_uri(STATUS_URI_A)
+            .expect("should query")
+            .expect("should find row");
+        assert_eq!(found.id.expect("id").0, 100);
+        assert_eq!(
+            found.original_status_uri.expect("uri").0,
+            STATUS_URI_A.to_string()
+        );
+    }
+
+    #[test]
+    fn test_find_by_original_uri_returns_none_when_missing() {
+        setup();
+        let found = BoostRepository::find_by_original_uri(STATUS_URI_A).expect("should query");
+        assert!(found.is_none());
     }
 }
