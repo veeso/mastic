@@ -63,13 +63,16 @@ async fn follow_user_inner(handle: &str) -> Result<(), FollowUserDomainError> {
     let target_actor_uri = crate::domain::urls::actor_uri(handle)?;
 
     // check if already following
-    if FollowingRepository::find_by_actor_uri(&target_actor_uri)?.is_some() {
+    if FollowingRepository::oneshot()
+        .find_by_actor_uri(&target_actor_uri)?
+        .is_some()
+    {
         ic_utils::log!("follow_user: already following {target_actor_uri}");
         return Err(FollowUserDomainError::AlreadyFollowing);
     }
 
     // insert pending follow and send activity
-    FollowingRepository::insert_pending(&target_actor_uri)?;
+    FollowingRepository::oneshot().insert_pending(&target_actor_uri)?;
 
     let activity = make_follow_activity(&own_actor_uri, &target_actor_uri)?;
     let args = SendActivityArgs::One(SendActivityArgsObject {
@@ -126,7 +129,8 @@ mod tests {
         assert_eq!(response, FollowUserResponse::Ok);
 
         // verify the entry was stored as pending with proper actor URI
-        let entry = FollowingRepository::find_by_actor_uri("https://mastic.social/users/alice")
+        let entry = FollowingRepository::oneshot()
+            .find_by_actor_uri("https://mastic.social/users/alice")
             .expect("should query following")
             .expect("should find following entry");
         assert_eq!(entry.status, FollowStatus::Pending);

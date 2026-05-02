@@ -1,36 +1,55 @@
 //! Following repository for managing follow relationships.
 
-use ic_dbms_canister::prelude::DBMS_CONTEXT;
+use ic_dbms_canister::prelude::{DBMS_CONTEXT, IcAccessControlList, IcMemoryProvider};
 use wasm_dbms::WasmDbmsDatabase;
+use wasm_dbms::prelude::DbmsContext;
 use wasm_dbms_api::prelude::*;
 
 use crate::error::{CanisterError, CanisterResult};
 use crate::schema::{FollowStatus, Following, FollowingInsertRequest, FollowingRecord, Schema};
 
 /// Interface to access [`Following`] data.
-pub struct FollowingRepository;
+pub struct FollowingRepository {
+    tx: Option<TransactionId>,
+}
 
 impl FollowingRepository {
-    /// Insert a new pending follow entry for the given actor URI.
-    pub fn insert_pending(actor_uri: &str) -> CanisterResult<()> {
-        DBMS_CONTEXT.with(|ctx| {
-            let db = WasmDbmsDatabase::oneshot(ctx, Schema);
+    pub const fn oneshot() -> Self {
+        Self { tx: None }
+    }
 
-            db.insert::<Following>(FollowingInsertRequest {
-                actor_uri: actor_uri.into(),
-                status: FollowStatus::Pending,
-                created_at: ic_utils::now().into(),
-            })
-            .map_err(CanisterError::from)
+    pub const fn with_transaction(tx: TransactionId) -> Self {
+        Self { tx: Some(tx) }
+    }
+
+    fn db<'a>(
+        &self,
+        ctx: &'a DbmsContext<IcMemoryProvider, IcAccessControlList>,
+    ) -> WasmDbmsDatabase<'a, IcMemoryProvider, IcAccessControlList> {
+        match self.tx {
+            Some(id) => WasmDbmsDatabase::from_transaction(ctx, Schema, id),
+            None => WasmDbmsDatabase::oneshot(ctx, Schema),
+        }
+    }
+
+    /// Insert a new pending follow entry for the given actor URI.
+    pub fn insert_pending(&self, actor_uri: &str) -> CanisterResult<()> {
+        DBMS_CONTEXT.with(|ctx| {
+            self.db(ctx)
+                .insert::<Following>(FollowingInsertRequest {
+                    actor_uri: actor_uri.into(),
+                    status: FollowStatus::Pending,
+                    created_at: ic_utils::now().into(),
+                })
+                .map_err(CanisterError::from)
         })
     }
 
     /// Find a following entry by actor URI.
-    pub fn find_by_actor_uri(actor_uri: &str) -> CanisterResult<Option<Following>> {
+    pub fn find_by_actor_uri(&self, actor_uri: &str) -> CanisterResult<Option<Following>> {
         DBMS_CONTEXT.with(|ctx| {
-            let db = WasmDbmsDatabase::oneshot(ctx, Schema);
-
-            let records = db
+            let records = self
+                .db(ctx)
                 .select::<Following>(
                     Query::builder()
                         .all()
@@ -46,48 +65,49 @@ impl FollowingRepository {
     /// Get the list of accepted [`Following`]s of the user.
     ///
     /// Only returns entries with [`FollowStatus::Accepted`].
-    pub fn get_accepted_following(offset: usize, limit: usize) -> CanisterResult<Vec<Following>> {
+    pub fn get_accepted_following(
+        &self,
+        offset: usize,
+        limit: usize,
+    ) -> CanisterResult<Vec<Following>> {
         DBMS_CONTEXT.with(|ctx| {
-            let db = WasmDbmsDatabase::oneshot(ctx, Schema);
-
-            db.select::<Following>(
-                Query::builder()
-                    .all()
-                    .and_where(Filter::eq("status", Value::from(FollowStatus::Accepted)))
-                    .offset(offset)
-                    .limit(limit)
-                    .build(),
-            )
-            .map(|records| records.into_iter().map(Self::record_to_following).collect())
-            .map_err(CanisterError::from)
+            self.db(ctx)
+                .select::<Following>(
+                    Query::builder()
+                        .all()
+                        .and_where(Filter::eq("status", Value::from(FollowStatus::Accepted)))
+                        .offset(offset)
+                        .limit(limit)
+                        .build(),
+                )
+                .map(|records| records.into_iter().map(Self::record_to_following).collect())
+                .map_err(CanisterError::from)
         })
     }
 
     /// Delete a following entry by actor URI.
     ///
     /// Returns `true` if an entry was deleted, `false` if no entry was found with the given actor URI.
-    pub fn delete_by_actor_uri(actor_uri: &str) -> CanisterResult<bool> {
+    pub fn delete_by_actor_uri(&self, actor_uri: &str) -> CanisterResult<bool> {
         DBMS_CONTEXT.with(|ctx| {
-            let db = WasmDbmsDatabase::oneshot(ctx, Schema);
-
-            db.delete::<Following>(
-                DeleteBehavior::Restrict,
-                Some(Filter::eq("actor_uri", Value::from(actor_uri.to_string()))),
-            )
-            .map(|entries| entries > 0)
-            .map_err(CanisterError::from)
+            self.db(ctx)
+                .delete::<Following>(
+                    DeleteBehavior::Restrict,
+                    Some(Filter::eq("actor_uri", Value::from(actor_uri.to_string()))),
+                )
+                .map(|entries| entries > 0)
+                .map_err(CanisterError::from)
         })
     }
 
     /// Update the follow status for a given actor URI.
     ///
     /// Implemented as delete + re-insert because wasm-dbms does not support
-    /// in-place updates. Runs inside a transaction to maintain atomicity.
-    pub fn update_status(actor_uri: &str, new_status: FollowStatus) -> CanisterResult<()> {
+    /// in-place updates. Callers must wrap this call in a `Transaction::run`
+    /// to preserve atomicity across the underlying delete + insert.
+    pub fn update_status(&self, actor_uri: &str, new_status: FollowStatus) -> CanisterResult<()> {
         DBMS_CONTEXT.with(|ctx| {
-            let tx_id =
-                ctx.begin_transaction(db_utils::transaction::transaction_caller(ic_utils::now()));
-            let mut db = WasmDbmsDatabase::from_transaction(ctx, Schema, tx_id);
+            let db = self.db(ctx);
 
             // read the existing entry
             let records = db.select::<Following>(
@@ -118,8 +138,6 @@ impl FollowingRepository {
                 created_at: existing.created_at,
             })?;
 
-            db.commit()?;
-
             Ok(())
         })
     }
@@ -136,6 +154,8 @@ impl FollowingRepository {
 #[cfg(test)]
 mod tests {
 
+    use db_utils::transaction::Transaction;
+
     use super::*;
     use crate::test_utils::setup;
 
@@ -143,13 +163,16 @@ mod tests {
     fn test_should_delete_following_by_actor_uri() {
         setup();
 
-        FollowingRepository::insert_pending("https://mastic.social/users/alice")
+        FollowingRepository::oneshot()
+            .insert_pending("https://mastic.social/users/alice")
             .expect("should insert");
 
-        FollowingRepository::delete_by_actor_uri("https://mastic.social/users/alice")
+        FollowingRepository::oneshot()
+            .delete_by_actor_uri("https://mastic.social/users/alice")
             .expect("should delete");
 
-        let found = FollowingRepository::find_by_actor_uri("https://mastic.social/users/alice")
+        let found = FollowingRepository::oneshot()
+            .find_by_actor_uri("https://mastic.social/users/alice")
             .expect("should query");
         assert!(found.is_none());
     }
@@ -158,16 +181,18 @@ mod tests {
     fn test_should_update_status_pending_to_accepted() {
         setup();
 
-        FollowingRepository::insert_pending("https://mastic.social/users/alice")
+        FollowingRepository::oneshot()
+            .insert_pending("https://mastic.social/users/alice")
             .expect("should insert");
 
-        FollowingRepository::update_status(
-            "https://mastic.social/users/alice",
-            FollowStatus::Accepted,
-        )
+        Transaction::run::<_, _, _, CanisterError>(Schema, |tx| {
+            FollowingRepository::with_transaction(tx)
+                .update_status("https://mastic.social/users/alice", FollowStatus::Accepted)
+        })
         .expect("should update");
 
-        let entry = FollowingRepository::find_by_actor_uri("https://mastic.social/users/alice")
+        let entry = FollowingRepository::oneshot()
+            .find_by_actor_uri("https://mastic.social/users/alice")
             .expect("should query")
             .expect("should find entry");
         assert_eq!(entry.status, FollowStatus::Accepted);
@@ -177,10 +202,10 @@ mod tests {
     fn test_update_status_should_fail_for_missing_entry() {
         setup();
 
-        let result = FollowingRepository::update_status(
-            "https://mastic.social/users/nobody",
-            FollowStatus::Accepted,
-        );
+        let result = Transaction::run::<_, _, _, CanisterError>(Schema, |tx| {
+            FollowingRepository::with_transaction(tx)
+                .update_status("https://mastic.social/users/nobody", FollowStatus::Accepted)
+        });
         assert!(result.is_err());
     }
 }

@@ -37,7 +37,7 @@ pub async fn unfollow_user(
 async fn unfollow_user_inner(target_actor_uri: &str) -> CanisterResult<()> {
     // Idempotent: delete returns false when no row matched — nothing to do.
     // Removes the row regardless of status (Pending or Accepted).
-    if !FollowingRepository::delete_by_actor_uri(target_actor_uri)? {
+    if !FollowingRepository::oneshot().delete_by_actor_uri(target_actor_uri)? {
         ic_utils::log!("unfollow_user: not following {target_actor_uri}, no-op");
         return Ok(());
     }
@@ -97,10 +97,12 @@ fn make_undo_follow_activity(own_actor_uri: &str, target_actor_uri: &str) -> Act
 #[cfg(test)]
 mod tests {
 
+    use db_utils::transaction::Transaction;
     use did::user::{UnfollowUserArgs, UnfollowUserResponse};
 
     use super::*;
-    use crate::schema::FollowStatus;
+    use crate::error::CanisterError;
+    use crate::schema::{FollowStatus, Schema};
     use crate::test_utils::setup;
 
     const TARGET_URI: &str = "https://mastic.social/users/alice";
@@ -110,9 +112,14 @@ mod tests {
     async fn test_should_unfollow_accepted_target() {
         setup();
 
-        FollowingRepository::insert_pending(TARGET_URI).expect("should insert");
-        FollowingRepository::update_status(TARGET_URI, FollowStatus::Accepted)
-            .expect("should accept");
+        FollowingRepository::oneshot()
+            .insert_pending(TARGET_URI)
+            .expect("should insert");
+        Transaction::run::<_, _, _, CanisterError>(Schema, |tx| {
+            FollowingRepository::with_transaction(tx)
+                .update_status(TARGET_URI, FollowStatus::Accepted)
+        })
+        .expect("should accept");
 
         let response = unfollow_user(UnfollowUserArgs {
             actor_uri: TARGET_URI.to_string(),
@@ -121,7 +128,8 @@ mod tests {
 
         assert_eq!(response, UnfollowUserResponse::Ok);
         assert!(
-            FollowingRepository::find_by_actor_uri(TARGET_URI)
+            FollowingRepository::oneshot()
+                .find_by_actor_uri(TARGET_URI)
                 .expect("should query")
                 .is_none()
         );
@@ -131,7 +139,9 @@ mod tests {
     async fn test_should_unfollow_pending_target() {
         setup();
 
-        FollowingRepository::insert_pending(TARGET_URI).expect("should insert");
+        FollowingRepository::oneshot()
+            .insert_pending(TARGET_URI)
+            .expect("should insert");
 
         let response = unfollow_user(UnfollowUserArgs {
             actor_uri: TARGET_URI.to_string(),
@@ -140,7 +150,8 @@ mod tests {
 
         assert_eq!(response, UnfollowUserResponse::Ok);
         assert!(
-            FollowingRepository::find_by_actor_uri(TARGET_URI)
+            FollowingRepository::oneshot()
+                .find_by_actor_uri(TARGET_URI)
                 .expect("should query")
                 .is_none()
         );
