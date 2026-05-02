@@ -36,12 +36,14 @@
     - [UnlikeStatus](#undolike)
     - [BoostStatus](#booststatus)
     - [UndoBoost](#undoboost)
+    - [GetLocalStatus](#getlocalstatus)
     - [GetLiked](#getliked)
     - [ReadFeed](#readfeed)
     - [ReceiveActivity](#receiveactivity)
   - [Federation Canister Types](#federation-canister-types)
     - [FederationInstallArgs](#federationinstallargs)
     - [SendActivity](#sendactivity)
+    - [FetchStatus](#fetchstatus)
 
 This document defines all shared Candid types used across the Directory, Federation, and User canisters.
 
@@ -93,15 +95,17 @@ type UserProfile = record {
 A single post authored by a user. Each status has a unique ID, content body,
 author principal, creation timestamp, and visibility setting.
 
-| Field         | Description                                                        |
-| ------------- | ------------------------------------------------------------------ |
-| `id`          | Snowflake identifier of the status assigned by the User Canister.  |
-| `content`     | The text content of the post.                                      |
-| `author`      | ActivityPub actor URI of the status author.                        |
-| `created_at`  | Timestamp (milliseconds since epoch) when the status was created.  |
-| `visibility`  | Audience control for this status (see [Visibility](#visibility)).  |
-| `like_count`  | Cached count of `Like` activities received for this status.        |
-| `boost_count` | Cached count of `Announce` (boost) activities received.            |
+| Field          | Description                                                          |
+| -------------- | -------------------------------------------------------------------- |
+| `id`           | Snowflake identifier of the status assigned by the User Canister.    |
+| `content`      | The text content of the post.                                        |
+| `author`       | ActivityPub actor URI of the status author.                          |
+| `created_at`   | Timestamp (milliseconds since epoch) when the status was created.    |
+| `visibility`   | Audience control for this status (see [Visibility](#visibility)).    |
+| `like_count`   | Cached count of `Like` activities received for this status.          |
+| `boost_count`  | Cached count of `Announce` (boost) activities received.              |
+| `spoiler_text` | Optional content warning / spoiler text shown before the content.    |
+| `sensitive`    | If `true`, clients should hide the content behind a CW by default.   |
 
 ```candid
 type Status = record {
@@ -112,8 +116,16 @@ type Status = record {
   visibility : Visibility;
   like_count : nat64;
   boost_count : nat64;
+  spoiler_text : opt text;
+  sensitive : bool;
 };
 ```
+
+When a status is boosted, the booster's User Canister inserts a wrapper
+row in its own `statuses` table that denormalizes the original
+`content`, `spoiler_text`, and `sensitive` fields. Feed rendering reads
+the wrapper directly so the boosted CW carries through into the
+booster's outbox copy.
 
 ### FeedItem
 
@@ -895,6 +907,13 @@ Request, response, and error types for the `boost_status` method. Boosts
 (reblogs) a status authored by another user, sharing it with the caller's
 followers.
 
+The flow resolves the original status through the Federation Canister's
+[`fetch_status`](#fetchstatus) endpoint (which dereferences local
+authors via [`get_local_status`](#getlocalstatus)), then inserts a
+wrapper `Status` row, a `boosts` row, and a `feed` outbox entry that
+all share a single Snowflake — also reused as the emitted `Announce`
+activity id.
+
 `boost_status` is **idempotent**: calling it for a status the caller has
 already boosted returns `Ok` without recording a duplicate row in the
 boosts collection and without re-emitting an `Announce` activity. Only the
@@ -951,6 +970,50 @@ type UndoBoostResponse = variant {
 };
 
 type UndoBoostError = variant {
+  Internal : text;
+};
+```
+
+### GetLocalStatus
+
+Request, response, and error types for the `get_local_status` query.
+Returns a single `Status` owned by this User Canister. Used by the
+Federation Canister's [`fetch_status`](#fetchstatus) endpoint to
+dereference a local actor's status.
+
+`get_local_status` is a public query with no inspect block. The caller's
+principal determines the visibility scope:
+
+- **Owner principal**: can read any status regardless of visibility.
+- **Federation Canister principal** with `requester_actor_uri = Some(uri)`:
+  returns `Public` and `Unlisted` always; returns `FollowersOnly` only
+  if `uri` is in the followers list; returns `NotFound` for `Direct`.
+- **Federation Canister principal** with `requester_actor_uri = None`:
+  returns `Public` and `Unlisted` only.
+- **Anonymous / other principals**: returns `Public` and `Unlisted`
+  only.
+
+| Field                 | Description                                                    |
+| --------------------- | -------------------------------------------------------------- |
+| `id`                  | Snowflake ID of the status to read.                            |
+| `requester_actor_uri` | Actor URI of the requester (used for visibility filtering).    |
+
+- **NotFound**: no status with the given ID is visible to the caller.
+- **Internal**: an unexpected internal error occurred.
+
+```candid
+type GetLocalStatusArgs = record {
+  id : nat64;
+  requester_actor_uri : opt text;
+};
+
+type GetLocalStatusResponse = variant {
+  Ok : Status;
+  Err : GetLocalStatusError;
+};
+
+type GetLocalStatusError = variant {
+  NotFound;
   Internal : text;
 };
 ```
@@ -1117,5 +1180,49 @@ type SendActivityError = variant {
   UnknownLocalUser : text;
   DeliveryFailed : text;
   Rejected : text;
+};
+```
+
+### FetchStatus
+
+Request, response, and error types for the `fetch_status` method. Called
+by a User Canister to dereference a status by URI through the
+Federation Canister. The Federation Canister parses the URI, resolves
+the local handle via the Directory Canister, and forwards the request
+to the target User Canister's [`get_local_status`](#getlocalstatus)
+query.
+
+In Milestone 1, only local URIs (host equal to the instance
+`public_url`) are supported. Remote URIs return `Unsupported`;
+Milestone 3 will add HTTPS outcalls for cross-instance fetches.
+
+| Field                 | Description                                                    |
+| --------------------- | -------------------------------------------------------------- |
+| `uri`                 | ActivityPub status URI to dereference.                         |
+| `requester_actor_uri` | Actor URI of the requester (forwarded for visibility scoping). |
+
+- **InvalidUri**: the URI failed to parse or did not match the expected
+  `<public_url>/users/<handle>/statuses/<id>` shape.
+- **Unsupported**: the URI host is not local (Milestone 1 limitation).
+- **NotFound**: the URI is local but no matching handle / status exists,
+  or the status is not visible to the requester.
+- **Internal**: an unexpected internal error occurred.
+
+```candid
+type FetchStatusArgs = record {
+  uri : text;
+  requester_actor_uri : opt text;
+};
+
+type FetchStatusResponse = variant {
+  Ok : Status;
+  Err : FetchStatusError;
+};
+
+type FetchStatusError = variant {
+  InvalidUri;
+  Unsupported;
+  NotFound;
+  Internal : text;
 };
 ```

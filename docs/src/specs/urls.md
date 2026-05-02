@@ -7,13 +7,21 @@ across the codebase.
 
 ## URL Table
 
-| Pattern                                 | Purpose              |
-| --------------------------------------- | -------------------- |
-| `{public_url}/users/{handle}`           | Actor URI (profile)  |
-| `{public_url}/users/{handle}/inbox`     | ActivityPub inbox    |
-| `{public_url}/users/{handle}/outbox`    | ActivityPub outbox   |
-| `{public_url}/users/{handle}/followers` | Followers collection |
-| `{public_url}/users/{handle}/following` | Following collection |
+| Pattern                                       | Purpose              |
+| --------------------------------------------- | -------------------- |
+| `{public_url}/users/{handle}`                 | Actor URI (profile)  |
+| `{public_url}/users/{handle}/inbox`           | ActivityPub inbox    |
+| `{public_url}/users/{handle}/outbox`          | ActivityPub outbox   |
+| `{public_url}/users/{handle}/followers`       | Followers collection |
+| `{public_url}/users/{handle}/following`       | Following collection |
+| `{public_url}/users/{handle}/statuses/{id}`   | Status URL           |
+
+When a user boosts a status, the wrapper status URL
+`<actor>/statuses/<snowflake>` is also the canonical `id` of the
+emitted `Announce` activity. The booster's `Boost` row, wrapper
+`Status`, `FeedEntry`, and the `Announce` activity all share a single
+Snowflake — one URL dereferences both the wrapper status and the boost
+activity.
 
 ## Example
 

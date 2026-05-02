@@ -238,6 +238,13 @@ paired with a wrapper row in the `statuses` table.
 | `original_status_uri` | `TEXT`   | validated                     | URI of the boosted status             |
 | `created_at`          | `UINT64` | INDEX                         | Timestamp when the boost was emitted  |
 
+The same Snowflake is reused as `boosts.id`, `boosts.status_id`, the
+wrapper `statuses.id`, and the wrapper's `feed.id` — making the
+wrapper status URL `<actor>/statuses/<snowflake>` also the canonical
+`id` of the emitted `Announce` activity. One sequence increment per
+boost; one URL that dereferences both the wrapper status and the boost
+activity.
+
 ### `media` Table
 
 See the [Media Attachments](../specs/media.md) spec for full validation

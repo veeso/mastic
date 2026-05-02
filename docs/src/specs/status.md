@@ -50,6 +50,15 @@ Boolean flag. Clients are expected to hide media and content behind a
 "show more" gate when `sensitive = true`, even if `spoiler_text` is
 null. No validation beyond type.
 
+Both `spoiler_text` and `sensitive` are part of the [`Status`](../interface/types.md#status)
+candid record returned by feed-rendering queries. When a status is
+boosted, the booster's User Canister inserts a wrapper row in its own
+`statuses` table that **denormalizes** these fields from the original
+status (resolved through `Federation.fetch_status`), so the boosted
+content warning carries through into the booster's outbox copy and
+into followers' inboxes without any extra cross-canister read at feed
+render time.
+
 ## `edited_at`
 
 Nullable `Uint64` timestamp. Written by the edit flow; never set by

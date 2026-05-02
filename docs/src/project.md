@@ -224,6 +224,8 @@ http\_request : (*HttpRequest*) -> (*HttpResponse*) query;
 
 http\_request\_update : (*HttpRequest*) -> (*HttpResponse*);
 
+fetch\_status : (*FetchStatusArgs*) -> (*FetchStatusResponse*);
+
 send\_activity : (*SendActivityArgs*) -> (*SendActivityResponse*)
 
 }
@@ -251,6 +253,8 @@ get\_followers : (*GetFollowersArgs*) -> (*GetFollowersResponse*) query;
 get\_following : (*GetFollowingArgs*) -> (*GetFollowingResponse*) query;
 
 get\_liked : (*GetLikedArgs*) -> (*GetLikedResponse*) query;
+
+get\_local\_status : (*GetLocalStatusArgs*) -> (*GetLocalStatusResponse*) query;
 
 get\_profile : () -> (*GetProfileResponse*) query;
 
