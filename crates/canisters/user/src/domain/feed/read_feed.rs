@@ -170,6 +170,37 @@ fn hydrate_inbox(db: &impl Database, id: u64, owner_actor_uri: &str) -> Option<F
     let row = rows.first()?;
 
     let created_at = find_value(row, "created_at")?.as_uint64()?.0;
+    let is_boost = find_value(row, "is_boost")
+        .and_then(|v| v.as_boolean())
+        .map(|b| b.0)
+        .unwrap_or(false);
+
+    if is_boost {
+        let original_uri = find_value(row, "original_status_uri")?.as_text()?.0.clone();
+        let booster = find_value(row, "actor_uri")?.as_text()?.0.clone();
+        let original_id = crate::domain::urls::parse_status_id(&original_uri).unwrap_or(0);
+        let author =
+            crate::domain::urls::actor_uri_from_status_uri(&original_uri).unwrap_or_default();
+
+        let (content, visibility, spoiler_text, sensitive) =
+            resolve_boost_original(db, &original_uri, original_id);
+
+        return Some(FeedItem {
+            status: Status {
+                id: original_id,
+                content,
+                author,
+                created_at,
+                visibility,
+                like_count: 0,
+                boost_count: 0,
+                spoiler_text,
+                sensitive,
+            },
+            boosted_by: Some(booster),
+        });
+    }
+
     let json_val = find_value(row, "object_data")?.as_json()?;
     let activity: Activity = serde_json::from_value(json_val.value().clone()).ok()?;
     let (content, visibility, spoiler_text, sensitive) = extract_note_from_activity(&activity)?;
@@ -193,8 +224,69 @@ fn hydrate_inbox(db: &impl Database, id: u64, owner_actor_uri: &str) -> Option<F
             spoiler_text,
             sensitive,
         },
-        boosted_by: None, // FIXME: eventually support boosts in M1
+        boosted_by: None,
     })
+}
+
+/// Resolve the original (boosted) status for an inbox boost render.
+///
+/// Tries:
+/// 1. Local statuses table (if the URI is hosted on this instance and the
+///    `find_by_id` lookup succeeds).
+/// 2. Cached inbox `Create(Note)` row whose `object_data.object.id` matches
+///    `original_uri`.
+/// 3. Fallback: empty content, `Visibility::Public`, no spoiler, not sensitive.
+fn resolve_boost_original(
+    db: &impl Database,
+    original_uri: &str,
+    original_id: u64,
+) -> (String, Visibility, Option<String>, bool) {
+    if let Ok(Some((_, _))) = crate::domain::urls::parse_local_status_uri(original_uri)
+        && let Ok(Some(row)) = crate::domain::status::StatusRepository::find_by_id(original_id)
+    {
+        let content = row.content.0.to_string();
+        let visibility: Visibility = row.visibility.into();
+        let spoiler_text = row.spoiler_text.into_opt().map(|t| t.0);
+        let sensitive = row.sensitive.0;
+        return (content, visibility, spoiler_text, sensitive);
+    }
+
+    if let Some((content, visibility, spoiler_text, sensitive)) =
+        find_cached_inbox_note(db, original_uri)
+    {
+        return (content, visibility, spoiler_text, sensitive);
+    }
+
+    (String::new(), Visibility::Public, None, false)
+}
+
+/// Scan the `inbox` table for a `Create(Note)` whose embedded note's `id`
+/// matches `original_uri`, returning the extracted note fields.
+fn find_cached_inbox_note(
+    db: &impl Database,
+    original_uri: &str,
+) -> Option<(String, Visibility, Option<String>, bool)> {
+    let query = Query::builder().all().build();
+    let rows = db.select_raw("inbox", query).ok()?;
+
+    for row in &rows {
+        let Some(json) = find_value(row, "object_data").and_then(|v| v.as_json()) else {
+            continue;
+        };
+        let Ok(activity) = serde_json::from_value::<Activity>(json.value().clone()) else {
+            continue;
+        };
+        if activity.base.kind != ApActivityType::Create {
+            continue;
+        }
+        let Some(ActivityObject::Object(note)) = activity.object.as_ref() else {
+            continue;
+        };
+        if note.id.as_deref() == Some(original_uri) {
+            return extract_note_from_activity(&activity);
+        }
+    }
+    None
 }
 
 /// Extracts the text content, inferred [`Visibility`], optional spoiler text,
@@ -728,5 +820,85 @@ mod tests {
         }));
 
         assert!(items.is_empty());
+    }
+
+    fn insert_inbox_announce(id: u64, booster: &str, target_uri: &str, created_at: u64) {
+        DBMS_CONTEXT.with(|ctx| {
+            let tx_id =
+                ctx.begin_transaction(db_utils::transaction::transaction_caller(ic_utils::now()));
+            let mut db = WasmDbmsDatabase::from_transaction(ctx, Schema, tx_id);
+            db.insert::<InboxActivity>(InboxActivityInsertRequest {
+                id: id.into(),
+                activity_type: DbActivityType::from(ApActivityType::Announce),
+                actor_uri: booster.into(),
+                object_data: serde_json::json!({"type": "Announce"}).into(),
+                is_boost: true.into(),
+                original_status_uri: Nullable::Value(target_uri.into()),
+                created_at: created_at.into(),
+            })
+            .expect("insert inbox row");
+            db.insert::<FeedEntry>(FeedEntryInsertRequest {
+                id: id.into(),
+                source: FeedSource::Inbox,
+                created_at: created_at.into(),
+            })
+            .expect("insert feed entry");
+            db.commit().expect("commit");
+        });
+    }
+
+    #[test]
+    fn test_inbox_boost_renders_boosted_by_booster_and_local_original_author() {
+        setup();
+        insert_status(99, "Bob's post", Visibility::Public, 1_000);
+        insert_inbox_announce(
+            500,
+            "https://remote.example/users/alice",
+            "https://mastic.social/users/rey_canisteryo/statuses/99",
+            2_000,
+        );
+
+        let items = unwrap_ok(read_feed(ReadFeedArgs {
+            limit: 10,
+            offset: 0,
+        }));
+
+        assert_eq!(items.len(), 2);
+        let boost = &items[0]; // newer first
+        assert_eq!(
+            boost.boosted_by.as_deref(),
+            Some("https://remote.example/users/alice")
+        );
+        assert_eq!(
+            boost.status.author,
+            "https://mastic.social/users/rey_canisteryo"
+        );
+        assert_eq!(boost.status.id, 99);
+        assert_eq!(boost.status.content, "Bob's post");
+    }
+
+    #[test]
+    fn test_inbox_boost_falls_back_to_empty_when_original_not_cached() {
+        setup();
+        insert_inbox_announce(
+            500,
+            "https://remote.example/users/alice",
+            "https://other.example/users/bob/statuses/99",
+            2_000,
+        );
+
+        let items = unwrap_ok(read_feed(ReadFeedArgs {
+            limit: 10,
+            offset: 0,
+        }));
+
+        assert_eq!(items.len(), 1);
+        assert_eq!(
+            items[0].boosted_by.as_deref(),
+            Some("https://remote.example/users/alice")
+        );
+        assert_eq!(items[0].status.author, "https://other.example/users/bob");
+        assert_eq!(items[0].status.id, 99);
+        assert_eq!(items[0].status.content, "");
     }
 }
