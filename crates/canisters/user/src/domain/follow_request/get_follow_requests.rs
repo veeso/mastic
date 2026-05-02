@@ -27,7 +27,8 @@ pub fn get_follow_requests(args: GetFollowRequestsArgs) -> GetFollowRequestsResp
 fn inner_get_follow_requests(
     GetFollowRequestsArgs { limit, offset }: GetFollowRequestsArgs,
 ) -> CanisterResult<Vec<String>> {
-    FollowRequestRepository::get_paginated(offset as usize, limit as usize)
+    FollowRequestRepository::oneshot()
+        .get_paginated(offset as usize, limit as usize)
         .map(|requests| requests.into_iter().map(|r| r.actor_uri.0).collect())
 }
 
@@ -93,9 +94,12 @@ mod tests {
     fn test_should_return_follow_requests() {
         setup();
 
-        FollowRequestRepository::insert("https://mastic.social/users/alice")
+        FollowRequestRepository::oneshot()
+            .insert("https://mastic.social/users/alice")
             .expect("should insert");
-        FollowRequestRepository::insert("https://mastic.social/users/bob").expect("should insert");
+        FollowRequestRepository::oneshot()
+            .insert("https://mastic.social/users/bob")
+            .expect("should insert");
 
         let response = get_follow_requests(GetFollowRequestsArgs {
             offset: 0,
@@ -114,10 +118,14 @@ mod tests {
     fn test_should_paginate_follow_requests_with_limit() {
         setup();
 
-        FollowRequestRepository::insert("https://mastic.social/users/alice")
+        FollowRequestRepository::oneshot()
+            .insert("https://mastic.social/users/alice")
             .expect("should insert");
-        FollowRequestRepository::insert("https://mastic.social/users/bob").expect("should insert");
-        FollowRequestRepository::insert("https://mastic.social/users/charlie")
+        FollowRequestRepository::oneshot()
+            .insert("https://mastic.social/users/bob")
+            .expect("should insert");
+        FollowRequestRepository::oneshot()
+            .insert("https://mastic.social/users/charlie")
             .expect("should insert");
 
         let response = get_follow_requests(GetFollowRequestsArgs {
@@ -135,10 +143,14 @@ mod tests {
     fn test_should_paginate_follow_requests_with_offset() {
         setup();
 
-        FollowRequestRepository::insert("https://mastic.social/users/alice")
+        FollowRequestRepository::oneshot()
+            .insert("https://mastic.social/users/alice")
             .expect("should insert");
-        FollowRequestRepository::insert("https://mastic.social/users/bob").expect("should insert");
-        FollowRequestRepository::insert("https://mastic.social/users/charlie")
+        FollowRequestRepository::oneshot()
+            .insert("https://mastic.social/users/bob")
+            .expect("should insert");
+        FollowRequestRepository::oneshot()
+            .insert("https://mastic.social/users/charlie")
             .expect("should insert");
 
         let response = get_follow_requests(GetFollowRequestsArgs {
@@ -156,7 +168,8 @@ mod tests {
     fn test_should_return_empty_list_when_offset_exceeds_total() {
         setup();
 
-        FollowRequestRepository::insert("https://mastic.social/users/alice")
+        FollowRequestRepository::oneshot()
+            .insert("https://mastic.social/users/alice")
             .expect("should insert");
 
         let response = get_follow_requests(GetFollowRequestsArgs {

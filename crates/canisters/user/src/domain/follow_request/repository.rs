@@ -1,35 +1,58 @@
 //! Follow request repository for managing incoming follow requests.
 
-use ic_dbms_canister::prelude::DBMS_CONTEXT;
+use ic_dbms_canister::prelude::{DBMS_CONTEXT, IcAccessControlList, IcMemoryProvider};
 use wasm_dbms::WasmDbmsDatabase;
+use wasm_dbms::prelude::DbmsContext;
 use wasm_dbms_api::prelude::*;
 
 use crate::error::{CanisterError, CanisterResult};
 use crate::schema::{FollowRequest, FollowRequestInsertRequest, FollowRequestRecord, Schema};
 
 /// Interface to access [`FollowRequest`] data.
-pub struct FollowRequestRepository;
+pub struct FollowRequestRepository {
+    tx: Option<TransactionId>,
+}
 
 impl FollowRequestRepository {
-    /// Insert a new follow request for the given actor URI.
-    pub fn insert(actor_uri: &str) -> CanisterResult<()> {
-        DBMS_CONTEXT.with(|ctx| {
-            let db = WasmDbmsDatabase::oneshot(ctx, Schema);
+    pub const fn oneshot() -> Self {
+        Self { tx: None }
+    }
 
-            db.insert::<FollowRequest>(FollowRequestInsertRequest {
-                actor_uri: actor_uri.into(),
-                created_at: ic_utils::now().into(),
-            })
-            .map_err(CanisterError::from)
+    // Reserved for future cross-repo atomic flows that need to splice follow
+    // request reads/writes into an externally-driven transaction. Not yet wired
+    // up.
+    #[allow(dead_code)]
+    pub const fn with_transaction(tx: TransactionId) -> Self {
+        Self { tx: Some(tx) }
+    }
+
+    fn db<'a>(
+        &self,
+        ctx: &'a DbmsContext<IcMemoryProvider, IcAccessControlList>,
+    ) -> WasmDbmsDatabase<'a, IcMemoryProvider, IcAccessControlList> {
+        match self.tx {
+            Some(id) => WasmDbmsDatabase::from_transaction(ctx, Schema, id),
+            None => WasmDbmsDatabase::oneshot(ctx, Schema),
+        }
+    }
+
+    /// Insert a new follow request for the given actor URI.
+    pub fn insert(&self, actor_uri: &str) -> CanisterResult<()> {
+        DBMS_CONTEXT.with(|ctx| {
+            self.db(ctx)
+                .insert::<FollowRequest>(FollowRequestInsertRequest {
+                    actor_uri: actor_uri.into(),
+                    created_at: ic_utils::now().into(),
+                })
+                .map_err(CanisterError::from)
         })
     }
 
     /// Find a follow request by actor URI.
-    pub fn find_by_actor_uri(actor_uri: &str) -> CanisterResult<Option<FollowRequest>> {
+    pub fn find_by_actor_uri(&self, actor_uri: &str) -> CanisterResult<Option<FollowRequest>> {
         DBMS_CONTEXT.with(|ctx| {
-            let db = WasmDbmsDatabase::oneshot(ctx, Schema);
-
-            let records = db
+            let records = self
+                .db(ctx)
                 .select::<FollowRequest>(
                     Query::builder()
                         .all()
@@ -46,11 +69,10 @@ impl FollowRequestRepository {
     }
 
     /// Get a paginated list of [`FollowRequest`]s.
-    pub fn get_paginated(offset: usize, limit: usize) -> CanisterResult<Vec<FollowRequest>> {
+    pub fn get_paginated(&self, offset: usize, limit: usize) -> CanisterResult<Vec<FollowRequest>> {
         DBMS_CONTEXT.with(|ctx| {
-            let db = WasmDbmsDatabase::oneshot(ctx, Schema);
-
-            let records = db
+            let records = self
+                .db(ctx)
                 .select::<FollowRequest>(Query::builder().all().offset(offset).limit(limit).build())
                 .map_err(CanisterError::from)?;
 
@@ -62,16 +84,15 @@ impl FollowRequestRepository {
     }
 
     /// Delete a follow request by actor URI.
-    pub fn delete_by_actor_uri(actor_uri: &str) -> CanisterResult<()> {
+    pub fn delete_by_actor_uri(&self, actor_uri: &str) -> CanisterResult<()> {
         DBMS_CONTEXT.with(|ctx| {
-            let db = WasmDbmsDatabase::oneshot(ctx, Schema);
-
-            db.delete::<FollowRequest>(
-                DeleteBehavior::Restrict,
-                Some(Filter::eq("actor_uri", Value::from(actor_uri.to_string()))),
-            )
-            .map(|_| ())
-            .map_err(CanisterError::from)
+            self.db(ctx)
+                .delete::<FollowRequest>(
+                    DeleteBehavior::Restrict,
+                    Some(Filter::eq("actor_uri", Value::from(actor_uri.to_string()))),
+                )
+                .map(|_| ())
+                .map_err(CanisterError::from)
         })
     }
 
@@ -93,10 +114,12 @@ mod tests {
     fn test_should_insert_and_find_follow_request() {
         setup();
 
-        FollowRequestRepository::insert("https://mastic.social/users/alice")
+        FollowRequestRepository::oneshot()
+            .insert("https://mastic.social/users/alice")
             .expect("should insert");
 
-        let found = FollowRequestRepository::find_by_actor_uri("https://mastic.social/users/alice")
+        let found = FollowRequestRepository::oneshot()
+            .find_by_actor_uri("https://mastic.social/users/alice")
             .expect("should query")
             .expect("should find follow request");
 
@@ -107,9 +130,9 @@ mod tests {
     fn test_should_return_none_for_missing_follow_request() {
         setup();
 
-        let found =
-            FollowRequestRepository::find_by_actor_uri("https://mastic.social/users/nobody")
-                .expect("should query");
+        let found = FollowRequestRepository::oneshot()
+            .find_by_actor_uri("https://mastic.social/users/nobody")
+            .expect("should query");
 
         assert!(found.is_none());
     }
@@ -118,13 +141,16 @@ mod tests {
     fn test_should_delete_follow_request() {
         setup();
 
-        FollowRequestRepository::insert("https://mastic.social/users/alice")
+        FollowRequestRepository::oneshot()
+            .insert("https://mastic.social/users/alice")
             .expect("should insert");
 
-        FollowRequestRepository::delete_by_actor_uri("https://mastic.social/users/alice")
+        FollowRequestRepository::oneshot()
+            .delete_by_actor_uri("https://mastic.social/users/alice")
             .expect("should delete");
 
-        let found = FollowRequestRepository::find_by_actor_uri("https://mastic.social/users/alice")
+        let found = FollowRequestRepository::oneshot()
+            .find_by_actor_uri("https://mastic.social/users/alice")
             .expect("should query");
 
         assert!(found.is_none());
