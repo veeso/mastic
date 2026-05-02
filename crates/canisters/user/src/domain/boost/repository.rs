@@ -1,6 +1,6 @@
 use ic_dbms_canister::prelude::DBMS_CONTEXT;
 use wasm_dbms::WasmDbmsDatabase;
-use wasm_dbms_api::prelude::{Database, DeleteBehavior, Filter, Nullable, Query};
+use wasm_dbms_api::prelude::{Database, DeleteBehavior, Filter, Nullable, Query, Value};
 
 use crate::error::{CanisterError, CanisterResult};
 use crate::schema::{
@@ -75,6 +75,35 @@ impl BoostRepository {
                     created_at: created_at.into(),
                 })?;
 
+                db.commit()
+            })
+            .map_err(CanisterError::from)
+    }
+
+    /// Transactionally delete the [`Boost`] row, the wrapper [`Status`] row,
+    /// and the corresponding `feed` entry sharing the same `snowflake_id`.
+    ///
+    /// Order: child (`boosts`) → `feed` → parent (`statuses`) so the FK
+    /// `boosts.status_id → statuses.id` (Restrict) is satisfied.
+    pub fn delete_boost_with_wrapper(snowflake_id: u64) -> CanisterResult<()> {
+        DBMS_CONTEXT
+            .with(|ctx| {
+                let tx_id = ctx
+                    .begin_transaction(db_utils::transaction::transaction_caller(ic_utils::now()));
+                let mut db = WasmDbmsDatabase::from_transaction(ctx, Schema, tx_id);
+
+                db.delete::<Boost>(
+                    DeleteBehavior::Restrict,
+                    Some(Filter::eq("id", Value::from(snowflake_id))),
+                )?;
+                db.delete::<FeedEntry>(
+                    DeleteBehavior::Restrict,
+                    Some(Filter::eq("id", Value::from(snowflake_id))),
+                )?;
+                db.delete::<Status>(
+                    DeleteBehavior::Restrict,
+                    Some(Filter::eq("id", Value::from(snowflake_id))),
+                )?;
                 db.commit()
             })
             .map_err(CanisterError::from)
@@ -260,6 +289,32 @@ mod tests {
         setup();
         let found = BoostRepository::find_by_original_uri(STATUS_URI_A).expect("should query");
         assert!(found.is_none());
+    }
+
+    #[test]
+    fn test_should_delete_boost_with_wrapper_in_one_tx() {
+        setup();
+
+        BoostRepository::insert_boost_with_wrapper(
+            77,
+            STATUS_URI_A,
+            "boosted",
+            crate::schema::Visibility::from(did::common::Visibility::Public),
+            None,
+            false,
+            1_000,
+        )
+        .expect("insert");
+
+        BoostRepository::delete_boost_with_wrapper(77).expect("delete");
+
+        assert!(!BoostRepository::is_boosted(STATUS_URI_A).expect("query"));
+        assert!(
+            crate::domain::status::StatusRepository::find_by_id(77)
+                .expect("query")
+                .is_none(),
+            "wrapper status row removed"
+        );
     }
 
     #[test]
