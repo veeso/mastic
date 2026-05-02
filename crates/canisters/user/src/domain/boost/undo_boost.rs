@@ -52,7 +52,8 @@ async fn undo_boost_inner(status_url: String) -> CanisterResult<()> {
     let own_profile = ProfileRepository::oneshot().get_profile()?;
     let own_actor_uri = urls::actor_uri(&own_profile.handle.0)?;
 
-    let mut recipients: Vec<String> = FollowerRepository::get_followers()?
+    let mut recipients: Vec<String> = FollowerRepository::oneshot()
+        .get_followers()?
         .into_iter()
         .map(|f| f.actor_uri.0)
         .collect();
@@ -160,7 +161,9 @@ mod tests {
     }
 
     async fn boost_first() {
-        FollowerRepository::insert(FOLLOWER_URI).expect("insert follower");
+        FollowerRepository::oneshot()
+            .insert(FOLLOWER_URI)
+            .expect("insert follower");
         push_fetch_status_response(FetchStatusResponse::Ok(fixture_status()));
         assert_eq!(
             boost_status(BoostStatusArgs {

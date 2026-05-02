@@ -164,7 +164,9 @@ mod tests {
         assert!(request.is_none(), "follow request should be deleted");
 
         // follower should be added
-        let followers = FollowerRepository::get_followers().expect("should query");
+        let followers = FollowerRepository::oneshot()
+            .get_followers()
+            .expect("should query");
         assert_eq!(followers.len(), 1);
         assert_eq!(
             followers[0].actor_uri.0,

@@ -84,7 +84,7 @@ impl Scope {
             (Scope::Owner, _) => Ok(true),
             (_, Visibility::Public) | (_, Visibility::Unlisted) => Ok(true),
             (Scope::FederationWithRequester(uri), Visibility::FollowersOnly) => {
-                FollowerRepository::is_follower(uri)
+                FollowerRepository::oneshot().is_follower(uri)
             }
             _ => Ok(false),
         }
@@ -117,7 +117,9 @@ mod tests {
     const NON_FOLLOWER_URI: &str = "https://remote.example/users/charlie";
 
     fn insert_follower(uri: &str) {
-        FollowerRepository::insert(uri).expect("insert follower");
+        FollowerRepository::oneshot()
+            .insert(uri)
+            .expect("insert follower");
     }
 
     #[test]

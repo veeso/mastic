@@ -92,7 +92,7 @@ async fn determine_relationship(caller: Principal) -> CanisterResult<CallerRelat
 
     let actor_uri = crate::domain::urls::actor_uri(&handle)?;
 
-    if FollowerRepository::is_follower(&actor_uri)? {
+    if FollowerRepository::oneshot().is_follower(&actor_uri)? {
         ic_utils::log!("Caller {caller} is a follower");
         return Ok(CallerRelationship::Follower);
     }

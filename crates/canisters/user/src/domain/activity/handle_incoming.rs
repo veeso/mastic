@@ -219,10 +219,12 @@ fn handle_undo(activity: &Activity) -> Result<(), ReceiveActivityError> {
         ActivityType::Follow => {
             ic_utils::log!("handle_incoming: Undo(Follow) from {sender_uri}");
 
-            FollowerRepository::delete_by_actor_uri(sender_uri).map_err(|e| {
-                ic_utils::log!("handle_incoming: failed to delete follower: {e}");
-                ReceiveActivityError::Internal(e.to_string())
-            })?;
+            FollowerRepository::oneshot()
+                .delete_by_actor_uri(sender_uri)
+                .map_err(|e| {
+                    ic_utils::log!("handle_incoming: failed to delete follower: {e}");
+                    ReceiveActivityError::Internal(e.to_string())
+                })?;
             FollowRequestRepository::delete_by_actor_uri(sender_uri).map_err(|e| {
                 ic_utils::log!("handle_incoming: failed to delete follow request: {e}");
                 ReceiveActivityError::Internal(e.to_string())
@@ -760,7 +762,9 @@ mod tests {
     fn test_should_remove_follower_on_undo_follow() {
         setup();
 
-        FollowerRepository::insert("https://mastic.social/users/alice").expect("should insert");
+        FollowerRepository::oneshot()
+            .insert("https://mastic.social/users/alice")
+            .expect("should insert");
 
         let json = make_undo_follow_json(
             "https://mastic.social/users/alice",
@@ -772,7 +776,9 @@ mod tests {
         });
         assert_eq!(response, ReceiveActivityResponse::Ok);
 
-        let followers = FollowerRepository::get_followers().expect("should query");
+        let followers = FollowerRepository::oneshot()
+            .get_followers()
+            .expect("should query");
         assert!(followers.is_empty(), "follower entry should be deleted");
     }
 
