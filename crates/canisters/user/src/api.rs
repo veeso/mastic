@@ -137,6 +137,11 @@ pub fn get_following(args: GetFollowingArgs) -> GetFollowingResponse {
     crate::domain::following::get_following(args)
 }
 
+/// Gets a single status by id, applying caller-scoped visibility rules.
+pub fn get_local_status(args: GetLocalStatusArgs) -> GetLocalStatusResponse {
+    crate::domain::status::get_local_status(args)
+}
+
 /// Likes a status.
 pub fn get_liked(args: GetLikedArgs) -> GetLikedResponse {
     crate::domain::liked::get_liked(args)
