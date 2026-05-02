@@ -25,6 +25,7 @@ pub fn directory() -> Principal {
 
 pub fn setup() {
     crate::adapters::federation::mock::reset_captured();
+    crate::adapters::federation::mock::reset_fetch_status();
     crate::api::init(UserInstallArgs::Init {
         owner: admin(),
         federation_canister: federation(),
