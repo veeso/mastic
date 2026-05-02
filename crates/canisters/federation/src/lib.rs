@@ -32,6 +32,11 @@ fn inspect_message() {
 }
 
 #[ic_cdk::update]
+async fn fetch_status(args: FetchStatusArgs) -> FetchStatusResponse {
+    api::fetch_status(args).await
+}
+
+#[ic_cdk::update]
 fn register_user(args: RegisterUserArgs) -> RegisterUserResponse {
     api::register_user(args)
 }
@@ -39,11 +44,6 @@ fn register_user(args: RegisterUserArgs) -> RegisterUserResponse {
 #[ic_cdk::update]
 async fn send_activity(args: SendActivityArgs) -> SendActivityResponse {
     api::send_activity(args).await
-}
-
-#[ic_cdk::update]
-async fn fetch_status(args: FetchStatusArgs) -> FetchStatusResponse {
-    api::fetch_status(args).await
 }
 
 ic_cdk::export_candid!();
