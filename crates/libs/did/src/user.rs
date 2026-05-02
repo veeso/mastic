@@ -499,6 +499,33 @@ pub enum ReadFeedResponse {
     Err(ReadFeedError),
 }
 
+/// Request arguments for the `get_local_status` method.
+#[derive(Debug, Clone, PartialEq, Eq, CandidType, Serialize, Deserialize)]
+pub struct GetLocalStatusArgs {
+    /// Snowflake id of the status to fetch.
+    pub id: u64,
+    /// Optional actor URI of the requester. Honored only when the caller is
+    /// the federation canister; ignored for owner / anonymous callers.
+    pub requester_actor_uri: Option<String>,
+}
+
+/// Error type for the `get_local_status` method.
+#[derive(Debug, Clone, PartialEq, Eq, CandidType, Serialize, Deserialize)]
+pub enum GetLocalStatusError {
+    /// The status does not exist on this canister, or visibility rules
+    /// prevent the requester from accessing it.
+    NotFound,
+    /// Internal error occurred while fetching the status.
+    Internal(String),
+}
+
+/// Response type for the `get_local_status` method.
+#[derive(Debug, Clone, PartialEq, Eq, CandidType, Serialize, Deserialize)]
+pub enum GetLocalStatusResponse {
+    Ok(Status),
+    Err(GetLocalStatusError),
+}
+
 /// Request arguments for the `receive_activity` method.
 /// Called by the Federation Canister to deliver an incoming ActivityPub activity.
 #[derive(Debug, Clone, PartialEq, Eq, CandidType, Serialize, Deserialize)]

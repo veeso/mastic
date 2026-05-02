@@ -620,6 +620,59 @@ fn test_should_roundtrip_read_feed_response_err() {
 }
 
 #[test]
+fn test_should_roundtrip_get_local_status_args_with_requester() {
+    let args = GetLocalStatusArgs {
+        id: 123456789,
+        requester_actor_uri: Some("https://mastic.social/users/alice".to_string()),
+    };
+    let bytes = Encode!(&args).unwrap();
+    let decoded = Decode!(&bytes, GetLocalStatusArgs).unwrap();
+    assert_eq!(args, decoded);
+}
+
+#[test]
+fn test_should_roundtrip_get_local_status_args_no_requester() {
+    let args = GetLocalStatusArgs {
+        id: 42,
+        requester_actor_uri: None,
+    };
+    let bytes = Encode!(&args).unwrap();
+    let decoded = Decode!(&bytes, GetLocalStatusArgs).unwrap();
+    assert_eq!(args, decoded);
+}
+
+#[test]
+fn test_should_roundtrip_get_local_status_response_ok() {
+    let resp = GetLocalStatusResponse::Ok(crate::common::Status {
+        id: 2,
+        content: "Hello".to_string(),
+        author: "https://mastic.social/users/alice".to_string(),
+        created_at: 42,
+        visibility: crate::common::Visibility::Public,
+        like_count: 0,
+        boost_count: 0,
+        spoiler_text: None,
+        sensitive: false,
+    });
+    let bytes = Encode!(&resp).unwrap();
+    let decoded = Decode!(&bytes, GetLocalStatusResponse).unwrap();
+    assert_eq!(resp, decoded);
+}
+
+#[test]
+fn test_should_roundtrip_get_local_status_response_err() {
+    for error in [
+        GetLocalStatusError::NotFound,
+        GetLocalStatusError::Internal("db error".to_string()),
+    ] {
+        let resp = GetLocalStatusResponse::Err(error);
+        let bytes = Encode!(&resp).unwrap();
+        let decoded = Decode!(&bytes, GetLocalStatusResponse).unwrap();
+        assert_eq!(resp, decoded);
+    }
+}
+
+#[test]
 fn test_should_roundtrip_receive_activity_args() {
     let args = ReceiveActivityArgs {
         activity_json: r#"{"type":"Follow"}"#.to_string(),
