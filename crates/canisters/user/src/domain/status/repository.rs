@@ -147,6 +147,48 @@ impl StatusRepository {
         Ok(true)
     }
 
+    /// Increment the cached `boost_count` of the [`Status`] with the given id.
+    ///
+    /// Returns `Ok(true)` when the row exists and was updated, `Ok(false)`
+    /// when no row matched (silently ignored: a missing target means we are
+    /// not the author of that status, so the counter does not concern us).
+    pub fn increment_boost_count(id: u64) -> CanisterResult<bool> {
+        Self::adjust_boost_count(id, 1, true)
+    }
+
+    /// Saturating-decrement the cached `boost_count` of the [`Status`] with the
+    /// given id. Decrementing from `0` is a no-op rather than an underflow.
+    ///
+    /// Returns `Ok(true)` when the row exists, `Ok(false)` when no row matched.
+    pub fn decrement_boost_count(id: u64) -> CanisterResult<bool> {
+        Self::adjust_boost_count(id, 1, false)
+    }
+
+    fn adjust_boost_count(id: u64, delta: u64, increment: bool) -> CanisterResult<bool> {
+        let Some(status) = Self::find_by_id(id)? else {
+            return Ok(false);
+        };
+        let current = status.boost_count.0;
+        let next = if increment {
+            current.saturating_add(delta)
+        } else {
+            current.saturating_sub(delta)
+        };
+        if next == current {
+            return Ok(true);
+        }
+        let patch = StatusUpdateRequest {
+            boost_count: Some(next.into()),
+            where_clause: Some(Filter::eq(Status::primary_key(), Value::from(id))),
+            ..Default::default()
+        };
+        DBMS_CONTEXT.with(|ctx| {
+            let db = WasmDbmsDatabase::oneshot(ctx, Schema);
+            db.update::<Status>(patch)
+        })?;
+        Ok(true)
+    }
+
     fn record_to_status(record: StatusRecord) -> Status {
         Status {
             id: record.id.expect("must have field"),
@@ -304,5 +346,40 @@ mod tests {
         assert_eq!(statuses[0].id, snowflake.into());
         assert_eq!(statuses[0].content.0, "Hello world");
         assert_eq!(statuses[0].created_at.0, 42_000);
+    }
+
+    #[test]
+    fn test_should_increment_boost_count() {
+        setup();
+        insert_status(7, "Hi", Visibility::Public, 1_000);
+
+        assert!(StatusRepository::increment_boost_count(7).expect("should adjust"));
+
+        let row = StatusRepository::find_by_id(7).unwrap().unwrap();
+        assert_eq!(row.boost_count.0, 1);
+    }
+
+    #[test]
+    fn test_increment_boost_count_returns_false_when_missing() {
+        setup();
+        assert!(!StatusRepository::increment_boost_count(99).expect("should adjust"));
+    }
+
+    #[test]
+    fn test_should_decrement_boost_count_saturating() {
+        setup();
+        insert_status(7, "Hi", Visibility::Public, 1_000);
+        StatusRepository::increment_boost_count(7).expect("inc");
+        StatusRepository::decrement_boost_count(7).expect("dec");
+        assert_eq!(
+            StatusRepository::find_by_id(7).unwrap().unwrap().boost_count.0,
+            0
+        );
+
+        StatusRepository::decrement_boost_count(7).expect("dec at zero");
+        assert_eq!(
+            StatusRepository::find_by_id(7).unwrap().unwrap().boost_count.0,
+            0
+        );
     }
 }
