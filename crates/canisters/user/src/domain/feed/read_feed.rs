@@ -108,10 +108,7 @@ fn hydrate_outbox(db: &impl Database, id: u64, owner_actor_uri: &str) -> Option<
     let spoiler_text = find_value(row, "spoiler_text")
         .and_then(|v| v.as_text())
         .map(|t| t.0.clone());
-    let sensitive = find_value(row, "sensitive")
-        .and_then(|v| v.as_boolean())
-        .map(|b| b.0)
-        .unwrap_or(false);
+    let sensitive = find_value(row, "sensitive")?.as_boolean()?.0;
 
     Some(FeedItem {
         status: Status {
