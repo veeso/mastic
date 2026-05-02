@@ -53,7 +53,7 @@ async fn reject_follow_inner(actor_uri: &str) -> Result<(), RejectFollowDomainEr
     }
 
     // build own actor URI
-    let own_profile = ProfileRepository::get_profile()?;
+    let own_profile = ProfileRepository::oneshot().get_profile()?;
     let own_actor_uri = crate::domain::urls::actor_uri(&own_profile.handle.0)?;
 
     // build and send Reject(Follow) activity

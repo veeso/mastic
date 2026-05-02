@@ -51,7 +51,7 @@ pub fn read_feed(ReadFeedArgs { limit, offset }: ReadFeedArgs) -> ReadFeedRespon
 /// Sorting, offset and limit are fully handled at the database level,
 /// keeping memory usage bounded regardless of feed size.
 fn read_feed_inner(limit: u64, offset: u64) -> CanisterResult<Vec<FeedItem>> {
-    let own_profile = crate::domain::profile::ProfileRepository::get_profile()?;
+    let own_profile = crate::domain::profile::ProfileRepository::oneshot().get_profile()?;
     let owner_actor_uri = crate::domain::urls::actor_uri(&own_profile.handle.0)?;
 
     DBMS_CONTEXT.with(|ctx| {

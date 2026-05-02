@@ -49,7 +49,7 @@ async fn undo_boost_inner(status_url: String) -> CanisterResult<()> {
     };
 
     let wrapper_id = boost.id.expect("id").0;
-    let own_profile = ProfileRepository::get_profile()?;
+    let own_profile = ProfileRepository::oneshot().get_profile()?;
     let own_actor_uri = urls::actor_uri(&own_profile.handle.0)?;
 
     let mut recipients: Vec<String> = FollowerRepository::get_followers()?

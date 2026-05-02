@@ -8,7 +8,7 @@ use crate::error::CanisterError;
 
 /// Gets the profile of the user.
 pub fn get_profile() -> GetProfileResponse {
-    let user = match ProfileRepository::get_profile() {
+    let user = match ProfileRepository::oneshot().get_profile() {
         Ok(profile) => profile,
         Err(CanisterError::Settings(_)) => {
             return GetProfileResponse::Err(GetProfileError::NotFound);

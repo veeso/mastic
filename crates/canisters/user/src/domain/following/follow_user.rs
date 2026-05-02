@@ -52,7 +52,7 @@ impl From<CanisterError> for FollowUserDomainError {
 
 async fn follow_user_inner(handle: &str) -> Result<(), FollowUserDomainError> {
     // check if trying to follow self
-    let own_profile = ProfileRepository::get_profile()?;
+    let own_profile = ProfileRepository::oneshot().get_profile()?;
     if handle == own_profile.handle.as_str() {
         ic_utils::log!("follow_user: cannot follow own handle");
         return Err(FollowUserDomainError::CannotFollowSelf);

@@ -35,7 +35,7 @@ pub async fn emit_delete_profile_activity() -> EmitDeleteProfileActivityResponse
 }
 
 async fn dispatch() -> CanisterResult<()> {
-    let profile = ProfileRepository::get_profile()?;
+    let profile = ProfileRepository::oneshot().get_profile()?;
     let handle = profile.handle.0.clone();
     let owner_uri = urls::actor_uri(&handle)?;
 
