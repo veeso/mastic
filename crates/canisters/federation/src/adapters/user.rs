@@ -8,7 +8,7 @@
 #[cfg(not(target_family = "wasm"))]
 pub mod mock;
 
-use did::user::ReceiveActivityArgs;
+use did::user::{GetLocalStatusArgs, GetLocalStatusResponse, ReceiveActivityArgs};
 
 /// Abstraction over the user canister API used by the Federation Canister.
 ///
@@ -29,6 +29,18 @@ pub trait UserCanister: Send + Sync + Sized {
         &self,
         args: ReceiveActivityArgs,
     ) -> impl Future<Output = Result<(), UserCanisterClientError>>;
+
+    /// Query the User Canister for a single locally-hosted status by id.
+    ///
+    /// Returns the raw [`GetLocalStatusResponse`] — the user-canister-level
+    /// success / error variant is preserved so domain callers can decide
+    /// how to map it. Transport-level problems are reported as
+    /// [`UserCanisterClientError::CallFailed`] or
+    /// [`UserCanisterClientError::DecodeFailed`].
+    fn get_local_status(
+        &self,
+        args: GetLocalStatusArgs,
+    ) -> impl Future<Output = Result<GetLocalStatusResponse, UserCanisterClientError>>;
 }
 
 /// Errors returned by [`UserCanister`] operations.
@@ -110,5 +122,31 @@ impl UserCanister for IcUserCanisterClient {
                 Err(UserCanisterClientError::Rejected(format!("{e:?}")))
             }
         }
+    }
+
+    async fn get_local_status(
+        &self,
+        args: GetLocalStatusArgs,
+    ) -> Result<GetLocalStatusResponse, UserCanisterClientError> {
+        ic_utils::log!(
+            "IcUserCanisterClient::get_local_status: querying status {} on {}",
+            args.id,
+            self.canister_id
+        );
+
+        let raw = ic_cdk::call::Call::bounded_wait(self.canister_id, "get_local_status")
+            .with_arg(args)
+            .await
+            .map_err(|e| {
+                ic_utils::log!("IcUserCanisterClient::get_local_status: call failed: {e:?}");
+                UserCanisterClientError::CallFailed(format!("{e:?}"))
+            })?;
+
+        let response = candid::decode_one::<GetLocalStatusResponse>(&raw).map_err(|e| {
+            ic_utils::log!("IcUserCanisterClient::get_local_status: decode failed: {e}");
+            UserCanisterClientError::DecodeFailed(e.to_string())
+        })?;
+
+        Ok(response)
     }
 }

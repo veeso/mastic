@@ -20,4 +20,5 @@ pub fn setup() {
         directory_canister: directory(),
         public_url: public_url(),
     });
+    crate::adapters::user::mock::reset_get_local_status();
 }
