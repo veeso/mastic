@@ -9,11 +9,17 @@ use ic_dbms_canister::prelude::DBMS_CONTEXT;
 use wasm_dbms::WasmDbmsDatabase;
 use wasm_dbms_api::prelude::{ColumnDef, Database, Filter, Query, Value};
 
+use crate::domain::boost::BoostRepository;
+use crate::domain::liked::LikedRepository;
 use crate::error::CanisterResult;
 use crate::schema::{FeedSource, Schema, Visibility as DbVisibility};
 
 /// The ActivityStreams public addressing constant.
 const AS_PUBLIC: &str = "https://www.w3.org/ns/activitystreams#Public";
+
+/// Tuple of fields extracted from a `Create(Note)` activity:
+/// `(content, visibility, spoiler_text, sensitive, note_id)`.
+type ExtractedNote = (String, Visibility, Option<String>, bool, Option<String>);
 
 /// Reads the user's feed, which includes status updates from followed users.
 ///
@@ -124,7 +130,7 @@ fn hydrate_outbox(db: &impl Database, id: u64, owner_actor_uri: &str) -> Option<
         .ok()
         .and_then(|rows| rows.into_iter().next());
 
-    let (final_id, author, boosted_by) = match boost_row {
+    let (final_id, author, boosted_by, lookup_uri) = match boost_row {
         Some(row) => {
             let original_uri = row
                 .original_status_uri
@@ -133,10 +139,22 @@ fn hydrate_outbox(db: &impl Database, id: u64, owner_actor_uri: &str) -> Option<
             let original_id = crate::domain::urls::parse_status_id(&original_uri).unwrap_or(id);
             let author = crate::domain::urls::actor_uri_from_status_uri(&original_uri)
                 .unwrap_or_else(|| owner_actor_uri.to_string());
-            (original_id, author, Some(owner_actor_uri.to_string()))
+            (
+                original_id,
+                author,
+                Some(owner_actor_uri.to_string()),
+                original_uri,
+            )
         }
-        None => (id, owner_actor_uri.to_string(), None),
+        None => (
+            id,
+            owner_actor_uri.to_string(),
+            None,
+            format!("{owner_actor_uri}/statuses/{id}"),
+        ),
     };
+
+    let (liked, boosted) = viewer_flags(&lookup_uri);
 
     Some(FeedItem {
         status: Status {
@@ -151,6 +169,8 @@ fn hydrate_outbox(db: &impl Database, id: u64, owner_actor_uri: &str) -> Option<
             sensitive,
         },
         boosted_by,
+        liked,
+        boosted,
     })
 }
 
@@ -185,6 +205,8 @@ fn hydrate_inbox(db: &impl Database, id: u64, owner_actor_uri: &str) -> Option<F
         let (content, visibility, spoiler_text, sensitive) =
             resolve_boost_original(db, &original_uri, original_id);
 
+        let (liked, boosted) = viewer_flags(&original_uri);
+
         return Some(FeedItem {
             status: Status {
                 id: original_id,
@@ -198,12 +220,15 @@ fn hydrate_inbox(db: &impl Database, id: u64, owner_actor_uri: &str) -> Option<F
                 sensitive,
             },
             boosted_by: Some(booster),
+            liked,
+            boosted,
         });
     }
 
     let json_val = find_value(row, "object_data")?.as_json()?;
     let activity: Activity = serde_json::from_value(json_val.value().clone()).ok()?;
-    let (content, visibility, spoiler_text, sensitive) = extract_note_from_activity(&activity)?;
+    let (content, visibility, spoiler_text, sensitive, note_id) =
+        extract_note_from_activity(&activity)?;
 
     // Direct messages must only appear when the owner is explicitly addressed.
     if visibility == Visibility::Direct && !is_addressed_to(&activity.base, owner_actor_uri) {
@@ -211,6 +236,11 @@ fn hydrate_inbox(db: &impl Database, id: u64, owner_actor_uri: &str) -> Option<F
     }
 
     let author_uri = activity.actor.clone().unwrap_or_default();
+    let lookup_uri = note_id.and_then(|nid| canonical_status_uri(&nid, &author_uri));
+    let (liked, boosted) = lookup_uri
+        .as_deref()
+        .map(viewer_flags)
+        .unwrap_or((false, false));
 
     Some(FeedItem {
         status: Status {
@@ -225,7 +255,34 @@ fn hydrate_inbox(db: &impl Database, id: u64, owner_actor_uri: &str) -> Option<F
             sensitive,
         },
         boosted_by: None,
+        liked,
+        boosted,
     })
+}
+
+/// Returns `(liked, boosted)` for the given status URI from the viewer's
+/// own `liked` and `boosts` tables. Lookup failures degrade to `false` so
+/// hydration never blocks the feed render.
+fn viewer_flags(status_uri: &str) -> (bool, bool) {
+    let liked = LikedRepository::is_liked(status_uri).unwrap_or(false);
+    let boosted = BoostRepository::is_boosted(status_uri).unwrap_or(false);
+    (liked, boosted)
+}
+
+/// Resolve a note's `id` field into the canonical status URI used by the
+/// `liked` and `boosts` tables. When the note id is already an absolute
+/// URI it is returned unchanged; when it is a bare snowflake (as emitted
+/// today by [`make_activity`] in the publish pipeline) it is rebuilt as
+/// `{actor}/statuses/{id}`. Returns [`None`] when no actor is available
+/// to anchor a relative id.
+fn canonical_status_uri(note_id: &str, author_uri: &str) -> Option<String> {
+    if note_id.starts_with("http://") || note_id.starts_with("https://") {
+        Some(note_id.to_string())
+    } else if author_uri.is_empty() {
+        None
+    } else {
+        Some(format!("{author_uri}/statuses/{note_id}"))
+    }
 }
 
 /// Resolve the original (boosted) status for an inbox boost render.
@@ -251,7 +308,7 @@ fn resolve_boost_original(
         return (content, visibility, spoiler_text, sensitive);
     }
 
-    if let Some((content, visibility, spoiler_text, sensitive)) =
+    if let Some((content, visibility, spoiler_text, sensitive, _)) =
         find_cached_inbox_note(db, original_uri)
     {
         return (content, visibility, spoiler_text, sensitive);
@@ -262,10 +319,7 @@ fn resolve_boost_original(
 
 /// Scan the `inbox` table for a `Create(Note)` whose embedded note's `id`
 /// matches `original_uri`, returning the extracted note fields.
-fn find_cached_inbox_note(
-    db: &impl Database,
-    original_uri: &str,
-) -> Option<(String, Visibility, Option<String>, bool)> {
+fn find_cached_inbox_note(db: &impl Database, original_uri: &str) -> Option<ExtractedNote> {
     let query = Query::builder().all().build();
     let rows = db.select_raw("inbox", query).ok()?;
 
@@ -290,10 +344,9 @@ fn find_cached_inbox_note(
 }
 
 /// Extracts the text content, inferred [`Visibility`], optional spoiler text,
-/// and `sensitive` flag from a `Create(Note)` activity.
-fn extract_note_from_activity(
-    activity: &Activity,
-) -> Option<(String, Visibility, Option<String>, bool)> {
+/// `sensitive` flag, and the note's canonical id (when present) from a
+/// `Create(Note)` activity.
+fn extract_note_from_activity(activity: &Activity) -> Option<ExtractedNote> {
     let ActivityObject::Object(note) = activity.object.as_ref()? else {
         return None;
     };
@@ -306,8 +359,9 @@ fn extract_note_from_activity(
     let visibility = infer_visibility(&activity.base);
     let spoiler_text = note.summary.clone();
     let sensitive = note.sensitive.unwrap_or(false);
+    let note_id = note.id.clone();
 
-    Some((content, visibility, spoiler_text, sensitive))
+    Some((content, visibility, spoiler_text, sensitive, note_id))
 }
 
 /// Infers [`Visibility`] from ActivityPub `to`/`cc` addressing conventions
@@ -900,5 +954,182 @@ mod tests {
         assert_eq!(items[0].status.author, "https://other.example/users/bob");
         assert_eq!(items[0].status.id, 99);
         assert_eq!(items[0].status.content, "");
+    }
+
+    #[test]
+    fn test_outbox_status_flags_default_false() {
+        setup();
+        insert_status(1, "Plain", Visibility::Public, 1_000);
+
+        let items = unwrap_ok(read_feed(ReadFeedArgs {
+            limit: 10,
+            offset: 0,
+        }));
+
+        assert_eq!(items.len(), 1);
+        assert!(!items[0].liked);
+        assert!(!items[0].boosted);
+    }
+
+    #[test]
+    fn test_outbox_status_liked_flag_set_when_user_liked_own_status() {
+        setup();
+        insert_status(1, "Mine", Visibility::Public, 1_000);
+        let owner_uri = crate::domain::urls::actor_uri("rey_canisteryo").unwrap();
+        let status_uri = format!("{owner_uri}/statuses/1");
+        crate::domain::liked::LikedRepository::like_status(&status_uri).expect("like");
+
+        let items = unwrap_ok(read_feed(ReadFeedArgs {
+            limit: 10,
+            offset: 0,
+        }));
+
+        assert_eq!(items.len(), 1);
+        assert!(items[0].liked);
+        assert!(!items[0].boosted);
+    }
+
+    #[test]
+    fn test_outbox_self_boost_marks_wrapper_boosted_true() {
+        setup();
+        let owner_uri = crate::domain::urls::actor_uri("rey_canisteryo").unwrap();
+        // Original status authored by the owner, then boosted by the owner.
+        insert_status(1, "Mine", Visibility::Public, 1_000);
+        let original_uri = format!("{owner_uri}/statuses/1");
+        insert_boost_wrapper(7, &original_uri, "boosted text", 5_000);
+
+        let items = unwrap_ok(read_feed(ReadFeedArgs {
+            limit: 10,
+            offset: 0,
+        }));
+
+        assert_eq!(items.len(), 2);
+        // Newest first: boost wrapper, then the original.
+        let wrapper = &items[0];
+        assert!(wrapper.boosted_by.is_some());
+        assert!(wrapper.boosted, "wrapper resolves boosted=true");
+
+        let original = &items[1];
+        assert!(original.boosted_by.is_none());
+        assert!(
+            original.boosted,
+            "original status is also boosted by the viewer"
+        );
+    }
+
+    #[test]
+    fn test_inbox_boost_sets_liked_when_viewer_liked_original() {
+        setup();
+        // Viewer's local status acts as the boosted target.
+        insert_status(99, "Bob's post", Visibility::Public, 1_000);
+        let original_uri = "https://mastic.social/users/rey_canisteryo/statuses/99";
+        crate::domain::liked::LikedRepository::like_status(original_uri).expect("like");
+
+        insert_inbox_announce(
+            500,
+            "https://remote.example/users/alice",
+            original_uri,
+            2_000,
+        );
+
+        let items = unwrap_ok(read_feed(ReadFeedArgs {
+            limit: 10,
+            offset: 0,
+        }));
+
+        assert_eq!(items.len(), 2);
+        let boost_item = items
+            .iter()
+            .find(|i| i.boosted_by.is_some())
+            .expect("boost item present");
+        assert!(boost_item.liked);
+        assert!(!boost_item.boosted);
+    }
+
+    #[test]
+    fn test_inbox_create_note_uses_note_id_for_flag_lookup() {
+        setup();
+        // Build an inbox Create(Note) whose note carries an explicit `id`,
+        // and like that id from the viewer's perspective.
+        let note_uri = "https://remote.example/users/bob/statuses/42";
+        crate::domain::liked::LikedRepository::like_status(note_uri).expect("like");
+
+        let object_data = make_create_note_with_id(note_uri, "Remote post", Visibility::Public);
+        DBMS_CONTEXT.with(|ctx| {
+            let tx_id =
+                ctx.begin_transaction(db_utils::transaction::transaction_caller(ic_utils::now()));
+            let mut db = WasmDbmsDatabase::from_transaction(ctx, Schema, tx_id);
+            db.insert::<InboxActivity>(InboxActivityInsertRequest {
+                id: 200u64.into(),
+                activity_type: DbActivityType::from(ApActivityType::Create),
+                actor_uri: "https://remote.example/users/bob".into(),
+                object_data: object_data.into(),
+                is_boost: false.into(),
+                original_status_uri: Nullable::Null,
+                created_at: 3_000u64.into(),
+            })
+            .expect("insert inbox row");
+            db.insert::<FeedEntry>(FeedEntryInsertRequest {
+                id: 200u64.into(),
+                source: FeedSource::Inbox,
+                created_at: 3_000u64.into(),
+            })
+            .expect("insert feed entry");
+            db.commit().expect("commit");
+        });
+
+        let items = unwrap_ok(read_feed(ReadFeedArgs {
+            limit: 10,
+            offset: 0,
+        }));
+
+        assert_eq!(items.len(), 1);
+        assert!(items[0].liked);
+        assert!(!items[0].boosted);
+    }
+
+    fn make_create_note_with_id(
+        note_id: &str,
+        content: &str,
+        visibility: Visibility,
+    ) -> serde_json::Value {
+        let (to, cc) = match visibility {
+            Visibility::Public => (
+                Some(OneOrMany::One(
+                    "https://www.w3.org/ns/activitystreams#Public".to_string(),
+                )),
+                None,
+            ),
+            _ => (None, None),
+        };
+
+        let note = BaseObject {
+            kind: ObjectType::Note,
+            id: Some(note_id.to_string()),
+            content: Some(content.to_string()),
+            to: to.clone(),
+            cc: cc.clone(),
+            ..Default::default()
+        };
+
+        let activity = Activity {
+            base: BaseObject {
+                context: Some(activitypub::context::Context::Uri(
+                    ACTIVITY_STREAMS_CONTEXT.to_string(),
+                )),
+                kind: ApActivityType::Create,
+                to,
+                cc,
+                ..Default::default()
+            },
+            actor: Some("https://remote.example/users/bob".to_string()),
+            object: Some(ActivityObject::Object(Box::new(note))),
+            target: None,
+            result: None,
+            origin: None,
+            instrument: None,
+        };
+
+        serde_json::to_value(&activity).expect("serialize")
     }
 }

@@ -75,6 +75,13 @@ pub struct FeedItem {
     /// It works like this: if Alice creates a status, and Bob boosts it,
     /// then a new Feed Item is created with `boosted_by` set to Bob's actor URI.
     pub boosted_by: Option<String>,
+    /// `true` if the viewing user has liked the underlying [`Status`].
+    pub liked: bool,
+    /// `true` if the viewing user has boosted (reblogged) the underlying
+    /// [`Status`]. For the user's own boost wrapper this is always `true`;
+    /// for inbox boost items it indicates the viewer has independently
+    /// boosted the same original status.
+    pub boosted: bool,
 }
 
 /// A helper enum for update operations on optional fields.

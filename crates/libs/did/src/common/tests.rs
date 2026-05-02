@@ -79,6 +79,8 @@ fn test_should_roundtrip_feed_item() {
             sensitive: false,
         },
         boosted_by: Some("https://mastic.social/users/bob".to_string()),
+        liked: true,
+        boosted: true,
     };
     let bytes = Encode!(&item).unwrap();
     let decoded = Decode!(&bytes, FeedItem).unwrap();
@@ -100,6 +102,8 @@ fn test_should_roundtrip_feed_item_without_boost() {
             sensitive: false,
         },
         boosted_by: None,
+        liked: false,
+        boosted: false,
     };
     let bytes = Encode!(&item).unwrap();
     let decoded = Decode!(&bytes, FeedItem).unwrap();

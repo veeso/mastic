@@ -71,6 +71,14 @@ async fn test_alice_boosts_bob_charlie_sees_it(env: PocketIcTestEnv<MasticCanist
     );
     assert_eq!(alice_boost_item.status.id, bob_status_id);
     assert_eq!(alice_boost_item.status.content, "Bob says hi");
+    assert!(
+        alice_boost_item.boosted,
+        "alice's boost wrapper carries boosted=true"
+    );
+    assert!(
+        !alice_boost_item.liked,
+        "alice has not liked bob's status yet"
+    );
 
     // 6. Charlie's feed contains the boost too.
     let ReadFeedResponse::Ok(charlie_feed) = charlie_client.read_feed(charlie(), 0, 10).await
@@ -89,6 +97,11 @@ async fn test_alice_boosts_bob_charlie_sees_it(env: PocketIcTestEnv<MasticCanist
         charlie_boost_item.status.author,
         format!("{PUBLIC_URL}/users/bob")
     );
+    assert!(
+        !charlie_boost_item.boosted,
+        "charlie has not boosted bob's status"
+    );
+    assert!(!charlie_boost_item.liked, "charlie has not liked it either");
 
     // 7. Bob's status reports boost_count = 1.
     let GetStatusesResponse::Ok(bob_statuses) = bob_client.get_statuses(bob(), 0, 10).await else {

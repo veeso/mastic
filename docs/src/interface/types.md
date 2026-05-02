@@ -95,17 +95,17 @@ type UserProfile = record {
 A single post authored by a user. Each status has a unique ID, content body,
 author principal, creation timestamp, and visibility setting.
 
-| Field          | Description                                                          |
-| -------------- | -------------------------------------------------------------------- |
-| `id`           | Snowflake identifier of the status assigned by the User Canister.    |
-| `content`      | The text content of the post.                                        |
-| `author`       | ActivityPub actor URI of the status author.                          |
-| `created_at`   | Timestamp (milliseconds since epoch) when the status was created.    |
-| `visibility`   | Audience control for this status (see [Visibility](#visibility)).    |
-| `like_count`   | Cached count of `Like` activities received for this status.          |
-| `boost_count`  | Cached count of `Announce` (boost) activities received.              |
-| `spoiler_text` | Optional content warning / spoiler text shown before the content.    |
-| `sensitive`    | If `true`, clients should hide the content behind a CW by default.   |
+| Field          | Description                                                        |
+| -------------- | ------------------------------------------------------------------ |
+| `id`           | Snowflake identifier of the status assigned by the User Canister.  |
+| `content`      | The text content of the post.                                      |
+| `author`       | ActivityPub actor URI of the status author.                        |
+| `created_at`   | Timestamp (milliseconds since epoch) when the status was created.  |
+| `visibility`   | Audience control for this status (see [Visibility](#visibility)).  |
+| `like_count`   | Cached count of `Like` activities received for this status.        |
+| `boost_count`  | Cached count of `Announce` (boost) activities received.            |
+| `spoiler_text` | Optional content warning / spoiler text shown before the content.  |
+| `sensitive`    | If `true`, clients should hide the content behind a CW by default. |
 
 ```candid
 type Status = record {
@@ -130,17 +130,23 @@ booster's outbox copy.
 ### FeedItem
 
 A single entry in a user's feed. Wraps a `Status` and optionally indicates
-that it was boosted (reblogged) by another user.
+that it was boosted (reblogged) by another user. Also surfaces per-viewer
+interaction flags so clients can render "you liked this" / "you boosted
+this" markers without an additional round-trip.
 
-| Field        | Description                                                                  |
-| ------------ | ---------------------------------------------------------------------------- |
-| `status`     | The status being displayed.                                                  |
-| `boosted_by` | If present, the principal of the user who boosted this status into the feed. |
+| Field        | Description                                                                                                          |
+| ------------ | -------------------------------------------------------------------------------------------------------------------- |
+| `status`     | The status being displayed.                                                                                          |
+| `boosted_by` | If present, the actor URI of the user who boosted this status into the feed.                                         |
+| `liked`      | `true` if the viewing user has liked the underlying status.                                                          |
+| `boosted`    | `true` if the viewing user has boosted the underlying status. Always `true` for the viewer's own boost wrapper rows. |
 
 ```candid
 type FeedItem = record {
   status : Status;
-  boosted_by : opt principal;
+  boosted_by : opt text;
+  liked : bool;
+  boosted : bool;
 };
 ```
 
@@ -252,11 +258,11 @@ Response and error types for the `who_am_i` method. Returns the caller's handle,
 User Canister ID, and canister status, allowing a logged-in user to discover
 their own identity and check canister readiness.
 
-| Field              | Description                                                                              |
-| :----------------- | :--------------------------------------------------------------------------------------- |
-| `handle`           | The caller's registered handle.                                                          |
-| `user_canister`    | Principal of the caller's User Canister. (Optional)                                      |
-| `canister_status`  | Status of the caller's User Canister (see [UserCanisterStatus](#usercanisterstatus)).    |
+| Field             | Description                                                                           |
+| :---------------- | :------------------------------------------------------------------------------------ |
+| `handle`          | The caller's registered handle.                                                       |
+| `user_canister`   | Principal of the caller's User Canister. (Optional)                                   |
+| `canister_status` | Status of the caller's User Canister (see [UserCanisterStatus](#usercanisterstatus)). |
 
 - **NotRegistered**: the caller has no account in the directory.
 
@@ -300,10 +306,10 @@ type UserCanisterError = variant {
 Request, response, and error types for the `get_user` method. Looks up a user
 by handle and returns their handle and User Canister ID.
 
-| Field         | Description                                  |
-| ------------- | -------------------------------------------- |
-| `handle`      | The handle to look up.                       |
-| `canister_id` | Principal of the looked-up user's canister.  |
+| Field         | Description                                 |
+| ------------- | ------------------------------------------- |
+| `handle`      | The handle to look up.                      |
+| `canister_id` | Principal of the looked-up user's canister. |
 
 - **NotFound**: no user exists with the given handle.
 
@@ -332,9 +338,9 @@ type GetUserError = variant {
 Request, response, and error types for the `add_moderator` method. Grants
 moderator privileges to a principal. Only existing moderators may call this.
 
-| Field       | Description                              |
-| ----------- | ---------------------------------------- |
-| `principal` | The principal to promote to moderator.   |
+| Field       | Description                            |
+| ----------- | -------------------------------------- |
+| `principal` | The principal to promote to moderator. |
 
 - **Unauthorized**: the caller is not a moderator.
 - **AlreadyModerator**: the target principal is already a moderator.
@@ -388,9 +394,9 @@ type RemoveModeratorError = variant {
 Request, response, and error types for the `suspend` method. Suspends a user
 account, preventing further activity. Only moderators may call this.
 
-| Field       | Description                             |
-| ----------- | --------------------------------------- |
-| `principal` | The principal of the user to suspend.   |
+| Field       | Description                           |
+| ----------- | ------------------------------------- |
+| `principal` | The principal of the user to suspend. |
 
 - **Unauthorized**: the caller is not a moderator.
 - **NotFound**: no user exists with the given principal.
@@ -427,18 +433,18 @@ are returned. `CreationPending`, `CreationFailed`, `DeletionPending`, and
 
 An empty `query` returns all eligible users, paginated.
 
-| Field    | Description                                              |
-| :------- | :------------------------------------------------------- |
-| `query`  | Free-text search string matched against handles.         |
-| `offset` | Number of results to skip (for pagination).              |
-| `limit`  | Maximum results to return; must be in `1..=50`.          |
+| Field    | Description                                      |
+| :------- | :----------------------------------------------- |
+| `query`  | Free-text search string matched against handles. |
+| `offset` | Number of results to skip (for pagination).      |
+| `limit`  | Maximum results to return; must be in `1..=50`.  |
 
 Each result entry contains:
 
-| Field         | Description                                |
-| :------------ | :----------------------------------------- |
-| `handle`      | The matched user's handle.                 |
-| `canister_id` | Principal of the matched user's canister.  |
+| Field         | Description                               |
+| :------------ | :---------------------------------------- |
+| `handle`      | The matched user's handle.                |
+| `canister_id` | Principal of the matched user's canister. |
 
 Errors:
 
@@ -568,9 +574,9 @@ type UpdateProfileError = variant {
 Request, response, and error types for the `follow_user` method. Sends a
 follow request to another user by handle.
 
-| Field    | Description                    |
-| -------- | ------------------------------ |
-| `handle` | Handle of the user to follow.  |
+| Field    | Description                   |
+| -------- | ----------------------------- |
+| `handle` | Handle of the user to follow. |
 
 - **Unauthorized**: the caller is not the canister owner.
 - **AlreadyFollowing**: the caller already follows the target user.
@@ -600,9 +606,9 @@ type FollowUserError = variant {
 Request, response, and error types for the `accept_follow` method. Accepts a
 pending follow request from another user, adding them to the followers list.
 
-| Field      | Description                                                     |
-| ---------- | --------------------------------------------------------------- |
-| `follower` | Principal of the User Canister whose follow request to accept.  |
+| Field      | Description                                                    |
+| ---------- | -------------------------------------------------------------- |
+| `follower` | Principal of the User Canister whose follow request to accept. |
 
 - **Unauthorized**: the caller is not the canister owner.
 - **RequestNotFound**: no pending follow request exists from the given principal.
@@ -628,9 +634,9 @@ type AcceptFollowError = variant {
 Request, response, and error types for the `reject_follow` method. Rejects a
 pending follow request from another user.
 
-| Field      | Description                                                     |
-| ---------- | --------------------------------------------------------------- |
-| `follower` | Principal of the User Canister whose follow request to reject.  |
+| Field      | Description                                                    |
+| ---------- | -------------------------------------------------------------- |
+| `follower` | Principal of the User Canister whose follow request to reject. |
 
 - **Unauthorized**: the caller is not the canister owner.
 - **RequestNotFound**: no pending follow request exists from the given principal.
@@ -657,9 +663,9 @@ Request, response, and error types for the `unfollow_user` method. Removes the
 caller from the target user's followers list and removes the target from the
 caller's following list.
 
-| Field         | Description                                  |
-| ------------- | -------------------------------------------- |
-| `canister_id` | Principal of the User Canister to unfollow.  |
+| Field         | Description                                 |
+| ------------- | ------------------------------------------- |
+| `canister_id` | Principal of the User Canister to unfollow. |
 
 - **Unauthorized**: the caller is not the canister owner.
 - **NotFollowing**: the caller does not currently follow the target user.
@@ -685,9 +691,9 @@ type UnfollowUserError = variant {
 Request, response, and error types for the `block_user` method. Blocks another
 user, preventing them from following or interacting with the caller.
 
-| Field         | Description                               |
-| ------------- | ----------------------------------------- |
-| `canister_id` | Principal of the User Canister to block.  |
+| Field         | Description                              |
+| ------------- | ---------------------------------------- |
+| `canister_id` | Principal of the User Canister to block. |
 
 - **Unauthorized**: the caller is not the canister owner.
 
@@ -712,10 +718,10 @@ Request, response, and error types for the `get_followers` method. Returns a
 paginated list of actor URIs that follow this user. The `limit` must not exceed
 **50** (the maximum page size).
 
-| Field    | Description                                              |
-| -------- | -------------------------------------------------------- |
-| `offset` | Number of results to skip (for pagination).              |
-| `limit`  | Maximum number of results to return (max 50).            |
+| Field    | Description                                   |
+| -------- | --------------------------------------------- |
+| `offset` | Number of results to skip (for pagination).   |
+| `limit`  | Maximum number of results to return (max 50). |
 
 - **LimitExceeded**: the requested `limit` exceeds the maximum page size (50).
 - **Internal**: an internal error occurred while querying followers.
@@ -743,10 +749,10 @@ Request, response, and error types for the `get_following` method. Returns a
 paginated list of actor URIs that this user follows. The `limit` must not exceed
 **50** (the maximum page size).
 
-| Field    | Description                                              |
-| -------- | -------------------------------------------------------- |
-| `offset` | Number of results to skip (for pagination).              |
-| `limit`  | Maximum number of results to return (max 50).            |
+| Field    | Description                                   |
+| -------- | --------------------------------------------- |
+| `offset` | Number of results to skip (for pagination).   |
+| `limit`  | Maximum number of results to return (max 50). |
 
 - **LimitExceeded**: the requested `limit` exceeds the maximum page size (50).
 - **Internal**: an internal error occurred while querying the following list.
@@ -776,11 +782,11 @@ Canister. For `Public`, `Unlisted`, and `FollowersOnly` visibilities, the
 recipients are the author's followers. For `Direct` visibility, the recipients
 are the explicitly listed `mentions` — followers are not addressed.
 
-| Field        | Description                                                                             |
-| ------------ | --------------------------------------------------------------------------------------- |
-| `content`    | The text content of the new post.                                                       |
-| `visibility` | Audience control for this status (see [Visibility](#visibility)).                       |
-| `mentions`   | Actor URIs explicitly mentioned. Required (non-empty) when `visibility` is `Direct`.    |
+| Field        | Description                                                                          |
+| ------------ | ------------------------------------------------------------------------------------ |
+| `content`    | The text content of the new post.                                                    |
+| `visibility` | Audience control for this status (see [Visibility](#visibility)).                    |
+| `mentions`   | Actor URIs explicitly mentioned. Required (non-empty) when `visibility` is `Direct`. |
 
 On success, returns the created `Status` with its assigned ID and timestamp.
 
@@ -817,9 +823,9 @@ type PublishStatusError = variant {
 Request, response, and error types for the `delete_status` method. Removes a
 status post from the caller's outbox.
 
-| Field       | Description                             |
-| ----------- | --------------------------------------- |
-| `status_id` | The unique ID of the status to delete.  |
+| Field       | Description                            |
+| ----------- | -------------------------------------- |
+| `status_id` | The unique ID of the status to delete. |
 
 - **Unauthorized**: the caller is not the canister owner.
 - **NotFound**: no status exists with the given ID.
@@ -851,9 +857,9 @@ liked collection and without re-emitting a `Like` activity. Only the
 caller (canister owner) is authorized; non-owner calls are rejected at
 the inspect layer.
 
-| Field        | Description                              |
-| ------------ | ---------------------------------------- |
-| `status_url` | ActivityPub URI of the status to like.   |
+| Field        | Description                            |
+| ------------ | -------------------------------------- |
+| `status_url` | ActivityPub URI of the status to like. |
 
 - **Internal**: an unexpected internal error occurred (database access
   failure, federation dispatch failure, etc.).
@@ -993,10 +999,10 @@ principal determines the visibility scope:
 - **Anonymous / other principals**: returns `Public` and `Unlisted`
   only.
 
-| Field                 | Description                                                    |
-| --------------------- | -------------------------------------------------------------- |
-| `id`                  | Snowflake ID of the status to read.                            |
-| `requester_actor_uri` | Actor URI of the requester (used for visibility filtering).    |
+| Field                 | Description                                                 |
+| --------------------- | ----------------------------------------------------------- |
+| `id`                  | Snowflake ID of the status to read.                         |
+| `requester_actor_uri` | Actor URI of the requester (used for visibility filtering). |
 
 - **NotFound**: no status with the given ID is visible to the caller.
 - **Internal**: an unexpected internal error occurred.
@@ -1081,9 +1087,9 @@ Request, response, and error types for the `receive_activity` method. Called by
 the Federation Canister to deliver an incoming ActivityPub activity (encoded as
 JSON) to this User Canister's inbox.
 
-| Field           | Description                                |
-| --------------- | ------------------------------------------ |
-| `activity_json` | JSON-encoded ActivityPub activity object.  |
+| Field           | Description                               |
+| --------------- | ----------------------------------------- |
+| `activity_json` | JSON-encoded ActivityPub activity object. |
 
 - **Unauthorized**: the caller is not the Federation Canister.
 - **InvalidActivity**: the JSON could not be parsed as a valid ActivityPub
@@ -1138,10 +1144,10 @@ a single activity (`One`) or a batch (`Batch`) per call. Local targets are
 routed to the recipient User Canister via the Directory Canister; remote
 targets are skipped (remote HTTP delivery is Milestone 2).
 
-| Field           | Description                                                 |
-| --------------- | ----------------------------------------------------------- |
-| `activity_json` | JSON-encoded ActivityPub activity object to send.           |
-| `target_inbox`  | URL of the actor's inbox to deliver the activity to.        |
+| Field           | Description                                          |
+| --------------- | ---------------------------------------------------- |
+| `activity_json` | JSON-encoded ActivityPub activity object to send.    |
+| `target_inbox`  | URL of the actor's inbox to deliver the activity to. |
 
 `SendActivityError`:
 

@@ -596,6 +596,8 @@ fn test_should_roundtrip_read_feed_response_ok() {
             sensitive: false,
         },
         boosted_by: None,
+        liked: false,
+        boosted: false,
     }]);
     let bytes = Encode!(&resp).unwrap();
     let decoded = Decode!(&bytes, ReadFeedResponse).unwrap();
