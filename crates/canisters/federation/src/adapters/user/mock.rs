@@ -30,7 +30,10 @@ thread_local! {
 
 /// Enqueue a canned response to be returned by the next call to
 /// [`MockUserCanisterClient::get_local_status`].
-#[allow(dead_code, reason = "exposed as a test helper; called from cfg(test) sites")]
+#[allow(
+    dead_code,
+    reason = "exposed as a test helper; called from cfg(test) sites"
+)]
 pub fn push_get_local_status_response(resp: GetLocalStatusResponse) {
     GET_LOCAL_STATUS_RESPONSES.with_borrow_mut(|q| q.push_back(resp));
 }
@@ -47,7 +50,10 @@ pub fn captured_get_local_status_calls() -> Vec<GetLocalStatusArgs> {
 
 /// Clear both the canned response queue and the captured-calls log so
 /// tests start from a clean slate.
-#[allow(dead_code, reason = "exposed as a test helper; called from cfg(test) sites")]
+#[allow(
+    dead_code,
+    reason = "exposed as a test helper; called from cfg(test) sites"
+)]
 pub fn reset_get_local_status() {
     GET_LOCAL_STATUS_RESPONSES.with_borrow_mut(|q| q.clear());
     GET_LOCAL_STATUS_CALLS.with_borrow_mut(|v| v.clear());
