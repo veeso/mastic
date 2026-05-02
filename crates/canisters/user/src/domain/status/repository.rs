@@ -372,13 +372,21 @@ mod tests {
         StatusRepository::increment_boost_count(7).expect("inc");
         StatusRepository::decrement_boost_count(7).expect("dec");
         assert_eq!(
-            StatusRepository::find_by_id(7).unwrap().unwrap().boost_count.0,
+            StatusRepository::find_by_id(7)
+                .unwrap()
+                .unwrap()
+                .boost_count
+                .0,
             0
         );
 
         StatusRepository::decrement_boost_count(7).expect("dec at zero");
         assert_eq!(
-            StatusRepository::find_by_id(7).unwrap().unwrap().boost_count.0,
+            StatusRepository::find_by_id(7)
+                .unwrap()
+                .unwrap()
+                .boost_count
+                .0,
             0
         );
     }

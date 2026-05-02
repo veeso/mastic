@@ -19,10 +19,6 @@ use crate::error::CanisterResult;
 
 /// Public entry point. Pulls `ic_utils::caller()` and forwards to
 /// [`get_local_status_with_caller`].
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "wired up by the get_local_status API endpoint")
-)]
 pub fn get_local_status(args: GetLocalStatusArgs) -> GetLocalStatusResponse {
     get_local_status_with_caller(ic_utils::caller(), args)
 }

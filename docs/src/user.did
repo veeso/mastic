@@ -14,6 +14,18 @@ type AcceptFollowError = variant {
 };
 // Response type for the `accept_follow` method.
 type AcceptFollowResponse = variant { Ok; Err : AcceptFollowError };
+// Request arguments for the `boost_status` method.
+type BoostStatusArgs = record {
+  // ActivityPub URI of the status to like.
+  status_url : text;
+};
+// Error types for the `boost_status` method.
+type BoostStatusError = variant {
+  // Internal error occurred while boosting the status.
+  Internal : text;
+};
+// Response type for the `boost_status` method.
+type BoostStatusResponse = variant { Ok; Err : BoostStatusError };
 // Error types for the `emit_delete_profile_activity` method.
 // 
 // Called by the Directory Canister during delete_profile flow to aggregate and
@@ -119,6 +131,27 @@ type GetLikedArgs = record {
 type GetLikedError = variant { Internal : text };
 // Response type for the `get_liked` method.
 type GetLikedResponse = variant { Ok : vec text; Err : GetLikedError };
+// Request arguments for the `get_local_status` method.
+type GetLocalStatusArgs = record {
+  // Snowflake id of the status to fetch.
+  id : nat64;
+  // Optional actor URI of the requester. Honored only when the caller is
+  // the federation canister; ignored for owner / anonymous callers.
+  requester_actor_uri : opt text;
+};
+// Error type for the `get_local_status` method.
+type GetLocalStatusError = variant {
+  // Internal error occurred while fetching the status.
+  Internal : text;
+  // The status does not exist on this canister, or visibility rules
+  // prevent the requester from accessing it.
+  NotFound;
+};
+// Response type for the `get_local_status` method.
+type GetLocalStatusResponse = variant {
+  Ok : Status;
+  Err : GetLocalStatusError;
+};
 // Error types for the `get_profile` method.
 type GetProfileError = variant {
   // Internal error occurred while fetching the profile.
@@ -214,9 +247,20 @@ type Status = record {
   author : text;
   // The visibility setting of the status, controlling its audience.
   visibility : Visibility;
+  // Optional content warning / spoiler text shown before content.
+  spoiler_text : opt text;
+  // Whether the status should be hidden behind a content warning by clients.
+  sensitive : bool;
   // Cached count of `Announce` (boost) activities received for this status.
   boost_count : nat64;
 };
+// Request arguments for the `undo_boost` method.
+type UndoBoostArgs = record {
+  // ActivityPub URI of the status to un-boost.
+  status_url : text;
+};
+// Response type for the `undo_boost` method.
+type UndoBoostResponse = variant { Ok; Err : GetLikedError };
 // Request arguments for the `update_profile` method.
 // All fields are optional; only provided fields are updated.
 type UpdateProfileArgs = record {
@@ -272,6 +316,7 @@ type Visibility = variant {
 };
 service : (UserInstallArgs) -> {
   accept_follow : (AcceptFollowArgs) -> (AcceptFollowResponse);
+  boost_status : (BoostStatusArgs) -> (BoostStatusResponse);
   emit_delete_profile_activity : () -> (EmitDeleteProfileActivityResponse);
   follow_user : (FollowUserArgs) -> (FollowUserResponse);
   get_follow_requests : (GetFollowRequestsArgs) -> (
@@ -280,6 +325,7 @@ service : (UserInstallArgs) -> {
   get_followers : (GetFollowersArgs) -> (GetFollowersResponse) query;
   get_following : (GetFollowersArgs) -> (GetFollowersResponse) query;
   get_liked : (GetLikedArgs) -> (GetLikedResponse) query;
+  get_local_status : (GetLocalStatusArgs) -> (GetLocalStatusResponse) query;
   get_profile : () -> (GetProfileResponse) query;
   get_statuses : (GetLikedArgs) -> (GetStatusesResponse) composite_query;
   like_status : (LikeStatusArgs) -> (LikeStatusResponse);
@@ -287,7 +333,8 @@ service : (UserInstallArgs) -> {
   read_feed : (GetLikedArgs) -> (ReadFeedResponse) query;
   receive_activity : (ReceiveActivityArgs) -> (ReceiveActivityResponse);
   reject_follow : (AcceptFollowArgs) -> (AcceptFollowResponse);
-  unfollow_user : (AcceptFollowArgs) -> (LikeStatusResponse);
-  unlike_status : (LikeStatusArgs) -> (LikeStatusResponse);
-  update_profile : (UpdateProfileArgs) -> (LikeStatusResponse);
+  undo_boost : (UndoBoostArgs) -> (UndoBoostResponse);
+  unfollow_user : (AcceptFollowArgs) -> (UndoBoostResponse);
+  unlike_status : (UndoBoostArgs) -> (UndoBoostResponse);
+  update_profile : (UpdateProfileArgs) -> (UndoBoostResponse);
 }
