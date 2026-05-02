@@ -2,22 +2,45 @@
 
 use std::collections::HashSet;
 
-use ic_dbms_canister::prelude::DBMS_CONTEXT;
+use ic_dbms_canister::prelude::{DBMS_CONTEXT, IcAccessControlList, IcMemoryProvider};
 use wasm_dbms::WasmDbmsDatabase;
-use wasm_dbms_api::prelude::*;
+use wasm_dbms::prelude::DbmsContext;
+use wasm_dbms_api::prelude::{Database, Query, TransactionId};
 
 use crate::error::{CanisterError, CanisterResult};
 use crate::schema::{Block, BlockRecord, Schema};
 
-pub struct BlockRepository;
+pub struct BlockRepository {
+    tx: Option<TransactionId>,
+}
 
 impl BlockRepository {
-    /// Return the set of actor URIs blocked by the owner.
-    pub fn list_blocked_uris() -> CanisterResult<HashSet<String>> {
-        DBMS_CONTEXT.with(|ctx| {
-            let db = WasmDbmsDatabase::oneshot(ctx, Schema);
+    pub const fn oneshot() -> Self {
+        Self { tx: None }
+    }
 
-            db.select::<Block>(Query::builder().all().build())
+    // Reserved for future cross-repo atomic flows that need to splice block
+    // reads/writes into an externally-driven transaction. Not yet wired up.
+    #[allow(dead_code)]
+    pub const fn with_transaction(tx: TransactionId) -> Self {
+        Self { tx: Some(tx) }
+    }
+
+    fn db<'a>(
+        &self,
+        ctx: &'a DbmsContext<IcMemoryProvider, IcAccessControlList>,
+    ) -> WasmDbmsDatabase<'a, IcMemoryProvider, IcAccessControlList> {
+        match self.tx {
+            Some(id) => WasmDbmsDatabase::from_transaction(ctx, Schema, id),
+            None => WasmDbmsDatabase::oneshot(ctx, Schema),
+        }
+    }
+
+    /// Return the set of actor URIs blocked by the owner.
+    pub fn list_blocked_uris(&self) -> CanisterResult<HashSet<String>> {
+        DBMS_CONTEXT.with(|ctx| {
+            self.db(ctx)
+                .select::<Block>(Query::builder().all().build())
                 .map(|records| {
                     records
                         .into_iter()
@@ -53,7 +76,9 @@ mod tests {
     #[test]
     fn test_list_blocked_uris_empty() {
         setup();
-        let blocked = BlockRepository::list_blocked_uris().expect("should query");
+        let blocked = BlockRepository::oneshot()
+            .list_blocked_uris()
+            .expect("should query");
         assert!(blocked.is_empty());
     }
 
@@ -63,7 +88,9 @@ mod tests {
         insert_block("https://remote.example/users/eve");
         insert_block("https://remote.example/users/mallory");
 
-        let blocked = BlockRepository::list_blocked_uris().expect("should query");
+        let blocked = BlockRepository::oneshot()
+            .list_blocked_uris()
+            .expect("should query");
         assert_eq!(blocked.len(), 2);
         assert!(blocked.contains("https://remote.example/users/eve"));
         assert!(blocked.contains("https://remote.example/users/mallory"));
