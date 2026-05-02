@@ -264,7 +264,9 @@ fn hydrate_inbox(db: &impl Database, id: u64, owner_actor_uri: &str) -> Option<F
 /// own `liked` and `boosts` tables. Lookup failures degrade to `false` so
 /// hydration never blocks the feed render.
 fn viewer_flags(status_uri: &str) -> (bool, bool) {
-    let liked = LikedRepository::is_liked(status_uri).unwrap_or(false);
+    let liked = LikedRepository::oneshot()
+        .is_liked(status_uri)
+        .unwrap_or(false);
     let boosted = BoostRepository::is_boosted(status_uri).unwrap_or(false);
     (liked, boosted)
 }
@@ -977,7 +979,9 @@ mod tests {
         insert_status(1, "Mine", Visibility::Public, 1_000);
         let owner_uri = crate::domain::urls::actor_uri("rey_canisteryo").unwrap();
         let status_uri = format!("{owner_uri}/statuses/1");
-        crate::domain::liked::LikedRepository::like_status(&status_uri).expect("like");
+        crate::domain::liked::LikedRepository::oneshot()
+            .like_status(&status_uri)
+            .expect("like");
 
         let items = unwrap_ok(read_feed(ReadFeedArgs {
             limit: 10,
@@ -1023,7 +1027,9 @@ mod tests {
         // Viewer's local status acts as the boosted target.
         insert_status(99, "Bob's post", Visibility::Public, 1_000);
         let original_uri = "https://mastic.social/users/rey_canisteryo/statuses/99";
-        crate::domain::liked::LikedRepository::like_status(original_uri).expect("like");
+        crate::domain::liked::LikedRepository::oneshot()
+            .like_status(original_uri)
+            .expect("like");
 
         insert_inbox_announce(
             500,
@@ -1052,7 +1058,9 @@ mod tests {
         // Build an inbox Create(Note) whose note carries an explicit `id`,
         // and like that id from the viewer's perspective.
         let note_uri = "https://remote.example/users/bob/statuses/42";
-        crate::domain::liked::LikedRepository::like_status(note_uri).expect("like");
+        crate::domain::liked::LikedRepository::oneshot()
+            .like_status(note_uri)
+            .expect("like");
 
         let object_data = make_create_note_with_id(note_uri, "Remote post", Visibility::Public);
         DBMS_CONTEXT.with(|ctx| {

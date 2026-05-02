@@ -39,12 +39,12 @@ async fn unlike_status_inner(status_uri: String) -> CanisterResult<()> {
     ic_utils::log!("Unliking status with URI: {status_uri}");
 
     // Idempotent: nothing to do if the row is absent.
-    if !LikedRepository::is_liked(&status_uri)? {
+    if !LikedRepository::oneshot().is_liked(&status_uri)? {
         ic_utils::log!("Status not liked: {status_uri}; nothing to do");
         return Ok(());
     }
 
-    LikedRepository::unlike_status(&status_uri)?;
+    LikedRepository::oneshot().unlike_status(&status_uri)?;
 
     let Some(author_actor_uri) = crate::domain::urls::actor_uri_from_status_uri(&status_uri) else {
         ic_utils::log!("unlike_status: could not derive author actor URI from {status_uri}");
@@ -121,7 +121,9 @@ mod tests {
     async fn test_should_unlike_status_after_like() {
         setup();
 
-        LikedRepository::like_status(STATUS_URI).expect("should insert liked");
+        LikedRepository::oneshot()
+            .like_status(STATUS_URI)
+            .expect("should insert liked");
 
         let response = unlike_status(UnlikeStatusArgs {
             status_url: STATUS_URI.to_string(),
@@ -129,7 +131,11 @@ mod tests {
         .await;
 
         assert_eq!(response, UnlikeStatusResponse::Ok);
-        assert!(!LikedRepository::is_liked(STATUS_URI).expect("should query"));
+        assert!(
+            !LikedRepository::oneshot()
+                .is_liked(STATUS_URI)
+                .expect("should query")
+        );
 
         let captured = captured();
         assert_eq!(captured.len(), 1);
