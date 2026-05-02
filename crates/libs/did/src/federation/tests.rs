@@ -212,3 +212,58 @@ fn test_should_roundtrip_send_activity_response_batch() {
     let decoded = Decode!(&bytes, SendActivityResponse).unwrap();
     assert_eq!(resp, decoded);
 }
+
+#[test]
+fn test_should_roundtrip_fetch_status_args_with_requester() {
+    let args = FetchStatusArgs {
+        uri: "https://mastic.social/users/alice/statuses/123".to_string(),
+        requester_actor_uri: Some("https://mastic.social/users/bob".to_string()),
+    };
+    let bytes = Encode!(&args).unwrap();
+    let decoded = Decode!(&bytes, FetchStatusArgs).unwrap();
+    assert_eq!(args, decoded);
+}
+
+#[test]
+fn test_should_roundtrip_fetch_status_args_no_requester() {
+    let args = FetchStatusArgs {
+        uri: "https://mastic.social/users/alice/statuses/456".to_string(),
+        requester_actor_uri: None,
+    };
+    let bytes = Encode!(&args).unwrap();
+    let decoded = Decode!(&bytes, FetchStatusArgs).unwrap();
+    assert_eq!(args, decoded);
+}
+
+#[test]
+fn test_should_roundtrip_fetch_status_response_ok() {
+    let resp = FetchStatusResponse::Ok(crate::common::Status {
+        id: 42,
+        content: "Hello, world!".to_string(),
+        author: "https://mastic.social/users/alice".to_string(),
+        created_at: 1_000_000_000,
+        visibility: crate::common::Visibility::Public,
+        like_count: 3,
+        boost_count: 1,
+        spoiler_text: Some("Content warning".to_string()),
+        sensitive: true,
+    });
+    let bytes = Encode!(&resp).unwrap();
+    let decoded = Decode!(&bytes, FetchStatusResponse).unwrap();
+    assert_eq!(resp, decoded);
+}
+
+#[test]
+fn test_should_roundtrip_fetch_status_response_err() {
+    for error in [
+        FetchStatusError::Unsupported,
+        FetchStatusError::InvalidUri,
+        FetchStatusError::NotFound,
+        FetchStatusError::Internal("db failure".to_string()),
+    ] {
+        let resp = FetchStatusResponse::Err(error);
+        let bytes = Encode!(&resp).unwrap();
+        let decoded = Decode!(&bytes, FetchStatusResponse).unwrap();
+        assert_eq!(resp, decoded);
+    }
+}

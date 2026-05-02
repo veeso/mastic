@@ -163,3 +163,34 @@ pub enum SendActivityResponse {
     /// request.
     Batch(Vec<SendActivityResult>),
 }
+
+/// Request arguments for the `fetch_status` method.
+#[derive(Debug, Clone, PartialEq, Eq, CandidType, Serialize, Deserialize)]
+pub struct FetchStatusArgs {
+    /// ActivityPub URI of the status to fetch.
+    pub uri: String,
+    /// Optional actor URI of the requester. Forwarded to the target user
+    /// canister so it can apply visibility rules.
+    pub requester_actor_uri: Option<String>,
+}
+
+/// Error type for the `fetch_status` method.
+#[derive(Debug, Clone, PartialEq, Eq, CandidType, Serialize, Deserialize)]
+pub enum FetchStatusError {
+    /// The URI host is not local. M1 only supports local fetch; HTTPS
+    /// outcalls land in M3.
+    Unsupported,
+    /// The URI could not be parsed (host or path shape).
+    InvalidUri,
+    /// The status was not found, or the requester is not allowed to see it.
+    NotFound,
+    /// Internal error occurred while fetching the status.
+    Internal(String),
+}
+
+/// Response type for the `fetch_status` method.
+#[derive(Debug, Clone, PartialEq, Eq, CandidType, Serialize, Deserialize)]
+pub enum FetchStatusResponse {
+    Ok(crate::common::Status),
+    Err(FetchStatusError),
+}
