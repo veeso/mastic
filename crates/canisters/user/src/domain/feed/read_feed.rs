@@ -110,11 +110,39 @@ fn hydrate_outbox(db: &impl Database, id: u64, owner_actor_uri: &str) -> Option<
         .map(|t| t.0.clone());
     let sensitive = find_value(row, "sensitive")?.as_boolean()?.0;
 
+    // If a `Boost` row exists for this status id, this is a wrapper status for
+    // a re-share: rewrite id/author from the boosted original and surface the
+    // owner as `boosted_by`.
+    let boost_row = db
+        .select::<crate::schema::Boost>(
+            Query::builder()
+                .all()
+                .and_where(Filter::eq("status_id", Value::from(id)))
+                .limit(1)
+                .build(),
+        )
+        .ok()
+        .and_then(|rows| rows.into_iter().next());
+
+    let (final_id, author, boosted_by) = match boost_row {
+        Some(row) => {
+            let original_uri = row
+                .original_status_uri
+                .expect("boosts.original_status_uri is non-null")
+                .0;
+            let original_id = crate::domain::urls::parse_status_id(&original_uri).unwrap_or(id);
+            let author = crate::domain::urls::actor_uri_from_status_uri(&original_uri)
+                .unwrap_or_else(|| owner_actor_uri.to_string());
+            (original_id, author, Some(owner_actor_uri.to_string()))
+        }
+        None => (id, owner_actor_uri.to_string(), None),
+    };
+
     Some(FeedItem {
         status: Status {
-            id,
+            id: final_id,
             content,
-            author: owner_actor_uri.to_string(),
+            author,
             created_at,
             visibility: db_vis.into(),
             like_count,
@@ -122,7 +150,7 @@ fn hydrate_outbox(db: &impl Database, id: u64, owner_actor_uri: &str) -> Option<
             spoiler_text,
             sensitive,
         },
-        boosted_by: None, // FIXME: eventually support boosts in M1
+        boosted_by,
     })
 }
 
@@ -276,9 +304,9 @@ mod tests {
 
     use super::read_feed;
     use crate::schema::{
-        ActivityType as DbActivityType, FeedEntry, FeedEntryInsertRequest, FeedSource,
-        InboxActivity, InboxActivityInsertRequest, Schema, Status, StatusInsertRequest,
-        Visibility as DbVisibility,
+        ActivityType as DbActivityType, Boost, BoostInsertRequest, FeedEntry,
+        FeedEntryInsertRequest, FeedSource, InboxActivity, InboxActivityInsertRequest, Schema,
+        Status, StatusInsertRequest, Visibility as DbVisibility,
     };
     use crate::test_utils::setup;
 
@@ -605,6 +633,82 @@ mod tests {
         assert_eq!(items.len(), 1);
         assert_eq!(items[0].status.content, "DM for you");
         assert_eq!(items[0].status.visibility, Visibility::Direct);
+    }
+
+    fn insert_boost_wrapper(snowflake: u64, original_uri: &str, content: &str, created_at: u64) {
+        DBMS_CONTEXT.with(|ctx| {
+            let tx_id =
+                ctx.begin_transaction(db_utils::transaction::transaction_caller(ic_utils::now()));
+            let mut db = WasmDbmsDatabase::from_transaction(ctx, Schema, tx_id);
+            db.insert::<Status>(StatusInsertRequest {
+                id: snowflake.into(),
+                content: content.into(),
+                visibility: DbVisibility::from(Visibility::Public),
+                like_count: 0u64.into(),
+                boost_count: 0u64.into(),
+                in_reply_to_uri: Nullable::Null,
+                spoiler_text: Nullable::Null,
+                sensitive: false.into(),
+                edited_at: Nullable::Null,
+                created_at: created_at.into(),
+            })
+            .expect("should insert wrapper status");
+            db.insert::<Boost>(BoostInsertRequest {
+                id: snowflake.into(),
+                status_id: snowflake.into(),
+                original_status_uri: original_uri.into(),
+                created_at: created_at.into(),
+            })
+            .expect("should insert boost");
+            db.insert::<FeedEntry>(FeedEntryInsertRequest {
+                id: snowflake.into(),
+                source: FeedSource::Outbox,
+                created_at: created_at.into(),
+            })
+            .expect("should insert feed entry");
+            db.commit().expect("should commit");
+        });
+    }
+
+    #[test]
+    fn test_outbox_boost_renders_boosted_by_self_and_original_author() {
+        setup();
+        let original = "https://remote.example/users/bob/statuses/99";
+        insert_boost_wrapper(7, original, "boosted text", 5_000);
+
+        let items = unwrap_ok(read_feed(ReadFeedArgs {
+            limit: 10,
+            offset: 0,
+        }));
+
+        assert_eq!(items.len(), 1);
+        assert_eq!(
+            items[0].boosted_by.as_deref(),
+            Some("https://mastic.social/users/rey_canisteryo")
+        );
+        assert_eq!(items[0].status.author, "https://remote.example/users/bob");
+        assert_eq!(items[0].status.id, 99);
+        assert_eq!(items[0].status.content, "boosted text");
+    }
+
+    #[test]
+    fn test_outbox_non_boost_renders_owner_as_author_with_no_boosted_by() {
+        setup();
+        insert_status(8, "Mine", Visibility::Public, 1_000);
+
+        let items = unwrap_ok(read_feed(ReadFeedArgs {
+            limit: 10,
+            offset: 0,
+        }));
+
+        assert_eq!(items.len(), 1);
+        assert!(items[0].boosted_by.is_none());
+        assert_eq!(
+            items[0].status.author,
+            "https://mastic.social/users/rey_canisteryo"
+        );
+        assert_eq!(items[0].status.id, 8);
+        assert_eq!(items[0].status.content, "Mine");
     }
 
     #[test]
