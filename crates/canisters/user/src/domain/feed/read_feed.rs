@@ -105,6 +105,13 @@ fn hydrate_outbox(db: &impl Database, id: u64, owner_actor_uri: &str) -> Option<
 
     let like_count = find_value(row, "like_count")?.as_uint64()?.0;
     let boost_count = find_value(row, "boost_count")?.as_uint64()?.0;
+    let spoiler_text = find_value(row, "spoiler_text")
+        .and_then(|v| v.as_text())
+        .map(|t| t.0.clone());
+    let sensitive = find_value(row, "sensitive")
+        .and_then(|v| v.as_boolean())
+        .map(|b| b.0)
+        .unwrap_or(false);
 
     Some(FeedItem {
         status: Status {
@@ -115,6 +122,8 @@ fn hydrate_outbox(db: &impl Database, id: u64, owner_actor_uri: &str) -> Option<
             visibility: db_vis.into(),
             like_count,
             boost_count,
+            spoiler_text,
+            sensitive,
         },
         boosted_by: None, // FIXME: eventually support boosts in M1
     })
@@ -138,7 +147,7 @@ fn hydrate_inbox(db: &impl Database, id: u64, owner_actor_uri: &str) -> Option<F
     let created_at = find_value(row, "created_at")?.as_uint64()?.0;
     let json_val = find_value(row, "object_data")?.as_json()?;
     let activity: Activity = serde_json::from_value(json_val.value().clone()).ok()?;
-    let (content, visibility) = extract_note_from_activity(&activity)?;
+    let (content, visibility, spoiler_text, sensitive) = extract_note_from_activity(&activity)?;
 
     // Direct messages must only appear when the owner is explicitly addressed.
     if visibility == Visibility::Direct && !is_addressed_to(&activity.base, owner_actor_uri) {
@@ -156,13 +165,18 @@ fn hydrate_inbox(db: &impl Database, id: u64, owner_actor_uri: &str) -> Option<F
             visibility,
             like_count: 0,
             boost_count: 0,
+            spoiler_text,
+            sensitive,
         },
         boosted_by: None, // FIXME: eventually support boosts in M1
     })
 }
 
-/// Extracts the text content and inferred [`Visibility`] from a `Create(Note)` activity.
-fn extract_note_from_activity(activity: &Activity) -> Option<(String, Visibility)> {
+/// Extracts the text content, inferred [`Visibility`], optional spoiler text,
+/// and `sensitive` flag from a `Create(Note)` activity.
+fn extract_note_from_activity(
+    activity: &Activity,
+) -> Option<(String, Visibility, Option<String>, bool)> {
     let ActivityObject::Object(note) = activity.object.as_ref()? else {
         return None;
     };
@@ -173,8 +187,10 @@ fn extract_note_from_activity(activity: &Activity) -> Option<(String, Visibility
 
     let content = note.content.clone()?;
     let visibility = infer_visibility(&activity.base);
+    let spoiler_text = note.summary.clone();
+    let sensitive = note.sensitive.unwrap_or(false);
 
-    Some((content, visibility))
+    Some((content, visibility, spoiler_text, sensitive))
 }
 
 /// Infers [`Visibility`] from ActivityPub `to`/`cc` addressing conventions

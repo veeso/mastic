@@ -57,6 +57,10 @@ pub struct Status {
     pub like_count: u64,
     /// Cached count of `Announce` (boost) activities received for this status.
     pub boost_count: u64,
+    /// Optional content warning / spoiler text shown before content.
+    pub spoiler_text: Option<String>,
+    /// Whether the status should be hidden behind a content warning by clients.
+    pub sensitive: bool,
 }
 
 /// A single entry in a user's feed. Wraps a [`Status`] and optionally indicates

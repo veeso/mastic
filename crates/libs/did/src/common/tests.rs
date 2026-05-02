@@ -56,6 +56,8 @@ fn test_should_roundtrip_status() {
         visibility: Visibility::Public,
         like_count: 0,
         boost_count: 0,
+        spoiler_text: None,
+        sensitive: false,
     };
     let bytes = Encode!(&status).unwrap();
     let decoded = Decode!(&bytes, Status).unwrap();
@@ -73,6 +75,8 @@ fn test_should_roundtrip_feed_item() {
             visibility: Visibility::FollowersOnly,
             like_count: 0,
             boost_count: 0,
+            spoiler_text: None,
+            sensitive: false,
         },
         boosted_by: Some("https://mastic.social/users/bob".to_string()),
     };
@@ -92,6 +96,8 @@ fn test_should_roundtrip_feed_item_without_boost() {
             visibility: Visibility::Unlisted,
             like_count: 0,
             boost_count: 0,
+            spoiler_text: None,
+            sensitive: false,
         },
         boosted_by: None,
     };
