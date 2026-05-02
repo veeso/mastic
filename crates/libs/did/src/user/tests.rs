@@ -450,8 +450,7 @@ fn test_should_roundtrip_undo_like_response_err() {
 #[test]
 fn test_should_roundtrip_boost_status_args() {
     let args = BoostStatusArgs {
-        status_id: "test-id".to_string(),
-        author_canister: candid::Principal::anonymous(),
+        status_url: "https://example.com/users/alice/statuses/123".to_string(),
     };
     let bytes = Encode!(&args).unwrap();
     let decoded = Decode!(&bytes, BoostStatusArgs).unwrap();
@@ -468,10 +467,7 @@ fn test_should_roundtrip_boost_status_response_ok() {
 
 #[test]
 fn test_should_roundtrip_boost_status_response_err() {
-    for error in [
-        BoostStatusError::Unauthorized,
-        BoostStatusError::AlreadyBoosted,
-    ] {
+    for error in [BoostStatusError::Internal("err".to_string())] {
         let resp = BoostStatusResponse::Err(error);
         let bytes = Encode!(&resp).unwrap();
         let decoded = Decode!(&bytes, BoostStatusResponse).unwrap();
@@ -482,8 +478,7 @@ fn test_should_roundtrip_boost_status_response_err() {
 #[test]
 fn test_should_roundtrip_undo_boost_args() {
     let args = UndoBoostArgs {
-        status_id: "test-id".to_string(),
-        author_canister: candid::Principal::anonymous(),
+        status_url: "https://example.com/users/alice/statuses/123".to_string(),
     };
     let bytes = Encode!(&args).unwrap();
     let decoded = Decode!(&bytes, UndoBoostArgs).unwrap();
@@ -500,7 +495,7 @@ fn test_should_roundtrip_undo_boost_response_ok() {
 
 #[test]
 fn test_should_roundtrip_undo_boost_response_err() {
-    for error in [UndoBoostError::Unauthorized, UndoBoostError::NotFound] {
+    for error in [UndoBoostError::Internal("err".to_string())] {
         let resp = UndoBoostResponse::Err(error);
         let bytes = Encode!(&resp).unwrap();
         let decoded = Decode!(&bytes, UndoBoostResponse).unwrap();

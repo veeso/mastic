@@ -31,6 +31,11 @@ async fn accept_follow(args: AcceptFollowArgs) -> AcceptFollowResponse {
 }
 
 #[ic_cdk::update]
+async fn boost_status(args: BoostStatusArgs) -> BoostStatusResponse {
+    api::boost_status(args).await
+}
+
+#[ic_cdk::update]
 async fn follow_user(args: FollowUserArgs) -> FollowUserResponse {
     api::follow_user(args).await
 }
@@ -93,6 +98,11 @@ fn receive_activity(args: ReceiveActivityArgs) -> ReceiveActivityResponse {
 #[ic_cdk::update]
 async fn reject_follow(args: RejectFollowArgs) -> RejectFollowResponse {
     api::reject_follow(args).await
+}
+
+#[ic_cdk::update]
+async fn undo_boost(args: UndoBoostArgs) -> UndoBoostResponse {
+    api::undo_boost(args).await
 }
 
 #[ic_cdk::update]
