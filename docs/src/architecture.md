@@ -17,6 +17,7 @@
     - [Federation Install Arguments](#federation-install-arguments)
   - [Authorization Model](#authorization-model)
   - [Inter-Canister Communication](#inter-canister-communication)
+  - [Boost Flow](#boost-flow)
   - [Shared Libraries](#shared-libraries)
 
 This document describes the architecture of Mastic, detailing
@@ -265,6 +266,48 @@ invocations. The key communication patterns are:
 4. **Canister lifecycle** -- Directory Canister calls the IC management
    canister (`create_canister`, `install_code`, `stop_canister`,
    `delete_canister`) to manage User Canister instances.
+
+## Boost Flow
+
+Boosting (`Announce`) requires denormalizing the original status content
+into a wrapper row owned by the booster, so the feed can render the
+boost without re-fetching on every read. The booster's User Canister
+never trusts content supplied by its caller; instead it fetches the
+verified `Status` through the Federation Canister.
+
+```mermaid
+sequenceDiagram
+    actor A as Alice (booster)
+    participant UC as Booster User Canister
+    participant FED as Federation Canister
+    participant DIR as Directory Canister
+    participant TUC as Target User Canister (author)
+    participant Fol as Follower User Canisters
+
+    A->>UC: boost_status(status_url)
+    UC->>FED: fetch_status(uri, requester=alice_actor_uri)
+    FED->>DIR: lookup handle from URI
+    DIR-->>FED: target canister id
+    FED->>TUC: get_local_status(id, requester=alice_actor_uri)
+    TUC-->>FED: Status (visibility-filtered)
+    FED-->>UC: Status
+    UC->>UC: tx { wrapper Status, Boost row, FeedEntry } (shared snowflake)
+    UC->>FED: send_activity(Batch[Announce])
+    FED->>TUC: receive_activity(Announce)  -- bumps boost_count
+    FED->>Fol: receive_activity(Announce)  -- inbox row + feed entry
+    UC-->>A: Ok
+```
+
+A single Snowflake is reused as `boosts.id`, `boosts.status_id`, the
+wrapper `statuses.id`, and the booster's `feed.id`. The same Snowflake
+also forms the canonical id of the emitted `Announce` activity:
+`<own_actor_uri>/statuses/<snowflake>`.
+
+Both `boost_status` and `undo_boost` are idempotent: a repeat call
+returns `Ok` without inserting a duplicate row or re-dispatching the
+activity. Remote URIs (host ≠ instance `public_url`) currently return
+`Unsupported` from `Federation.fetch_status`; Milestone 3 will extend
+the remote branch with HTTPS outcalls.
 
 ## Shared Libraries
 

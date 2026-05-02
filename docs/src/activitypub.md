@@ -516,6 +516,15 @@ The `Announce` activity is used to share an existing object with the actor's fol
 
 The side effect of receiving an Announce on the **inbox** (S2S) is that the server SHOULD increment the shares count of the announced object and MAY display the object as having been shared by the announcing actor.
 
+> **Mastic implementation (M1):** Outbound `Announce` is emitted by the
+> User Canister's `boost_status` flow (with `Undo(Announce)` from
+> `undo_boost`). Inbound `Announce` is processed by `handle_announce`
+> in `crates/canisters/user/src/domain/activity/handle_incoming.rs`,
+> which inserts an inbox row, a feed entry, and increments the local
+> target's `statuses.boost_count` (saturating). Inbound `Undo(Announce)`
+> is dispatched to `handle_undo_announce`, which deletes the inbox /
+> feed rows and saturating-decrements the boost count.
+
 ```json
 {
   "@context": "https://www.w3.org/ns/activitystreams",
@@ -658,8 +667,8 @@ Mastodon supports the following activities for `Statuses`:
 - `Update`: Update an existing status in the database
 - `Delete`: Delete a Status from the database
 - `Like`: Favourited a Status
-- `Announce`: Boost a status (like rt on Twitter)
-- `Undo`: Undo a Like or a Boost
+- `Announce`: Boost a status (like rt on Twitter). **Mastic M1**: outbound via `boost_status`, inbound via `handle_announce`.
+- `Undo`: Undo a Like or a Boost. **Mastic M1**: outbound via `undo_like` / `undo_boost`, inbound via `handle_undo_like` / `handle_undo_announce`.
 - `Flag`: Transformed into a report to the moderation team. See the [Reports extension](#reports-extension) for more information
 - `QuoteRequest`: Request approval for a quote post. See the [Quote Posts extension](#quote-posts)
 

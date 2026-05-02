@@ -310,26 +310,46 @@ sequenceDiagram
 
 ```mermaid
 sequenceDiagram
-    actor A as Alice
-    participant UC as Alice's User Canister
-    participant DIR as Directory Canister
+    actor A as Alice (booster)
+    participant UC as Booster User Canister
     participant FED as Federation Canister
-    participant TUC as Target User Canister (local)
-    participant M as Mastodon Web2
+    participant DIR as Directory Canister
+    participant TUC as Target User Canister (author)
+    participant Fol as Follower User Canisters
 
-    A->>DIR: Get Alice's User Canister (candid)
-    DIR->>A: User Canister Principal
-    A->>UC: Boost Status (candid)
-    UC->>UC: Store Boost in Alice's Outbox
-    UC->>FED: Forward Announce Activity (ic)
-    alt Status author is local
-        FED->>DIR: Resolve author's User Canister
-        FED->>TUC: Deliver Announce activity
-    else Status author is remote
-        FED->>M: Forward Announce Activity (ActivityPub)
-    end
-    Note over FED: Also delivers to Alice's followers (local + remote)
+    A->>UC: boost_status(status_url)
+    UC->>FED: fetch_status(uri, requester=alice_actor_uri)
+    FED->>DIR: lookup handle from URI
+    DIR-->>FED: target canister id
+    FED->>TUC: get_local_status(id, requester=alice_actor_uri)
+    TUC-->>FED: Status (visibility-filtered)
+    FED-->>UC: Status
+    UC->>UC: tx { wrapper Status, Boost row, FeedEntry } (shared snowflake)
+    UC->>FED: send_activity(Batch[Announce])
+    FED->>TUC: receive_activity(Announce)  -- bumps boost_count
+    FED->>Fol: receive_activity(Announce)  -- inbox row + feed entry
+    UC-->>A: Ok
 ```
+
+The booster's User Canister never trusts boost content from its caller:
+the wrapper row's `content`, `spoiler_text`, and `sensitive` are
+populated from the `Status` returned by `Federation.fetch_status`,
+which in turn dereferences the local author through
+`User.get_local_status` (Milestone 1; Milestone 3 will extend the
+remote branch via HTTPS outcalls).
+
+A single Snowflake is reused as `boosts.id`, the wrapper `statuses.id`,
+the `feed.id` for the booster's outbox entry, and the `Announce`
+activity `id` (`<own_actor_uri>/statuses/<snowflake>`).
+
+`boost_status` is **idempotent**: a duplicate boost of the same
+`status_url` returns `Ok` without inserting a second wrapper or
+re-emitting the `Announce`. `undo_boost` reverses the flow — it deletes
+the `boosts` row, the wrapper `statuses` row, and the `feed` outbox
+entry, then dispatches an `Undo(Announce)` to followers and the
+original author. `undo_boost` is also idempotent.
+
+Remote author / follower delivery via HTTPS is Milestone 3.
 
 ## Delete Status
 
