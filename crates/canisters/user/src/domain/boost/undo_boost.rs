@@ -19,6 +19,7 @@ use activitypub::Activity;
 use activitypub::activity::{ActivityObject, ActivityType};
 use activitypub::context::ACTIVITY_STREAMS_CONTEXT;
 use activitypub::object::{BaseObject, OneOrMany};
+use db_utils::transaction::Transaction;
 use did::federation::{SendActivityArgs, SendActivityArgsObject};
 use did::user::{UndoBoostArgs, UndoBoostError, UndoBoostResponse};
 
@@ -26,7 +27,8 @@ use crate::domain::boost::repository::BoostRepository;
 use crate::domain::follower::FollowerRepository;
 use crate::domain::profile::ProfileRepository;
 use crate::domain::urls;
-use crate::error::CanisterResult;
+use crate::error::{CanisterError, CanisterResult};
+use crate::schema::Schema;
 
 const AS_PUBLIC: &str = "https://www.w3.org/ns/activitystreams#Public";
 
@@ -43,7 +45,7 @@ pub async fn undo_boost(UndoBoostArgs { status_url }: UndoBoostArgs) -> UndoBoos
 async fn undo_boost_inner(status_url: String) -> CanisterResult<()> {
     ic_utils::log!("Undoing boost on {status_url}");
 
-    let Some(boost) = BoostRepository::find_by_original_uri(&status_url)? else {
+    let Some(boost) = BoostRepository::oneshot().find_by_original_uri(&status_url)? else {
         ic_utils::log!("No boost row for {status_url}; idempotent ok");
         return Ok(());
     };
@@ -65,7 +67,9 @@ async fn undo_boost_inner(status_url: String) -> CanisterResult<()> {
     recipients.sort();
     recipients.dedup();
 
-    BoostRepository::delete_boost_with_wrapper(wrapper_id)?;
+    Transaction::run::<_, _, _, CanisterError>(Schema, |tx| {
+        BoostRepository::with_transaction(tx).delete_boost_with_wrapper(wrapper_id)
+    })?;
 
     if recipients.is_empty() {
         return Ok(());
@@ -185,7 +189,11 @@ mod tests {
         })
         .await;
         assert_eq!(resp, UndoBoostResponse::Ok);
-        assert!(!BoostRepository::is_boosted(STATUS_URI).expect("query"));
+        assert!(
+            !BoostRepository::oneshot()
+                .is_boosted(STATUS_URI)
+                .expect("query")
+        );
 
         let captured = captured();
         let SendActivityArgs::Batch(batch) = &captured[0] else {
