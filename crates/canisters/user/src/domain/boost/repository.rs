@@ -1,15 +1,9 @@
-use ic_dbms_canister::prelude::{DBMS_CONTEXT, IcAccessControlList, IcMemoryProvider};
-use wasm_dbms::WasmDbmsDatabase;
-use wasm_dbms::prelude::DbmsContext;
-use wasm_dbms_api::prelude::{
-    Database, DeleteBehavior, Filter, Nullable, Query, TransactionId, Value,
-};
+use db_utils::repository::Repository;
+use ic_dbms_canister::prelude::DBMS_CONTEXT;
+use wasm_dbms_api::prelude::{Database, DeleteBehavior, Filter, Query, TransactionId, Value};
 
-use crate::error::{CanisterError, CanisterResult};
-use crate::schema::{
-    Boost, BoostInsertRequest, BoostRecord, FeedEntry, FeedEntryInsertRequest, FeedSource, Schema,
-    Status, StatusInsertRequest, Visibility,
-};
+use crate::error::CanisterResult;
+use crate::schema::{Boost, BoostInsertRequest, BoostRecord, Schema};
 
 /// Repository for managing [`Boost`] records in the database.
 pub struct BoostRepository {
@@ -17,101 +11,38 @@ pub struct BoostRepository {
 }
 
 impl BoostRepository {
-    pub const fn oneshot() -> Self {
-        Self { tx: None }
-    }
-
-    pub const fn with_transaction(tx: TransactionId) -> Self {
-        Self { tx: Some(tx) }
-    }
-
-    fn db<'a>(
-        &self,
-        ctx: &'a DbmsContext<IcMemoryProvider, IcAccessControlList>,
-    ) -> WasmDbmsDatabase<'a, IcMemoryProvider, IcAccessControlList> {
-        match self.tx {
-            Some(id) => WasmDbmsDatabase::from_transaction(ctx, Schema, id),
-            None => WasmDbmsDatabase::oneshot(ctx, Schema),
-        }
-    }
-
-    /// Insert a wrapper [`Status`] row, the corresponding [`Boost`] row, and a
-    /// `feed` entry with `source = Outbox`. The same `snowflake_id` is used as
-    /// the primary key in all three tables — this makes the wrapper status URL
-    /// `<actor>/statuses/<snowflake>` also serve as the `Announce` activity id.
-    ///
-    /// Transaction lifecycle is owned by the caller — typically via
-    /// `Transaction::run` — so the three writes are atomic.
-    #[allow(clippy::too_many_arguments)]
-    pub fn insert_boost_with_wrapper(
+    /// Insert a [`Boost`] row. The same `snowflake_id` is reused as the
+    /// primary key in the wrapper `statuses` and `feed` tables — that
+    /// orchestration is owned by the boost domain helper, not this repo.
+    pub fn insert(
         &self,
         snowflake_id: u64,
         original_status_uri: &str,
-        content: &str,
-        visibility: Visibility,
-        spoiler_text: Option<&str>,
-        sensitive: bool,
         created_at: u64,
     ) -> CanisterResult<()> {
         DBMS_CONTEXT.with(|ctx| {
-            let db = self.db(ctx);
-
-            db.insert::<Status>(StatusInsertRequest {
-                id: snowflake_id.into(),
-                content: content.into(),
-                visibility,
-                like_count: 0u64.into(),
-                boost_count: 0u64.into(),
-                in_reply_to_uri: Nullable::Null,
-                spoiler_text: spoiler_text.map_or(Nullable::Null, |s| Nullable::Value(s.into())),
-                sensitive: sensitive.into(),
-                edited_at: Nullable::Null,
-                created_at: created_at.into(),
-            })?;
-
-            db.insert::<Boost>(BoostInsertRequest {
+            self.db(ctx).insert::<Boost>(BoostInsertRequest {
                 id: snowflake_id.into(),
                 status_id: snowflake_id.into(),
                 original_status_uri: original_status_uri.into(),
                 created_at: created_at.into(),
             })?;
-
-            db.insert::<FeedEntry>(FeedEntryInsertRequest {
-                id: snowflake_id.into(),
-                source: FeedSource::Outbox,
-                created_at: created_at.into(),
-            })?;
-
-            Ok::<(), CanisterError>(())
+            Ok(())
         })
     }
 
-    /// Delete the [`Boost`] row, the wrapper [`Status`] row, and the
-    /// corresponding `feed` entry sharing the same `snowflake_id`.
+    /// Delete the [`Boost`] row whose primary key matches `snowflake_id`.
     ///
-    /// Order: child (`boosts`) → `feed` → parent (`statuses`) so the FK
-    /// `boosts.status_id → statuses.id` (Restrict) is satisfied.
-    ///
-    /// Transaction lifecycle is owned by the caller — typically via
-    /// `Transaction::run` — so the three deletes are atomic.
-    pub fn delete_boost_with_wrapper(&self, snowflake_id: u64) -> CanisterResult<()> {
+    /// Uses [`DeleteBehavior::Restrict`] — callers must drop the wrapper
+    /// `statuses` and `feed` rows in the right order so referential integrity
+    /// is preserved.
+    pub fn delete_by_id(&self, snowflake_id: u64) -> CanisterResult<()> {
         DBMS_CONTEXT.with(|ctx| {
-            let db = self.db(ctx);
-
-            db.delete::<Boost>(
+            self.db(ctx).delete::<Boost>(
                 DeleteBehavior::Restrict,
                 Some(Filter::eq("id", Value::from(snowflake_id))),
             )?;
-            db.delete::<FeedEntry>(
-                DeleteBehavior::Restrict,
-                Some(Filter::eq("id", Value::from(snowflake_id))),
-            )?;
-            db.delete::<Status>(
-                DeleteBehavior::Restrict,
-                Some(Filter::eq("id", Value::from(snowflake_id))),
-            )?;
-
-            Ok::<(), CanisterError>(())
+            Ok(())
         })
     }
 
@@ -130,7 +61,7 @@ impl BoostRepository {
                 )
             })
             .map(|rows| !rows.is_empty())
-            .map_err(CanisterError::from)
+            .map_err(crate::error::CanisterError::from)
     }
 
     /// Looks up a boost record by the URI of the original (boosted) status.
@@ -148,45 +79,61 @@ impl BoostRepository {
                 )
             })
             .map(|rows| rows.into_iter().next())
-            .map_err(CanisterError::from)
+            .map_err(crate::error::CanisterError::from)
+    }
+}
+
+impl Repository for BoostRepository {
+    type Schema = Schema;
+
+    fn schema() -> Self::Schema {
+        Schema
+    }
+
+    fn oneshot() -> Self {
+        Self { tx: None }
+    }
+
+    fn with_transaction(tx: TransactionId) -> Self {
+        Self { tx: Some(tx) }
+    }
+
+    fn tx(&self) -> Option<TransactionId> {
+        self.tx
     }
 }
 
 #[cfg(test)]
 mod tests {
 
-    use db_utils::transaction::Transaction;
+    use did::common::Visibility;
 
     use super::*;
-    use crate::test_utils::setup;
+    use crate::test_utils::{insert_status, setup};
 
     const STATUS_URI_A: &str = "https://example.com/users/alice/statuses/1";
 
-    fn insert_boost(snowflake_id: u64, original_status_uri: &str) {
-        Transaction::run::<_, _, _, CanisterError>(Schema, |tx| {
-            BoostRepository::with_transaction(tx).insert_boost_with_wrapper(
-                snowflake_id,
-                original_status_uri,
-                "boosted",
-                crate::schema::Visibility::from(did::common::Visibility::Public),
-                None,
-                false,
-                1_000_000,
-            )
-        })
-        .expect("insert boost");
-    }
-
     #[test]
-    fn test_should_insert_and_check_boost() {
+    fn test_insert_should_persist_boost_row() {
         setup();
-        insert_boost(10, STATUS_URI_A);
+        // The boost row has a FK to a wrapper `statuses` row sharing the same
+        // primary key — insert it first so the FK constraint holds.
+        insert_status(10, "wrapper", Visibility::Public, 1_000_000);
 
-        assert!(
-            BoostRepository::oneshot()
-                .is_boosted(STATUS_URI_A)
-                .expect("should query")
+        BoostRepository::oneshot()
+            .insert(10, STATUS_URI_A, 1_000_000)
+            .expect("insert");
+
+        let row = BoostRepository::oneshot()
+            .find_by_original_uri(STATUS_URI_A)
+            .expect("query")
+            .expect("row exists");
+        assert_eq!(row.id.expect("id").0, 10);
+        assert_eq!(
+            row.original_status_uri.expect("uri").0,
+            STATUS_URI_A.to_string()
         );
+        assert_eq!(row.created_at.expect("created_at").0, 1_000_000);
     }
 
     #[test]
@@ -203,7 +150,10 @@ mod tests {
     #[test]
     fn test_should_find_by_original_uri() {
         setup();
-        insert_boost(100, STATUS_URI_A);
+        insert_status(100, "wrapper", Visibility::Public, 1_000_000);
+        BoostRepository::oneshot()
+            .insert(100, STATUS_URI_A, 1_000_000)
+            .expect("insert");
 
         let found = BoostRepository::oneshot()
             .find_by_original_uri(STATUS_URI_A)
@@ -226,123 +176,30 @@ mod tests {
     }
 
     #[test]
-    fn test_should_delete_boost_with_wrapper_in_one_tx() {
+    fn test_delete_by_id_should_remove_boost_row() {
         setup();
+        insert_status(11, "wrapper", Visibility::Public, 1_000);
+        BoostRepository::oneshot()
+            .insert(11, STATUS_URI_A, 1_000)
+            .expect("insert");
 
-        Transaction::run::<_, _, _, CanisterError>(Schema, |tx| {
-            BoostRepository::with_transaction(tx).insert_boost_with_wrapper(
-                77,
-                STATUS_URI_A,
-                "boosted",
-                crate::schema::Visibility::from(did::common::Visibility::Public),
-                None,
-                false,
-                1_000,
-            )
-        })
-        .expect("insert");
-
-        Transaction::run::<_, _, _, CanisterError>(Schema, |tx| {
-            BoostRepository::with_transaction(tx).delete_boost_with_wrapper(77)
-        })
-        .expect("delete");
+        BoostRepository::oneshot()
+            .delete_by_id(11)
+            .expect("should delete");
 
         assert!(
             !BoostRepository::oneshot()
                 .is_boosted(STATUS_URI_A)
                 .expect("query")
         );
-        assert!(
-            crate::domain::status::StatusRepository::oneshot()
-                .find_by_id(77)
-                .expect("query")
-                .is_none(),
-            "wrapper status row removed"
-        );
     }
 
     #[test]
-    fn test_should_insert_boost_with_wrapper_in_one_tx() {
+    fn test_delete_by_id_should_be_noop_when_missing() {
         setup();
 
-        Transaction::run::<_, _, _, CanisterError>(Schema, |tx| {
-            BoostRepository::with_transaction(tx).insert_boost_with_wrapper(
-                42,
-                STATUS_URI_A,
-                "boosted text",
-                crate::schema::Visibility::from(did::common::Visibility::Public),
-                Some("cw"),
-                true,
-                1_000_000,
-            )
-        })
-        .expect("insert");
-
-        // Wrapper Status row
-        let wrapper = crate::domain::status::StatusRepository::oneshot()
-            .find_by_id(42)
-            .expect("query")
-            .expect("wrapper exists");
-        assert_eq!(wrapper.content.0, "boosted text");
-        assert_eq!(
-            wrapper
-                .spoiler_text
-                .clone()
-                .into_opt()
-                .expect("spoiler value")
-                .0,
-            "cw"
-        );
-        assert!(wrapper.sensitive.0);
-
-        // Boost row
-        let boost = BoostRepository::oneshot()
-            .find_by_original_uri(STATUS_URI_A)
-            .expect("query")
-            .expect("boost exists");
-        assert_eq!(boost.id.expect("id").0, 42);
-        assert_eq!(
-            boost.original_status_uri.expect("uri").0,
-            STATUS_URI_A.to_string()
-        );
-
-        // Idempotency check picks it up
-        assert!(
-            BoostRepository::oneshot()
-                .is_boosted(STATUS_URI_A)
-                .expect("query")
-        );
-    }
-
-    #[test]
-    fn test_insert_boost_with_wrapper_rolls_back_on_error() {
-        setup();
-
-        let result: Result<(), CanisterError> = Transaction::run(Schema, |tx| {
-            BoostRepository::with_transaction(tx).insert_boost_with_wrapper(
-                55,
-                STATUS_URI_A,
-                "rolled back",
-                crate::schema::Visibility::from(did::common::Visibility::Public),
-                None,
-                false,
-                500,
-            )?;
-            Err(CanisterError::Internal("boom".to_string()))
-        });
-        assert!(result.is_err());
-
-        assert!(
-            !BoostRepository::oneshot()
-                .is_boosted(STATUS_URI_A)
-                .expect("query")
-        );
-        assert!(
-            crate::domain::status::StatusRepository::oneshot()
-                .find_by_id(55)
-                .expect("query")
-                .is_none(),
-            "wrapper status must not persist on rollback"
-        );
+        BoostRepository::oneshot()
+            .delete_by_id(999)
+            .expect("delete missing must succeed");
     }
 }

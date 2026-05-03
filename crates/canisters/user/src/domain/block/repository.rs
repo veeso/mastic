@@ -2,9 +2,8 @@
 
 use std::collections::HashSet;
 
-use ic_dbms_canister::prelude::{DBMS_CONTEXT, IcAccessControlList, IcMemoryProvider};
-use wasm_dbms::WasmDbmsDatabase;
-use wasm_dbms::prelude::DbmsContext;
+use db_utils::repository::Repository;
+use ic_dbms_canister::prelude::DBMS_CONTEXT;
 use wasm_dbms_api::prelude::{Database, Query, TransactionId};
 
 use crate::error::{CanisterError, CanisterResult};
@@ -15,27 +14,6 @@ pub struct BlockRepository {
 }
 
 impl BlockRepository {
-    pub const fn oneshot() -> Self {
-        Self { tx: None }
-    }
-
-    // Reserved for future cross-repo atomic flows that need to splice block
-    // reads/writes into an externally-driven transaction. Not yet wired up.
-    #[allow(dead_code)]
-    pub const fn with_transaction(tx: TransactionId) -> Self {
-        Self { tx: Some(tx) }
-    }
-
-    fn db<'a>(
-        &self,
-        ctx: &'a DbmsContext<IcMemoryProvider, IcAccessControlList>,
-    ) -> WasmDbmsDatabase<'a, IcMemoryProvider, IcAccessControlList> {
-        match self.tx {
-            Some(id) => WasmDbmsDatabase::from_transaction(ctx, Schema, id),
-            None => WasmDbmsDatabase::oneshot(ctx, Schema),
-        }
-    }
-
     /// Return the set of actor URIs blocked by the owner.
     pub fn list_blocked_uris(&self) -> CanisterResult<HashSet<String>> {
         DBMS_CONTEXT.with(|ctx| {
@@ -56,8 +34,30 @@ impl BlockRepository {
     }
 }
 
+impl Repository for BlockRepository {
+    type Schema = Schema;
+
+    fn schema() -> Self::Schema {
+        Schema
+    }
+
+    fn oneshot() -> Self {
+        Self { tx: None }
+    }
+
+    fn with_transaction(tx: TransactionId) -> Self {
+        Self { tx: Some(tx) }
+    }
+
+    fn tx(&self) -> Option<TransactionId> {
+        self.tx
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use wasm_dbms::WasmDbmsDatabase;
+
     use super::*;
     use crate::schema::BlockInsertRequest;
     use crate::test_utils::setup;

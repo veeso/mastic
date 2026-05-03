@@ -1,6 +1,7 @@
 //! Shared test utilities for the directory canister.
 
 use candid::Principal;
+use db_utils::repository::Repository;
 use did::directory::{DirectoryInstallArgs, SignUpRequest, SignUpResponse};
 
 pub fn admin() -> Principal {

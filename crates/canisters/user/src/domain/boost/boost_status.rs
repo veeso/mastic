@@ -20,17 +20,21 @@ use activitypub::Activity;
 use activitypub::activity::{ActivityObject, ActivityType};
 use activitypub::context::ACTIVITY_STREAMS_CONTEXT;
 use activitypub::object::{BaseObject, OneOrMany};
+use db_utils::repository::Repository;
 use db_utils::transaction::Transaction;
-use did::common::Status;
+use did::common::{Status, Visibility};
 use did::federation::{
     FetchStatusArgs, FetchStatusResponse, SendActivityArgs, SendActivityArgsObject,
 };
 use did::user::{BoostStatusArgs, BoostStatusError, BoostStatusResponse};
+use wasm_dbms_api::prelude::TransactionId;
 
 use crate::domain::boost::repository::BoostRepository;
+use crate::domain::feed::FeedRepository;
 use crate::domain::follower::FollowerRepository;
 use crate::domain::profile::ProfileRepository;
 use crate::domain::snowflake::Snowflake;
+use crate::domain::status::StatusRepository;
 use crate::domain::urls;
 use crate::error::{CanisterError, CanisterResult};
 use crate::schema::Schema;
@@ -76,11 +80,12 @@ async fn boost_status_inner(status_url: String) -> CanisterResult<()> {
     let now = ic_utils::now();
 
     Transaction::run::<_, _, _, CanisterError>(Schema, |tx| {
-        BoostRepository::with_transaction(tx).insert_boost_with_wrapper(
+        insert_boost_with_wrapper(
+            tx,
             snowflake,
             &status_url,
             &fetched.content,
-            fetched.visibility.into(),
+            fetched.visibility,
             fetched.spoiler_text.as_deref(),
             fetched.sensitive,
             now,
@@ -131,6 +136,36 @@ fn compute_recipients(fetched: &Status, own_actor_uri: &str) -> CanisterResult<V
     Ok(recipients)
 }
 
+/// Insert a boost wrapper status, the boost row, and the outbox feed entry
+/// inside the given transaction. Caller drives lifecycle via
+/// [`db_utils::transaction::Transaction::run`].
+#[expect(
+    clippy::too_many_arguments,
+    reason = "wrapper status fields collapse here"
+)]
+fn insert_boost_with_wrapper(
+    tx: TransactionId,
+    snowflake_id: u64,
+    original_status_uri: &str,
+    content: &str,
+    visibility: Visibility,
+    spoiler_text: Option<&str>,
+    sensitive: bool,
+    created_at: u64,
+) -> CanisterResult<()> {
+    StatusRepository::with_transaction(tx).insert_wrapper(
+        snowflake_id,
+        content,
+        visibility,
+        spoiler_text,
+        sensitive,
+        created_at,
+    )?;
+    BoostRepository::with_transaction(tx).insert(snowflake_id, original_status_uri, created_at)?;
+    FeedRepository::with_transaction(tx).insert_outbox(snowflake_id, created_at)?;
+    Ok(())
+}
+
 fn make_announce_activity(
     own_actor_uri: &str,
     wrapper_id: u64,
@@ -173,6 +208,8 @@ mod tests {
     use crate::adapters::federation::mock::{captured, push_fetch_status_response};
     use crate::domain::boost::repository::BoostRepository;
     use crate::domain::follower::FollowerRepository;
+    use crate::domain::status::StatusRepository;
+    use crate::error::CanisterError;
     use crate::test_utils::setup;
 
     const STATUS_URI: &str = "https://remote.example/users/bob/statuses/42";
@@ -303,5 +340,89 @@ mod tests {
             unreachable!()
         };
         assert_eq!(batch.len(), 1, "follower == author should dedup to 1");
+    }
+
+    #[test]
+    fn test_should_insert_boost_with_wrapper_in_one_tx() {
+        setup();
+
+        Transaction::run::<_, _, _, CanisterError>(Schema, |tx| {
+            insert_boost_with_wrapper(
+                tx,
+                42,
+                STATUS_URI,
+                "boosted text",
+                Visibility::Public,
+                Some("cw"),
+                true,
+                1_000_000,
+            )
+        })
+        .expect("insert");
+
+        let wrapper = StatusRepository::oneshot()
+            .find_by_id(42)
+            .expect("query")
+            .expect("wrapper exists");
+        assert_eq!(wrapper.content.0, "boosted text");
+        assert_eq!(
+            wrapper
+                .spoiler_text
+                .clone()
+                .into_opt()
+                .expect("spoiler value")
+                .0,
+            "cw"
+        );
+        assert!(wrapper.sensitive.0);
+
+        let boost = BoostRepository::oneshot()
+            .find_by_original_uri(STATUS_URI)
+            .expect("query")
+            .expect("boost exists");
+        assert_eq!(boost.id.expect("id").0, 42);
+        assert_eq!(
+            boost.original_status_uri.expect("uri").0,
+            STATUS_URI.to_string()
+        );
+
+        assert!(
+            BoostRepository::oneshot()
+                .is_boosted(STATUS_URI)
+                .expect("query")
+        );
+    }
+
+    #[test]
+    fn test_insert_boost_with_wrapper_rolls_back_on_error() {
+        setup();
+
+        let result: Result<(), CanisterError> = Transaction::run(Schema, |tx| {
+            insert_boost_with_wrapper(
+                tx,
+                55,
+                STATUS_URI,
+                "rolled back",
+                Visibility::Public,
+                None,
+                false,
+                500,
+            )?;
+            Err(CanisterError::Internal("boom".to_string()))
+        });
+        assert!(result.is_err());
+
+        assert!(
+            !BoostRepository::oneshot()
+                .is_boosted(STATUS_URI)
+                .expect("query")
+        );
+        assert!(
+            StatusRepository::oneshot()
+                .find_by_id(55)
+                .expect("query")
+                .is_none(),
+            "wrapper status must not persist on rollback"
+        );
     }
 }

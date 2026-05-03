@@ -1,5 +1,6 @@
 //! Domain logic for deleting a user's profile and associated User Canister.
 
+use db_utils::repository::Repository;
 mod state;
 
 use candid::Principal;

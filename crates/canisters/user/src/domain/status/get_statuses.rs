@@ -1,6 +1,7 @@
 //! Get statuses flow logic.
 
 use candid::Principal;
+use db_utils::repository::Repository;
 use did::common::{Status, Visibility};
 use did::user::{GetStatusesArgs, GetStatusesError, GetStatusesResponse};
 

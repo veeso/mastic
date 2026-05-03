@@ -9,6 +9,7 @@
 //! - Anonymous / other: Public/Unlisted only.
 
 use candid::Principal;
+use db_utils::repository::Repository;
 use did::common::{Status, Visibility};
 use did::user::{GetLocalStatusArgs, GetLocalStatusError, GetLocalStatusResponse};
 
@@ -106,6 +107,7 @@ fn resolve_scope(caller: Principal, requester_actor_uri: Option<&str>) -> Scope 
 
 #[cfg(test)]
 mod tests {
+    use db_utils::repository::Repository;
     use did::common::Visibility;
     use did::user::{GetLocalStatusArgs, GetLocalStatusError, GetLocalStatusResponse};
 

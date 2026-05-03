@@ -3,6 +3,7 @@
 use activitypub::activity::{Activity, ActivityObject, ActivityType};
 use activitypub::context::ACTIVITY_STREAMS_CONTEXT;
 use activitypub::object::{BaseObject, ObjectType, OneOrMany};
+use db_utils::repository::Repository;
 use db_utils::transaction::Transaction;
 use did::common::{Status, Visibility};
 use did::federation::{SendActivityArgs, SendActivityArgsObject};

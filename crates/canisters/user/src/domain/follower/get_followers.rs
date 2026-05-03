@@ -1,5 +1,6 @@
 //! Get followers domain logic.
 
+use db_utils::repository::Repository;
 use did::user::{GetFollowersArgs, GetFollowersError, GetFollowersResponse};
 
 use crate::domain::follower::FollowerRepository;

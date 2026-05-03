@@ -1,8 +1,7 @@
 //! Following repository for managing follow relationships.
 
-use ic_dbms_canister::prelude::{DBMS_CONTEXT, IcAccessControlList, IcMemoryProvider};
-use wasm_dbms::WasmDbmsDatabase;
-use wasm_dbms::prelude::DbmsContext;
+use db_utils::repository::Repository;
+use ic_dbms_canister::prelude::DBMS_CONTEXT;
 use wasm_dbms_api::prelude::*;
 
 use crate::error::{CanisterError, CanisterResult};
@@ -14,24 +13,6 @@ pub struct FollowingRepository {
 }
 
 impl FollowingRepository {
-    pub const fn oneshot() -> Self {
-        Self { tx: None }
-    }
-
-    pub const fn with_transaction(tx: TransactionId) -> Self {
-        Self { tx: Some(tx) }
-    }
-
-    fn db<'a>(
-        &self,
-        ctx: &'a DbmsContext<IcMemoryProvider, IcAccessControlList>,
-    ) -> WasmDbmsDatabase<'a, IcMemoryProvider, IcAccessControlList> {
-        match self.tx {
-            Some(id) => WasmDbmsDatabase::from_transaction(ctx, Schema, id),
-            None => WasmDbmsDatabase::oneshot(ctx, Schema),
-        }
-    }
-
     /// Insert a new pending follow entry for the given actor URI.
     pub fn insert_pending(&self, actor_uri: &str) -> CanisterResult<()> {
         DBMS_CONTEXT.with(|ctx| {
@@ -148,6 +129,26 @@ impl FollowingRepository {
             status: record.status.expect("must have field"),
             created_at: record.created_at.expect("must have field"),
         }
+    }
+}
+
+impl Repository for FollowingRepository {
+    type Schema = Schema;
+
+    fn schema() -> Self::Schema {
+        Schema
+    }
+
+    fn oneshot() -> Self {
+        Self { tx: None }
+    }
+
+    fn with_transaction(tx: TransactionId) -> Self {
+        Self { tx: Some(tx) }
+    }
+
+    fn tx(&self) -> Option<TransactionId> {
+        self.tx
     }
 }
 

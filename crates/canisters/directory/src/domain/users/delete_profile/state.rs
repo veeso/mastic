@@ -10,6 +10,7 @@ use std::collections::HashMap;
 use std::time::Duration;
 
 use candid::Principal;
+use db_utils::repository::Repository;
 
 use crate::adapters::management_canister::ManagementCanister;
 use crate::adapters::user_canister::UserCanister;

@@ -1,9 +1,8 @@
 //! Moderators repository for the directory canister.
 
 use candid::Principal;
-use ic_dbms_canister::prelude::{DBMS_CONTEXT, IcAccessControlList, IcMemoryProvider};
-use wasm_dbms::WasmDbmsDatabase;
-use wasm_dbms::prelude::DbmsContext;
+use db_utils::repository::Repository;
+use ic_dbms_canister::prelude::DBMS_CONTEXT;
 use wasm_dbms_api::prelude::*;
 
 use crate::error::{CanisterError, CanisterResult};
@@ -14,27 +13,6 @@ pub struct ModeratorsRepository {
 }
 
 impl ModeratorsRepository {
-    pub const fn oneshot() -> Self {
-        Self { tx: None }
-    }
-
-    // Reserved for future cross-repo atomic flows that need to splice moderator
-    // reads/writes into an externally-driven transaction. Not yet wired up.
-    #[allow(dead_code)]
-    pub const fn with_transaction(tx: TransactionId) -> Self {
-        Self { tx: Some(tx) }
-    }
-
-    fn db<'a>(
-        &self,
-        ctx: &'a DbmsContext<IcMemoryProvider, IcAccessControlList>,
-    ) -> WasmDbmsDatabase<'a, IcMemoryProvider, IcAccessControlList> {
-        match self.tx {
-            Some(id) => WasmDbmsDatabase::from_transaction(ctx, Schema, id),
-            None => WasmDbmsDatabase::oneshot(ctx, Schema),
-        }
-    }
-
     /// Adds a moderator to the directory canister.
     pub fn add_moderator(&self, principal: Principal) -> CanisterResult<()> {
         ic_utils::log!("ModeratorsRepository::add_moderator: inserting {principal}");
@@ -75,6 +53,26 @@ impl ModeratorsRepository {
             })
             .map(|_| ())
             .map_err(CanisterError::from)
+    }
+}
+
+impl Repository for ModeratorsRepository {
+    type Schema = Schema;
+
+    fn schema() -> Self::Schema {
+        Schema
+    }
+
+    fn oneshot() -> Self {
+        Self { tx: None }
+    }
+
+    fn with_transaction(tx: TransactionId) -> Self {
+        Self { tx: Some(tx) }
+    }
+
+    fn tx(&self) -> Option<TransactionId> {
+        self.tx
     }
 }
 

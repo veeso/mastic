@@ -1,6 +1,7 @@
 //! Flow for getting the `user_canister` by principal.
 
 use candid::Principal;
+use db_utils::repository::Repository;
 use did::directory::{UserCanisterError, UserCanisterResponse};
 
 use crate::domain::users::repository::UserRepository;

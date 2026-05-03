@@ -2,11 +2,10 @@
 
 use candid::Principal;
 use db_utils::field_update::field_update_to_nullable;
+use db_utils::repository::Repository;
 use db_utils::settings::SettingsError;
 use did::common::FieldUpdate;
-use ic_dbms_canister::prelude::{DBMS_CONTEXT, IcAccessControlList, IcMemoryProvider};
-use wasm_dbms::WasmDbmsDatabase;
-use wasm_dbms::prelude::DbmsContext;
+use ic_dbms_canister::prelude::DBMS_CONTEXT;
 use wasm_dbms_api::prelude::*;
 
 use crate::error::{CanisterError, CanisterResult};
@@ -17,27 +16,6 @@ pub struct ProfileRepository {
 }
 
 impl ProfileRepository {
-    pub const fn oneshot() -> Self {
-        Self { tx: None }
-    }
-
-    // Reserved for future cross-repo atomic flows that need to splice profile
-    // reads/writes into an externally-driven transaction. Not yet wired up.
-    #[allow(dead_code)]
-    pub const fn with_transaction(tx: TransactionId) -> Self {
-        Self { tx: Some(tx) }
-    }
-
-    fn db<'a>(
-        &self,
-        ctx: &'a DbmsContext<IcMemoryProvider, IcAccessControlList>,
-    ) -> WasmDbmsDatabase<'a, IcMemoryProvider, IcAccessControlList> {
-        match self.tx {
-            Some(id) => WasmDbmsDatabase::from_transaction(ctx, Schema, id),
-            None => WasmDbmsDatabase::oneshot(ctx, Schema),
-        }
-    }
-
     /// Get the profile of the current user.
     pub fn get_profile(&self) -> CanisterResult<Profile> {
         let row = DBMS_CONTEXT.with(|ctx| {
@@ -115,5 +93,25 @@ impl ProfileRepository {
             created_at: record.created_at.expect("created at cannot be missing"),
             updated_at: record.updated_at.expect("updated at cannot be missing"),
         }
+    }
+}
+
+impl Repository for ProfileRepository {
+    type Schema = Schema;
+
+    fn schema() -> Self::Schema {
+        Schema
+    }
+
+    fn oneshot() -> Self {
+        Self { tx: None }
+    }
+
+    fn with_transaction(tx: TransactionId) -> Self {
+        Self { tx: Some(tx) }
+    }
+
+    fn tx(&self) -> Option<TransactionId> {
+        self.tx
     }
 }

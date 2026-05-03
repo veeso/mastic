@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use std::time::Duration;
 
 use candid::Principal;
+use db_utils::repository::Repository;
 use did::user::UserInstallArgs;
 use ic_management_canister_types::CanisterSettings;
 

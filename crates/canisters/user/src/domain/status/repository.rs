@@ -1,9 +1,8 @@
 //! Status repository
 
+use db_utils::repository::Repository;
 use did::common::Visibility;
-use ic_dbms_canister::prelude::{DBMS_CONTEXT, IcAccessControlList, IcMemoryProvider};
-use wasm_dbms::WasmDbmsDatabase;
-use wasm_dbms::prelude::DbmsContext;
+use ic_dbms_canister::prelude::DBMS_CONTEXT;
 use wasm_dbms_api::prelude::*;
 
 use crate::error::CanisterResult;
@@ -15,24 +14,6 @@ pub struct StatusRepository {
 }
 
 impl StatusRepository {
-    pub const fn oneshot() -> Self {
-        Self { tx: None }
-    }
-
-    pub const fn with_transaction(tx: TransactionId) -> Self {
-        Self { tx: Some(tx) }
-    }
-
-    fn db<'a>(
-        &self,
-        ctx: &'a DbmsContext<IcMemoryProvider, IcAccessControlList>,
-    ) -> WasmDbmsDatabase<'a, IcMemoryProvider, IcAccessControlList> {
-        match self.tx {
-            Some(id) => WasmDbmsDatabase::from_transaction(ctx, Schema, id),
-            None => WasmDbmsDatabase::oneshot(ctx, Schema),
-        }
-    }
-
     /// Insert a row into the `statuses` table with default flags
     /// (`like_count = 0`, `boost_count = 0`, no reply, no spoiler, not
     /// sensitive, never edited).
@@ -69,10 +50,6 @@ impl StatusRepository {
     /// The caller mints `snowflake_id` and is responsible for any cross-table
     /// orchestration (e.g. matching `boosts` and `feed` rows) via
     /// `Transaction::run`.
-    //
-    // Wired in by the boost refactor; covered by the in-module test suite
-    // until then.
-    #[allow(dead_code)]
     pub fn insert_wrapper(
         &self,
         snowflake_id: u64,
@@ -104,10 +81,6 @@ impl StatusRepository {
     /// Uses [`DeleteBehavior::Restrict`] — callers must drop dependent rows
     /// (`boosts`, `feed`) in the right order so referential integrity is
     /// preserved.
-    //
-    // Wired in by the boost refactor (undo_boost flow); covered by the
-    // in-module test suite until then.
-    #[allow(dead_code)]
     pub fn delete_by_id(&self, snowflake_id: u64) -> CanisterResult<()> {
         DBMS_CONTEXT.with(|ctx| {
             self.db(ctx).delete::<Status>(
@@ -253,6 +226,26 @@ impl StatusRepository {
             edited_at: record.edited_at.expect("must have field"),
             created_at: record.created_at.expect("must have field"),
         }
+    }
+}
+
+impl Repository for StatusRepository {
+    type Schema = Schema;
+
+    fn schema() -> Self::Schema {
+        Schema
+    }
+
+    fn oneshot() -> Self {
+        Self { tx: None }
+    }
+
+    fn with_transaction(tx: TransactionId) -> Self {
+        Self { tx: Some(tx) }
+    }
+
+    fn tx(&self) -> Option<TransactionId> {
+        self.tx
     }
 }
 

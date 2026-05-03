@@ -2,6 +2,7 @@
 
 use activitypub::Activity;
 use activitypub::activity::{ActivityObject, ActivityType};
+use db_utils::repository::Repository;
 use db_utils::transaction::Transaction;
 use did::user::{ReceiveActivityArgs, ReceiveActivityError, ReceiveActivityResponse};
 use wasm_dbms_api::prelude::{Database, Nullable};
@@ -489,6 +490,7 @@ mod tests {
 
     use activitypub::activity::{Activity, ActivityObject, ActivityType};
     use activitypub::object::BaseObject;
+    use db_utils::repository::Repository;
     use did::user::{ReceiveActivityArgs, ReceiveActivityError, ReceiveActivityResponse};
 
     use super::handle_incoming;

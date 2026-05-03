@@ -17,6 +17,7 @@
 //! - Empty queries return all Active users, paginated.
 
 use db_utils::handle::HandleSanitizer;
+use db_utils::repository::Repository;
 use did::directory::{SearchProfileEntry, SearchProfilesArgs, SearchProfilesResponse};
 
 use crate::domain::users::repository::UserRepository;

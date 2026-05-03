@@ -19,13 +19,17 @@ use activitypub::Activity;
 use activitypub::activity::{ActivityObject, ActivityType};
 use activitypub::context::ACTIVITY_STREAMS_CONTEXT;
 use activitypub::object::{BaseObject, OneOrMany};
+use db_utils::repository::Repository;
 use db_utils::transaction::Transaction;
 use did::federation::{SendActivityArgs, SendActivityArgsObject};
 use did::user::{UndoBoostArgs, UndoBoostError, UndoBoostResponse};
+use wasm_dbms_api::prelude::TransactionId;
 
 use crate::domain::boost::repository::BoostRepository;
+use crate::domain::feed::FeedRepository;
 use crate::domain::follower::FollowerRepository;
 use crate::domain::profile::ProfileRepository;
+use crate::domain::status::StatusRepository;
 use crate::domain::urls;
 use crate::error::{CanisterError, CanisterResult};
 use crate::schema::Schema;
@@ -68,7 +72,7 @@ async fn undo_boost_inner(status_url: String) -> CanisterResult<()> {
     recipients.dedup();
 
     Transaction::run::<_, _, _, CanisterError>(Schema, |tx| {
-        BoostRepository::with_transaction(tx).delete_boost_with_wrapper(wrapper_id)
+        delete_boost_with_wrapper(tx, wrapper_id)
     })?;
 
     if recipients.is_empty() {
@@ -87,6 +91,16 @@ async fn undo_boost_inner(status_url: String) -> CanisterResult<()> {
         .collect();
     crate::adapters::federation::send_activity(SendActivityArgs::Batch(batch)).await?;
 
+    Ok(())
+}
+
+/// Delete the boost row, its outbox feed entry, and the wrapper status row.
+/// Order matters because of FK Restrict: child (boost) → feed → parent
+/// (status).
+fn delete_boost_with_wrapper(tx: TransactionId, snowflake_id: u64) -> CanisterResult<()> {
+    BoostRepository::with_transaction(tx).delete_by_id(snowflake_id)?;
+    FeedRepository::with_transaction(tx).delete_by_id(snowflake_id)?;
+    StatusRepository::with_transaction(tx).delete_by_id(snowflake_id)?;
     Ok(())
 }
 
@@ -140,11 +154,14 @@ mod tests {
     use did::federation::{FetchStatusResponse, SendActivityArgs};
     use did::user::{BoostStatusArgs, BoostStatusResponse, UndoBoostArgs, UndoBoostResponse};
 
-    use super::undo_boost;
+    use super::*;
     use crate::adapters::federation::mock::{captured, push_fetch_status_response, reset_captured};
     use crate::domain::boost::boost_status::boost_status;
     use crate::domain::boost::repository::BoostRepository;
+    use crate::domain::feed::FeedRepository;
     use crate::domain::follower::FollowerRepository;
+    use crate::domain::status::StatusRepository;
+    use crate::error::CanisterError;
     use crate::test_utils::setup;
 
     const STATUS_URI: &str = "https://remote.example/users/bob/statuses/42";
@@ -239,5 +256,40 @@ mod tests {
         let after_second = captured().len();
 
         assert_eq!(after_first, after_second);
+    }
+
+    #[test]
+    fn test_should_delete_boost_with_wrapper_in_one_tx() {
+        setup();
+
+        Transaction::run::<_, _, _, CanisterError>(Schema, |tx| {
+            StatusRepository::with_transaction(tx).insert_wrapper(
+                77,
+                "boosted",
+                Visibility::Public,
+                None,
+                false,
+                1_000,
+            )?;
+            BoostRepository::with_transaction(tx).insert(77, STATUS_URI, 1_000)?;
+            FeedRepository::with_transaction(tx).insert_outbox(77, 1_000)
+        })
+        .expect("seed");
+
+        Transaction::run::<_, _, _, CanisterError>(Schema, |tx| delete_boost_with_wrapper(tx, 77))
+            .expect("delete");
+
+        assert!(
+            !BoostRepository::oneshot()
+                .is_boosted(STATUS_URI)
+                .expect("query")
+        );
+        assert!(
+            StatusRepository::oneshot()
+                .find_by_id(77)
+                .expect("query")
+                .is_none(),
+            "wrapper status row removed"
+        );
     }
 }
