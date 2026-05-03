@@ -1,23 +1,46 @@
 //! Moderators repository for the directory canister.
 
 use candid::Principal;
-use ic_dbms_canister::prelude::DBMS_CONTEXT;
+use ic_dbms_canister::prelude::{DBMS_CONTEXT, IcAccessControlList, IcMemoryProvider};
 use wasm_dbms::WasmDbmsDatabase;
+use wasm_dbms::prelude::DbmsContext;
 use wasm_dbms_api::prelude::*;
 
 use crate::error::{CanisterError, CanisterResult};
 use crate::schema::{Moderator, ModeratorInsertRequest, Schema};
 
-pub struct ModeratorsRepository;
+pub struct ModeratorsRepository {
+    tx: Option<TransactionId>,
+}
 
 impl ModeratorsRepository {
+    pub const fn oneshot() -> Self {
+        Self { tx: None }
+    }
+
+    // Reserved for future cross-repo atomic flows that need to splice moderator
+    // reads/writes into an externally-driven transaction. Not yet wired up.
+    #[allow(dead_code)]
+    pub const fn with_transaction(tx: TransactionId) -> Self {
+        Self { tx: Some(tx) }
+    }
+
+    fn db<'a>(
+        &self,
+        ctx: &'a DbmsContext<IcMemoryProvider, IcAccessControlList>,
+    ) -> WasmDbmsDatabase<'a, IcMemoryProvider, IcAccessControlList> {
+        match self.tx {
+            Some(id) => WasmDbmsDatabase::from_transaction(ctx, Schema, id),
+            None => WasmDbmsDatabase::oneshot(ctx, Schema),
+        }
+    }
+
     /// Adds a moderator to the directory canister.
-    pub fn add_moderator(principal: Principal) -> CanisterResult<()> {
+    pub fn add_moderator(&self, principal: Principal) -> CanisterResult<()> {
         ic_utils::log!("ModeratorsRepository::add_moderator: inserting {principal}");
         DBMS_CONTEXT
             .with(|ctx| {
-                let db = WasmDbmsDatabase::oneshot(ctx, Schema);
-                db.insert::<Moderator>(ModeratorInsertRequest {
+                self.db(ctx).insert::<Moderator>(ModeratorInsertRequest {
                     principal: ic_dbms_canister::prelude::Principal(principal),
                     created_at: ic_utils::now().into(),
                 })
@@ -26,11 +49,10 @@ impl ModeratorsRepository {
     }
 
     /// Returns true if the given principal is a moderator, false otherwise.
-    pub fn is_moderator(principal: Principal) -> CanisterResult<bool> {
+    pub fn is_moderator(&self, principal: Principal) -> CanisterResult<bool> {
         let principal = ic_dbms_canister::prelude::Principal(principal);
         DBMS_CONTEXT.with(|ctx| {
-            let db = WasmDbmsDatabase::oneshot(ctx, Schema);
-            let rows = db.select::<Moderator>(
+            let rows = self.db(ctx).select::<Moderator>(
                 Query::builder()
                     .and_where(Filter::eq("principal", Value::from(principal)))
                     .limit(1)
@@ -41,13 +63,12 @@ impl ModeratorsRepository {
     }
 
     /// Removes a moderator from the directory canister.
-    pub fn remove_moderator(principal: Principal) -> CanisterResult<()> {
+    pub fn remove_moderator(&self, principal: Principal) -> CanisterResult<()> {
         ic_utils::log!("ModeratorsRepository::remove_moderator: removing {principal}");
         let principal = ic_dbms_canister::prelude::Principal(principal);
         DBMS_CONTEXT
             .with(|ctx| {
-                let db = WasmDbmsDatabase::oneshot(ctx, Schema);
-                db.delete::<Moderator>(
+                self.db(ctx).delete::<Moderator>(
                     DeleteBehavior::Cascade,
                     Some(Filter::eq("principal", Value::from(principal))),
                 )
@@ -67,10 +88,14 @@ mod tests {
     fn test_should_add_and_check_moderator() {
         setup();
 
-        ModeratorsRepository::add_moderator(rey_canisteryo()).expect("should add moderator");
+        ModeratorsRepository::oneshot()
+            .add_moderator(rey_canisteryo())
+            .expect("should add moderator");
 
         assert!(
-            ModeratorsRepository::is_moderator(rey_canisteryo()).expect("should check moderator")
+            ModeratorsRepository::oneshot()
+                .is_moderator(rey_canisteryo())
+                .expect("should check moderator")
         );
     }
 
@@ -78,11 +103,17 @@ mod tests {
     fn test_should_remove_moderator() {
         setup();
 
-        ModeratorsRepository::add_moderator(rey_canisteryo()).expect("should add moderator");
-        ModeratorsRepository::remove_moderator(rey_canisteryo()).expect("should remove moderator");
+        ModeratorsRepository::oneshot()
+            .add_moderator(rey_canisteryo())
+            .expect("should add moderator");
+        ModeratorsRepository::oneshot()
+            .remove_moderator(rey_canisteryo())
+            .expect("should remove moderator");
 
         assert!(
-            !ModeratorsRepository::is_moderator(rey_canisteryo()).expect("should check moderator")
+            !ModeratorsRepository::oneshot()
+                .is_moderator(rey_canisteryo())
+                .expect("should check moderator")
         );
     }
 
@@ -91,7 +122,9 @@ mod tests {
         setup();
 
         assert!(
-            !ModeratorsRepository::is_moderator(rey_canisteryo()).expect("should check moderator")
+            !ModeratorsRepository::oneshot()
+                .is_moderator(rey_canisteryo())
+                .expect("should check moderator")
         );
     }
 }
