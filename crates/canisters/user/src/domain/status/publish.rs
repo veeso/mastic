@@ -9,7 +9,7 @@ use did::federation::{SendActivityArgs, SendActivityArgsObject};
 use did::user::{PublishStatusArgs, PublishStatusError, PublishStatusResponse};
 
 use crate::domain::follower::FollowerRepository;
-use crate::domain::status::StatusRepository;
+use crate::domain::snowflake::Snowflake;
 use crate::error::{CanisterError, CanisterResult};
 use crate::schema::{Schema, StatusContentSanitizer};
 
@@ -73,8 +73,15 @@ async fn save_status_and_publish_to_federation(
 ) -> CanisterResult<Status> {
     // insert
     let created_at = ic_utils::now();
-    let snowflake_id = Transaction::run::<_, _, _, CanisterError>(Schema, |tx| {
-        StatusRepository::with_transaction(tx).create(content.clone(), visibility, created_at)
+    let snowflake_id = Snowflake::new();
+    Transaction::run::<_, _, _, CanisterError>(Schema, |tx| {
+        crate::domain::status::create_status_with_feed(
+            tx,
+            snowflake_id.into(),
+            content.clone(),
+            visibility,
+            created_at,
+        )
     })?;
     ic_utils::log!("Status created with ID: {snowflake_id}");
 
