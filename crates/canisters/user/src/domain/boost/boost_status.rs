@@ -20,6 +20,7 @@ use activitypub::Activity;
 use activitypub::activity::{ActivityObject, ActivityType};
 use activitypub::context::ACTIVITY_STREAMS_CONTEXT;
 use activitypub::object::{BaseObject, OneOrMany};
+use db_utils::transaction::Transaction;
 use did::common::Status;
 use did::federation::{
     FetchStatusArgs, FetchStatusResponse, SendActivityArgs, SendActivityArgsObject,
@@ -32,6 +33,7 @@ use crate::domain::profile::ProfileRepository;
 use crate::domain::snowflake::Snowflake;
 use crate::domain::urls;
 use crate::error::{CanisterError, CanisterResult};
+use crate::schema::Schema;
 
 const AS_PUBLIC: &str = "https://www.w3.org/ns/activitystreams#Public";
 
@@ -48,7 +50,7 @@ pub async fn boost_status(BoostStatusArgs { status_url }: BoostStatusArgs) -> Bo
 async fn boost_status_inner(status_url: String) -> CanisterResult<()> {
     ic_utils::log!("Boosting status {status_url}");
 
-    if BoostRepository::is_boosted(&status_url)? {
+    if BoostRepository::oneshot().is_boosted(&status_url)? {
         ic_utils::log!("Status already boosted: {status_url}");
         return Ok(());
     }
@@ -73,15 +75,17 @@ async fn boost_status_inner(status_url: String) -> CanisterResult<()> {
     let snowflake: u64 = Snowflake::new().into();
     let now = ic_utils::now();
 
-    BoostRepository::insert_boost_with_wrapper(
-        snowflake,
-        &status_url,
-        &fetched.content,
-        fetched.visibility.into(),
-        fetched.spoiler_text.as_deref(),
-        fetched.sensitive,
-        now,
-    )?;
+    Transaction::run::<_, _, _, CanisterError>(Schema, |tx| {
+        BoostRepository::with_transaction(tx).insert_boost_with_wrapper(
+            snowflake,
+            &status_url,
+            &fetched.content,
+            fetched.visibility.into(),
+            fetched.spoiler_text.as_deref(),
+            fetched.sensitive,
+            now,
+        )
+    })?;
 
     let recipients = compute_recipients(&fetched, &own_actor_uri)?;
     if recipients.is_empty() {
@@ -206,7 +210,11 @@ mod tests {
         })
         .await;
         assert_eq!(resp, BoostStatusResponse::Ok);
-        assert!(BoostRepository::is_boosted(STATUS_URI).expect("query"));
+        assert!(
+            BoostRepository::oneshot()
+                .is_boosted(STATUS_URI)
+                .expect("query")
+        );
 
         let captured = captured();
         assert_eq!(captured.len(), 1);
@@ -259,7 +267,11 @@ mod tests {
             resp,
             BoostStatusResponse::Err(BoostStatusError::Internal(_))
         ));
-        assert!(!BoostRepository::is_boosted(STATUS_URI).expect("query"));
+        assert!(
+            !BoostRepository::oneshot()
+                .is_boosted(STATUS_URI)
+                .expect("query")
+        );
     }
 
     #[tokio::test]

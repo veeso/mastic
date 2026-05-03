@@ -267,7 +267,9 @@ fn viewer_flags(status_uri: &str) -> (bool, bool) {
     let liked = LikedRepository::oneshot()
         .is_liked(status_uri)
         .unwrap_or(false);
-    let boosted = BoostRepository::is_boosted(status_uri).unwrap_or(false);
+    let boosted = BoostRepository::oneshot()
+        .is_boosted(status_uri)
+        .unwrap_or(false);
     (liked, boosted)
 }
 
