@@ -6,12 +6,8 @@ use wasm_dbms::WasmDbmsDatabase;
 use wasm_dbms::prelude::DbmsContext;
 use wasm_dbms_api::prelude::*;
 
-use crate::domain::snowflake::Snowflake;
-use crate::error::{CanisterError, CanisterResult};
-use crate::schema::{
-    FeedEntry, FeedEntryInsertRequest, FeedSource, Schema, Status, StatusInsertRequest,
-    StatusRecord, StatusUpdateRequest,
-};
+use crate::error::CanisterResult;
+use crate::schema::{Schema, Status, StatusInsertRequest, StatusRecord, StatusUpdateRequest};
 
 /// Interface for the [`Status`] repository.
 pub struct StatusRepository {
@@ -37,29 +33,21 @@ impl StatusRepository {
         }
     }
 
-    /// Create a new [`Status`] with the given content, timestamp and visibility.
+    /// Insert a row into the `statuses` table with default flags
+    /// (`like_count = 0`, `boost_count = 0`, no reply, no spoiler, not
+    /// sensitive, never edited).
     ///
-    /// A new [`Snowflake`] ID is generated for the status, and the current
-    /// timestamp is used as the creation time.
-    ///
-    /// Both the `statuses` row and the corresponding `feed` entry are inserted,
-    /// but transaction lifecycle is owned by the caller — typically via
-    /// `Transaction::run` — to keep the two writes atomic.
-    ///
-    /// In case of success the [`Snowflake`] ID of the newly created status is
-    /// returned.
-    pub fn create(
+    /// The caller mints `snowflake_id` and is responsible for any cross-table
+    /// orchestration (e.g. the matching `feed` entry) via `Transaction::run`.
+    pub fn insert(
         &self,
+        snowflake_id: u64,
         content: String,
         visibility: Visibility,
         created_at: u64,
-    ) -> CanisterResult<Snowflake> {
-        let snowflake_id = Snowflake::new();
-
+    ) -> CanisterResult<()> {
         DBMS_CONTEXT.with(|ctx| {
-            let db = self.db(ctx);
-
-            db.insert::<Status>(StatusInsertRequest {
+            self.db(ctx).insert::<Status>(StatusInsertRequest {
                 id: snowflake_id.into(),
                 content: content.into(),
                 visibility: visibility.into(),
@@ -71,17 +59,63 @@ impl StatusRepository {
                 edited_at: Nullable::Null,
                 created_at: created_at.into(),
             })?;
+            Ok(())
+        })
+    }
 
-            db.insert::<FeedEntry>(FeedEntryInsertRequest {
+    /// Insert a wrapper-style `statuses` row used for boost wrappers, where
+    /// `spoiler_text` and `sensitive` may be set from the boosted status.
+    ///
+    /// The caller mints `snowflake_id` and is responsible for any cross-table
+    /// orchestration (e.g. matching `boosts` and `feed` rows) via
+    /// `Transaction::run`.
+    //
+    // Wired in by the boost refactor; covered by the in-module test suite
+    // until then.
+    #[allow(dead_code)]
+    pub fn insert_wrapper(
+        &self,
+        snowflake_id: u64,
+        content: &str,
+        visibility: Visibility,
+        spoiler_text: Option<&str>,
+        sensitive: bool,
+        created_at: u64,
+    ) -> CanisterResult<()> {
+        DBMS_CONTEXT.with(|ctx| {
+            self.db(ctx).insert::<Status>(StatusInsertRequest {
                 id: snowflake_id.into(),
-                source: FeedSource::Outbox,
+                content: content.into(),
+                visibility: visibility.into(),
+                like_count: 0u64.into(),
+                boost_count: 0u64.into(),
+                in_reply_to_uri: Nullable::Null,
+                spoiler_text: spoiler_text.map_or(Nullable::Null, |s| Nullable::Value(s.into())),
+                sensitive: sensitive.into(),
+                edited_at: Nullable::Null,
                 created_at: created_at.into(),
             })?;
+            Ok(())
+        })
+    }
 
-            Ok::<(), CanisterError>(())
-        })?;
-
-        Ok(snowflake_id)
+    /// Delete the [`Status`] row whose primary key matches `snowflake_id`.
+    ///
+    /// Uses [`DeleteBehavior::Restrict`] — callers must drop dependent rows
+    /// (`boosts`, `feed`) in the right order so referential integrity is
+    /// preserved.
+    //
+    // Wired in by the boost refactor (undo_boost flow); covered by the
+    // in-module test suite until then.
+    #[allow(dead_code)]
+    pub fn delete_by_id(&self, snowflake_id: u64) -> CanisterResult<()> {
+        DBMS_CONTEXT.with(|ctx| {
+            self.db(ctx).delete::<Status>(
+                DeleteBehavior::Restrict,
+                Some(Filter::eq(Status::primary_key(), Value::from(snowflake_id))),
+            )?;
+            Ok(())
+        })
     }
 
     /// Get a paginated list of [`Status`]es with the given visibility, ordered from the most recent to the oldest.
@@ -225,7 +259,6 @@ impl StatusRepository {
 #[cfg(test)]
 mod tests {
 
-    use db_utils::transaction::Transaction;
     use did::common::Visibility;
 
     use super::*;
@@ -356,66 +389,71 @@ mod tests {
     }
 
     #[test]
-    fn test_create_should_insert_status_and_feed_entry() {
+    fn test_delete_by_id_should_remove_status_row() {
         setup();
+        insert_status(11, "to delete", Visibility::Public, 1_000);
 
-        let snowflake = Transaction::run::<_, _, _, CanisterError>(Schema, |tx| {
-            StatusRepository::with_transaction(tx).create(
-                "Hello world".to_string(),
-                Visibility::Public,
-                42_000,
-            )
-        })
-        .expect("should create");
+        StatusRepository::oneshot()
+            .delete_by_id(11)
+            .expect("should delete");
 
-        // verify the status was inserted
-        let statuses = StatusRepository::oneshot()
-            .get_paginated_by_visibility(&[Visibility::Public], 0, 10)
-            .expect("should query");
-
-        assert_eq!(statuses.len(), 1);
-        assert_eq!(statuses[0].id, snowflake.into());
-        assert_eq!(statuses[0].content.0, "Hello world");
-        assert_eq!(statuses[0].created_at.0, 42_000);
+        assert!(
+            StatusRepository::oneshot()
+                .find_by_id(11)
+                .expect("query")
+                .is_none()
+        );
     }
 
     #[test]
-    fn test_create_should_rollback_on_error() {
+    fn test_delete_by_id_should_be_noop_when_missing() {
         setup();
 
-        // First create a status with a known ID via transaction
-        let snowflake = Transaction::run::<_, _, _, CanisterError>(Schema, |tx| {
-            StatusRepository::with_transaction(tx).create(
-                "first".to_string(),
-                Visibility::Public,
-                1_000,
-            )
-        })
-        .expect("first create");
+        StatusRepository::oneshot()
+            .delete_by_id(999)
+            .expect("delete missing must succeed");
+    }
 
-        let initial_count = StatusRepository::oneshot()
-            .get_paginated_by_visibility(&[Visibility::Public], 0, 100)
+    #[test]
+    fn test_insert_should_persist_default_flags() {
+        setup();
+
+        StatusRepository::oneshot()
+            .insert(123, "hello".to_string(), Visibility::Public, 7_000)
+            .expect("should insert");
+
+        let row = StatusRepository::oneshot()
+            .find_by_id(123)
             .expect("query")
-            .len();
-        assert_eq!(initial_count, 1);
-        let _ = snowflake;
+            .expect("row exists");
+        assert_eq!(row.content.0, "hello");
+        assert_eq!(row.created_at.0, 7_000);
+        assert_eq!(row.like_count.0, 0);
+        assert_eq!(row.boost_count.0, 0);
+        assert!(!row.sensitive.0);
+        assert!(row.spoiler_text.clone().into_opt().is_none());
+        assert!(row.in_reply_to_uri.clone().into_opt().is_none());
+        assert!(row.edited_at.into_opt().is_none());
+    }
 
-        // run a transaction that errors out — nothing must be persisted
-        let result: Result<(), CanisterError> = Transaction::run(Schema, |tx| {
-            StatusRepository::with_transaction(tx).create(
-                "rollback".to_string(),
-                Visibility::Public,
-                2_000,
-            )?;
-            Err(CanisterError::Internal("boom".to_string()))
-        });
-        assert!(result.is_err());
+    #[test]
+    fn test_insert_wrapper_should_persist_spoiler_and_sensitive() {
+        setup();
 
-        let after_count = StatusRepository::oneshot()
-            .get_paginated_by_visibility(&[Visibility::Public], 0, 100)
+        StatusRepository::oneshot()
+            .insert_wrapper(321, "wrapper", Visibility::Public, Some("cw"), true, 8_000)
+            .expect("should insert wrapper");
+
+        let row = StatusRepository::oneshot()
+            .find_by_id(321)
             .expect("query")
-            .len();
-        assert_eq!(after_count, 1, "errored tx must not persist its insert");
+            .expect("row exists");
+        assert_eq!(row.content.0, "wrapper");
+        assert_eq!(
+            row.spoiler_text.clone().into_opt().expect("spoiler").0,
+            "cw"
+        );
+        assert!(row.sensitive.0);
     }
 
     #[test]

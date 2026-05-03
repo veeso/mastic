@@ -17,20 +17,17 @@ use crate::error::CanisterResult;
 use crate::schema::{FeedEntry, FeedEntryInsertRequest, FeedSource, Schema};
 
 /// Repository over the denormalized `feed` table.
-//
-// `#[allow(dead_code)]` is intentional: subsequent tasks (status / boost /
-// inbox refactors) will route their writes through this repository. Until
-// then, the constructors and methods are exercised only by the in-module
-// `#[cfg(test)]` suite.
-#[allow(dead_code)]
 pub struct FeedRepository {
     tx: Option<TransactionId>,
 }
 
-#[allow(dead_code)]
 impl FeedRepository {
     /// Build a repository instance that runs each operation in its own
     /// auto-committed oneshot transaction.
+    //
+    // `oneshot` callers land with the boost / inbox refactors; for now it is
+    // exercised only by the in-module `#[cfg(test)]` suite.
+    #[allow(dead_code)]
     pub const fn oneshot() -> Self {
         Self { tx: None }
     }
@@ -60,6 +57,10 @@ impl FeedRepository {
 
     /// Insert a feed entry tagged as [`FeedSource::Inbox`] — used for received
     /// `Create` / `Announce` activities.
+    //
+    // Wired in by the inbox refactor; covered by the in-module test suite
+    // until then.
+    #[allow(dead_code)]
     pub fn insert_inbox(&self, snowflake_id: u64, created_at: u64) -> CanisterResult<()> {
         self.insert(snowflake_id, FeedSource::Inbox, created_at)
     }
@@ -80,6 +81,10 @@ impl FeedRepository {
     /// Uses [`DeleteBehavior::Restrict`] — callers must drop the corresponding
     /// `statuses` / `inbox` / `boosts` rows in the right order so referential
     /// integrity is preserved.
+    //
+    // Wired in by the boost refactor (undo_boost flow); covered by the
+    // in-module test suite until then.
+    #[allow(dead_code)]
     pub fn delete_by_id(&self, snowflake_id: u64) -> CanisterResult<()> {
         DBMS_CONTEXT.with(|ctx| {
             self.db(ctx).delete::<FeedEntry>(
