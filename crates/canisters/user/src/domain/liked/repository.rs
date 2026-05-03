@@ -1,8 +1,7 @@
 //! Repository for the `liked` table.
 
-use ic_dbms_canister::prelude::{DBMS_CONTEXT, IcAccessControlList, IcMemoryProvider};
-use wasm_dbms::WasmDbmsDatabase;
-use wasm_dbms::prelude::DbmsContext;
+use db_utils::repository::Repository;
+use ic_dbms_canister::prelude::DBMS_CONTEXT;
 use wasm_dbms_api::prelude::{Database, DeleteBehavior, Filter, Query, TableSchema, TransactionId};
 
 use crate::error::{CanisterError, CanisterResult};
@@ -13,27 +12,6 @@ pub struct LikedRepository {
 }
 
 impl LikedRepository {
-    pub const fn oneshot() -> Self {
-        Self { tx: None }
-    }
-
-    // Reserved for future cross-repo atomic flows that need to splice liked
-    // reads/writes into an externally-driven transaction. Not yet wired up.
-    #[allow(dead_code)]
-    pub const fn with_transaction(tx: TransactionId) -> Self {
-        Self { tx: Some(tx) }
-    }
-
-    fn db<'a>(
-        &self,
-        ctx: &'a DbmsContext<IcMemoryProvider, IcAccessControlList>,
-    ) -> WasmDbmsDatabase<'a, IcMemoryProvider, IcAccessControlList> {
-        match self.tx {
-            Some(id) => WasmDbmsDatabase::from_transaction(ctx, Schema, id),
-            None => WasmDbmsDatabase::oneshot(ctx, Schema),
-        }
-    }
-
     /// Inserts a liked status into the database.
     pub fn like_status(&self, status_uri: &str) -> CanisterResult<()> {
         DBMS_CONTEXT
@@ -87,5 +65,25 @@ impl LikedRepository {
                     .collect()
             })
             .map_err(CanisterError::from)
+    }
+}
+
+impl Repository for LikedRepository {
+    type Schema = Schema;
+
+    fn schema() -> Self::Schema {
+        Schema
+    }
+
+    fn oneshot() -> Self {
+        Self { tx: None }
+    }
+
+    fn with_transaction(tx: TransactionId) -> Self {
+        Self { tx: Some(tx) }
+    }
+
+    fn tx(&self) -> Option<TransactionId> {
+        self.tx
     }
 }

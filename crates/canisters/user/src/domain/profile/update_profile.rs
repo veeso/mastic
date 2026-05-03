@@ -4,6 +4,7 @@ use activitypub::activity::{Activity, ActivityObject, ActivityType};
 use activitypub::actor::{Actor, ActorType};
 use activitypub::context::{ACTIVITY_STREAMS_CONTEXT, Context};
 use activitypub::object::{BaseObject, OneOrMany};
+use db_utils::repository::Repository;
 use did::federation::{SendActivityArgs, SendActivityArgsObject};
 use did::user::{UpdateProfileArgs, UpdateProfileError, UpdateProfileResponse};
 

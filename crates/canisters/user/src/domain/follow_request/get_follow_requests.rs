@@ -1,5 +1,6 @@
 //! Get follow requests domain logic.
 
+use db_utils::repository::Repository;
 use did::user::{GetFollowRequestsArgs, GetFollowRequestsError, GetFollowRequestsResponse};
 
 use crate::domain::follow_request::FollowRequestRepository;

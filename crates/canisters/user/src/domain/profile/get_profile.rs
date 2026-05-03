@@ -1,5 +1,6 @@
 //! Get profile flow.
 
+use db_utils::repository::Repository;
 use did::common::UserProfile;
 use did::user::{GetProfileError, GetProfileResponse};
 

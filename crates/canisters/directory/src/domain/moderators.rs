@@ -1,5 +1,6 @@
 //! Moderation functions for the Directory canister.
 
+use db_utils::repository::Repository;
 mod repository;
 
 use candid::Principal;

@@ -10,6 +10,7 @@
 use activitypub::activity::{Activity, ActivityObject, ActivityType};
 use activitypub::context::ACTIVITY_STREAMS_CONTEXT;
 use activitypub::object::{BaseObject, OneOrMany};
+use db_utils::repository::Repository;
 use did::federation::{SendActivityArgs, SendActivityArgsObject};
 use did::user::{AcceptFollowArgs, AcceptFollowError, AcceptFollowResponse};
 use ic_dbms_canister::prelude::DBMS_CONTEXT;

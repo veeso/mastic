@@ -1,6 +1,7 @@
 //! Create profile flow.
 
 use candid::Principal;
+use db_utils::repository::Repository;
 
 use crate::domain::profile::ProfileRepository;
 use crate::error::CanisterResult;

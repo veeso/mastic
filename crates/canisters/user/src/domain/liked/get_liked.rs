@@ -7,6 +7,7 @@
 //! Clients are expected to fetch each status individually if they need to
 //! render content.
 
+use db_utils::repository::Repository;
 use did::user::{GetLikedArgs, GetLikedError, GetLikedResponse};
 
 use crate::domain::liked::repository::LikedRepository;
@@ -31,6 +32,7 @@ pub fn get_liked(GetLikedArgs { offset, limit }: GetLikedArgs) -> GetLikedRespon
 #[cfg(test)]
 mod tests {
 
+    use db_utils::repository::Repository;
     use did::user::{GetLikedArgs, GetLikedResponse};
 
     use super::get_liked;

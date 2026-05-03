@@ -1,8 +1,7 @@
 //! Follow request repository for managing incoming follow requests.
 
-use ic_dbms_canister::prelude::{DBMS_CONTEXT, IcAccessControlList, IcMemoryProvider};
-use wasm_dbms::WasmDbmsDatabase;
-use wasm_dbms::prelude::DbmsContext;
+use db_utils::repository::Repository;
+use ic_dbms_canister::prelude::DBMS_CONTEXT;
 use wasm_dbms_api::prelude::*;
 
 use crate::error::{CanisterError, CanisterResult};
@@ -14,28 +13,6 @@ pub struct FollowRequestRepository {
 }
 
 impl FollowRequestRepository {
-    pub const fn oneshot() -> Self {
-        Self { tx: None }
-    }
-
-    // Reserved for future cross-repo atomic flows that need to splice follow
-    // request reads/writes into an externally-driven transaction. Not yet wired
-    // up.
-    #[allow(dead_code)]
-    pub const fn with_transaction(tx: TransactionId) -> Self {
-        Self { tx: Some(tx) }
-    }
-
-    fn db<'a>(
-        &self,
-        ctx: &'a DbmsContext<IcMemoryProvider, IcAccessControlList>,
-    ) -> WasmDbmsDatabase<'a, IcMemoryProvider, IcAccessControlList> {
-        match self.tx {
-            Some(id) => WasmDbmsDatabase::from_transaction(ctx, Schema, id),
-            None => WasmDbmsDatabase::oneshot(ctx, Schema),
-        }
-    }
-
     /// Insert a new follow request for the given actor URI.
     pub fn insert(&self, actor_uri: &str) -> CanisterResult<()> {
         DBMS_CONTEXT.with(|ctx| {
@@ -101,6 +78,26 @@ impl FollowRequestRepository {
             actor_uri: record.actor_uri.expect("must have field"),
             created_at: record.created_at.expect("must have field"),
         }
+    }
+}
+
+impl Repository for FollowRequestRepository {
+    type Schema = Schema;
+
+    fn schema() -> Self::Schema {
+        Schema
+    }
+
+    fn oneshot() -> Self {
+        Self { tx: None }
+    }
+
+    fn with_transaction(tx: TransactionId) -> Self {
+        Self { tx: Some(tx) }
+    }
+
+    fn tx(&self) -> Option<TransactionId> {
+        self.tx
     }
 }
 

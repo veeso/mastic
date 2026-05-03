@@ -8,9 +8,8 @@
 //! are still served by [`crate::domain::feed::read_feed`] which performs the
 //! full hydration join across `statuses` / `inbox` / `boosts`.
 
-use ic_dbms_canister::prelude::{DBMS_CONTEXT, IcAccessControlList, IcMemoryProvider};
-use wasm_dbms::WasmDbmsDatabase;
-use wasm_dbms::prelude::DbmsContext;
+use db_utils::repository::Repository;
+use ic_dbms_canister::prelude::DBMS_CONTEXT;
 use wasm_dbms_api::prelude::{Database, DeleteBehavior, Filter, TransactionId, Value};
 
 use crate::error::CanisterResult;
@@ -22,33 +21,6 @@ pub struct FeedRepository {
 }
 
 impl FeedRepository {
-    /// Build a repository instance that runs each operation in its own
-    /// auto-committed oneshot transaction.
-    //
-    // `oneshot` callers land with the boost / inbox refactors; for now it is
-    // exercised only by the in-module `#[cfg(test)]` suite.
-    #[allow(dead_code)]
-    pub const fn oneshot() -> Self {
-        Self { tx: None }
-    }
-
-    /// Build a repository instance that splices its writes into an
-    /// externally-driven transaction. Lifecycle (commit/rollback) is owned by
-    /// the caller — typically via [`db_utils::transaction::Transaction::run`].
-    pub const fn with_transaction(tx: TransactionId) -> Self {
-        Self { tx: Some(tx) }
-    }
-
-    fn db<'a>(
-        &self,
-        ctx: &'a DbmsContext<IcMemoryProvider, IcAccessControlList>,
-    ) -> WasmDbmsDatabase<'a, IcMemoryProvider, IcAccessControlList> {
-        match self.tx {
-            Some(id) => WasmDbmsDatabase::from_transaction(ctx, Schema, id),
-            None => WasmDbmsDatabase::oneshot(ctx, Schema),
-        }
-    }
-
     /// Insert a feed entry tagged as [`FeedSource::Outbox`] — used for own
     /// statuses and boost wrappers.
     pub fn insert_outbox(&self, snowflake_id: u64, created_at: u64) -> CanisterResult<()> {
@@ -81,10 +53,6 @@ impl FeedRepository {
     /// Uses [`DeleteBehavior::Restrict`] — callers must drop the corresponding
     /// `statuses` / `inbox` / `boosts` rows in the right order so referential
     /// integrity is preserved.
-    //
-    // Wired in by the boost refactor (undo_boost flow); covered by the
-    // in-module test suite until then.
-    #[allow(dead_code)]
     pub fn delete_by_id(&self, snowflake_id: u64) -> CanisterResult<()> {
         DBMS_CONTEXT.with(|ctx| {
             self.db(ctx).delete::<FeedEntry>(
@@ -96,9 +64,30 @@ impl FeedRepository {
     }
 }
 
+impl Repository for FeedRepository {
+    type Schema = Schema;
+
+    fn schema() -> Self::Schema {
+        Schema
+    }
+
+    fn oneshot() -> Self {
+        Self { tx: None }
+    }
+
+    fn with_transaction(tx: TransactionId) -> Self {
+        Self { tx: Some(tx) }
+    }
+
+    fn tx(&self) -> Option<TransactionId> {
+        self.tx
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use db_utils::transaction::Transaction;
+    use wasm_dbms::WasmDbmsDatabase;
     use wasm_dbms_api::prelude::Query;
 
     use super::*;

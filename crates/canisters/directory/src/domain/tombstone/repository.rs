@@ -1,9 +1,8 @@
 //! Tombstone repository
 
 use candid::Principal;
-use ic_dbms_canister::prelude::{DBMS_CONTEXT, IcAccessControlList, IcMemoryProvider};
-use wasm_dbms::WasmDbmsDatabase;
-use wasm_dbms::prelude::DbmsContext;
+use db_utils::repository::Repository;
+use ic_dbms_canister::prelude::DBMS_CONTEXT;
 use wasm_dbms_api::prelude::{Database as _, Filter, Query, TransactionId};
 
 use crate::error::CanisterResult;
@@ -18,27 +17,6 @@ pub struct TombstoneRepository {
 }
 
 impl TombstoneRepository {
-    pub const fn oneshot() -> Self {
-        Self { tx: None }
-    }
-
-    // Reserved for future cross-repo atomic flows that need to splice tombstone
-    // reads/writes into an externally-driven transaction. Not yet wired up.
-    #[allow(dead_code)]
-    pub const fn with_transaction(tx: TransactionId) -> Self {
-        Self { tx: Some(tx) }
-    }
-
-    fn db<'a>(
-        &self,
-        ctx: &'a DbmsContext<IcMemoryProvider, IcAccessControlList>,
-    ) -> WasmDbmsDatabase<'a, IcMemoryProvider, IcAccessControlList> {
-        match self.tx {
-            Some(id) => WasmDbmsDatabase::from_transaction(ctx, Schema, id),
-            None => WasmDbmsDatabase::oneshot(ctx, Schema),
-        }
-    }
-
     /// Inserts a [`Tombstone`] record for the given user principal and handle.
     pub fn insert_or_update(
         &self,
@@ -104,6 +82,26 @@ impl TombstoneRepository {
         let deleted_at = row.deleted_at.expect("must be set").0;
 
         Ok(ic_utils::now() - deleted_at < TOMBSTONE_TTL_SECONDS)
+    }
+}
+
+impl Repository for TombstoneRepository {
+    type Schema = Schema;
+
+    fn schema() -> Self::Schema {
+        Schema
+    }
+
+    fn oneshot() -> Self {
+        Self { tx: None }
+    }
+
+    fn with_transaction(tx: TransactionId) -> Self {
+        Self { tx: Some(tx) }
+    }
+
+    fn tx(&self) -> Option<TransactionId> {
+        self.tx
     }
 }
 

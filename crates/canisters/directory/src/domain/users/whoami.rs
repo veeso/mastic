@@ -1,6 +1,7 @@
 //! Whoami flow implementation
 
 use candid::Principal;
+use db_utils::repository::Repository;
 use did::directory::{WhoAmI, WhoAmIError, WhoAmIResponse};
 
 use crate::domain::users::repository::UserRepository;

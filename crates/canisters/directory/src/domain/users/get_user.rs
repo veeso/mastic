@@ -2,6 +2,7 @@
 
 use candid::Principal;
 use db_utils::handle::{HandleSanitizer, HandleValidator};
+use db_utils::repository::Repository;
 use did::directory::{GetUser, GetUserArgs, GetUserError, GetUserResponse};
 
 use crate::domain::users::repository::UserRepository;

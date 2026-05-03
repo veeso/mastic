@@ -1,5 +1,6 @@
 //! Get following domain logic.
 
+use db_utils::repository::Repository;
 use did::user::{GetFollowingArgs, GetFollowingError, GetFollowingResponse};
 
 use crate::domain::following::FollowingRepository;

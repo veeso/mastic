@@ -3,6 +3,7 @@
 use activitypub::Activity;
 use activitypub::activity::{ActivityObject, ActivityType as ApActivityType};
 use activitypub::object::{BaseObject, ObjectType, OneOrMany};
+use db_utils::repository::Repository;
 use did::common::{FeedItem, Status, Visibility};
 use did::user::{ReadFeedArgs, ReadFeedError, ReadFeedResponse};
 use ic_dbms_canister::prelude::DBMS_CONTEXT;
@@ -447,6 +448,7 @@ mod tests {
     use activitypub::activity::{Activity, ActivityObject, ActivityType as ApActivityType};
     use activitypub::context::ACTIVITY_STREAMS_CONTEXT;
     use activitypub::object::{BaseObject, ObjectType, OneOrMany};
+    use db_utils::repository::Repository;
     use did::common::{FeedItem, Visibility};
     use did::user::{ReadFeedArgs, ReadFeedError, ReadFeedResponse};
     use ic_dbms_canister::prelude::DBMS_CONTEXT;

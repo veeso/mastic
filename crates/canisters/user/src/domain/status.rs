@@ -1,5 +1,6 @@
 //! Status domain
 
+use db_utils::repository::Repository;
 mod get_local_status;
 mod get_statuses;
 mod publish;
