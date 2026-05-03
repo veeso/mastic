@@ -1,8 +1,9 @@
 //! User repository
 
 use candid::Principal;
-use ic_dbms_canister::prelude::DBMS_CONTEXT;
+use ic_dbms_canister::prelude::{DBMS_CONTEXT, IcAccessControlList, IcMemoryProvider};
 use wasm_dbms::WasmDbmsDatabase;
+use wasm_dbms::prelude::DbmsContext;
 use wasm_dbms_api::prelude::*;
 
 use crate::error::{CanisterError, CanisterResult};
@@ -11,13 +12,36 @@ use crate::schema::{
 };
 
 /// Repository for user-related database operations.
-pub struct UserRepository;
+pub struct UserRepository {
+    tx: Option<TransactionId>,
+}
 
 impl UserRepository {
+    pub const fn oneshot() -> Self {
+        Self { tx: None }
+    }
+
+    // Reserved for future cross-repo atomic flows that need to splice user
+    // reads/writes into an externally-driven transaction. Not yet wired up.
+    #[allow(dead_code)]
+    pub const fn with_transaction(tx: TransactionId) -> Self {
+        Self { tx: Some(tx) }
+    }
+
+    fn db<'a>(
+        &self,
+        ctx: &'a DbmsContext<IcMemoryProvider, IcAccessControlList>,
+    ) -> WasmDbmsDatabase<'a, IcMemoryProvider, IcAccessControlList> {
+        match self.tx {
+            Some(id) => WasmDbmsDatabase::from_transaction(ctx, Schema, id),
+            None => WasmDbmsDatabase::oneshot(ctx, Schema),
+        }
+    }
+
     /// Signs up a new user by creating a canister for them and storing their information in the database.
     ///
     /// The user canister is set to Null and the creation state is marked to pending.
-    pub fn sign_up(user_principal: Principal, handle: String) -> CanisterResult<()> {
+    pub fn sign_up(&self, user_principal: Principal, handle: String) -> CanisterResult<()> {
         ic_utils::log!(
             "UserRepository::sign_up: inserting user {user_principal} with handle {handle:?}"
         );
@@ -32,10 +56,7 @@ impl UserRepository {
             created_at: ic_utils::now().into(),
         };
 
-        DBMS_CONTEXT.with(|ctx| {
-            let dbms = WasmDbmsDatabase::oneshot(ctx, Schema);
-            dbms.insert::<User>(insert)
-        })?;
+        DBMS_CONTEXT.with(|ctx| self.db(ctx).insert::<User>(insert))?;
 
         ic_utils::log!("UserRepository::sign_up: user {user_principal} inserted successfully");
 
@@ -44,6 +65,7 @@ impl UserRepository {
 
     /// Sets the canister ID for a user after successful canister creation and updates their canister status to active.
     pub fn set_user_canister(
+        &self,
         user_principal: Principal,
         canister_id: Principal,
     ) -> CanisterResult<()> {
@@ -64,10 +86,7 @@ impl UserRepository {
             ..Default::default()
         };
 
-        let rows = DBMS_CONTEXT.with(|ctx| {
-            let dbms = WasmDbmsDatabase::oneshot(ctx, Schema);
-            dbms.update::<User>(update)
-        })?;
+        let rows = DBMS_CONTEXT.with(|ctx| self.db(ctx).update::<User>(update))?;
 
         if rows == 0 {
             ic_utils::log!(
@@ -86,7 +105,7 @@ impl UserRepository {
     }
 
     /// Sets the user canister status to creation failed if the canister creation process fails for a user.
-    pub fn set_failed_user_canister_create(user_principal: Principal) -> CanisterResult<()> {
+    pub fn set_failed_user_canister_create(&self, user_principal: Principal) -> CanisterResult<()> {
         ic_utils::log!(
             "UserRepository::set_failed_user_canister_create: marking user {user_principal} as failed"
         );
@@ -101,10 +120,7 @@ impl UserRepository {
             ..Default::default()
         };
 
-        let rows = DBMS_CONTEXT.with(|ctx| {
-            let dbms = WasmDbmsDatabase::oneshot(ctx, Schema);
-            dbms.update::<User>(update)
-        })?;
+        let rows = DBMS_CONTEXT.with(|ctx| self.db(ctx).update::<User>(update))?;
 
         if rows == 0 {
             ic_utils::log!(
@@ -123,7 +139,7 @@ impl UserRepository {
     }
 
     /// Sets the user canister status to creation failed if the canister creation process fails for a user.
-    pub fn retry_user_canister_creation(user_principal: Principal) -> CanisterResult<()> {
+    pub fn retry_user_canister_creation(&self, user_principal: Principal) -> CanisterResult<()> {
         ic_utils::log!(
             "UserRepository::retry_user_canister_creation: retrying for user {user_principal}"
         );
@@ -138,10 +154,7 @@ impl UserRepository {
             ..Default::default()
         };
 
-        let rows = DBMS_CONTEXT.with(|ctx| {
-            let dbms = WasmDbmsDatabase::oneshot(ctx, Schema);
-            dbms.update::<User>(update)
-        })?;
+        let rows = DBMS_CONTEXT.with(|ctx| self.db(ctx).update::<User>(update))?;
 
         if rows == 0 {
             ic_utils::log!(
@@ -160,11 +173,10 @@ impl UserRepository {
     }
 
     /// Retrieves a user's information from the database by their principal.
-    pub fn get_user_by_principal(user_principal: Principal) -> CanisterResult<Option<User>> {
+    pub fn get_user_by_principal(&self, user_principal: Principal) -> CanisterResult<Option<User>> {
         ic_utils::log!("UserRepository::get_user_by_principal: querying user {user_principal}");
         let rows = DBMS_CONTEXT.with(|ctx| {
-            let dbms = WasmDbmsDatabase::oneshot(ctx, Schema);
-            dbms.select::<User>(
+            self.db(ctx).select::<User>(
                 Query::builder()
                     .all()
                     .limit(1)
@@ -185,11 +197,10 @@ impl UserRepository {
     }
 
     /// Retrieves a user's information from the database by their handle.
-    pub fn get_user_by_handle(handle: &str) -> CanisterResult<Option<User>> {
+    pub fn get_user_by_handle(&self, handle: &str) -> CanisterResult<Option<User>> {
         ic_utils::log!("UserRepository::get_user_by_handle: querying handle {handle:?}");
         let rows = DBMS_CONTEXT.with(|ctx| {
-            let dbms = WasmDbmsDatabase::oneshot(ctx, Schema);
-            dbms.select::<User>(
+            self.db(ctx).select::<User>(
                 Query::builder()
                     .all()
                     .limit(1)
@@ -208,7 +219,7 @@ impl UserRepository {
 
     /// Marks a user for deletion by setting their canister status to deletion pending.
     /// The actual deletion of the user record and User Canister is handled asynchronously by the state machine.
-    pub fn mark_user_for_deletion(user_principal: Principal) -> CanisterResult<()> {
+    pub fn mark_user_for_deletion(&self, user_principal: Principal) -> CanisterResult<()> {
         ic_utils::log!(
             "UserRepository::mark_user_for_deletion: marking user {user_principal} for deletion"
         );
@@ -222,10 +233,7 @@ impl UserRepository {
             )),
             ..Default::default()
         };
-        let rows = DBMS_CONTEXT.with(|ctx| {
-            let dbms = WasmDbmsDatabase::oneshot(ctx, Schema);
-            dbms.update::<User>(update)
-        })?;
+        let rows = DBMS_CONTEXT.with(|ctx| self.db(ctx).update::<User>(update))?;
 
         if rows == 0 {
             return Err(CanisterError::SignUpFailed(format!(
@@ -238,12 +246,11 @@ impl UserRepository {
 
     /// Removes a user record from the database. Called by the delete_profile state machine
     /// after the user canister has been stopped and deleted.
-    pub fn remove_user(user_principal: Principal) -> CanisterResult<()> {
+    pub fn remove_user(&self, user_principal: Principal) -> CanisterResult<()> {
         ic_utils::log!("UserRepository::remove_user: removing user {user_principal}");
 
         let deleted = DBMS_CONTEXT.with(|ctx| {
-            let dbms = WasmDbmsDatabase::oneshot(ctx, Schema);
-            dbms.delete::<User>(
+            self.db(ctx).delete::<User>(
                 DeleteBehavior::Restrict,
                 Some(Filter::eq(
                     User::primary_key(),
@@ -264,13 +271,17 @@ impl UserRepository {
     /// Searches for user profiles based on a query string that matches the handle, with pagination support using offset and limit.
     ///
     /// Search only those which are `Active` and have a canister id.
-    pub fn search_profiles(handle: &str, offset: usize, limit: usize) -> CanisterResult<Vec<User>> {
+    pub fn search_profiles(
+        &self,
+        handle: &str,
+        offset: usize,
+        limit: usize,
+    ) -> CanisterResult<Vec<User>> {
         ic_utils::log!(
             "UserRepository::search_profiles: searching for handle {handle:?} with offset {offset} and limit {limit}"
         );
         let rows = DBMS_CONTEXT.with(|ctx| {
-            let dbms = WasmDbmsDatabase::oneshot(ctx, Schema);
-            dbms.select::<User>(
+            self.db(ctx).select::<User>(
                 Query::builder()
                     .all()
                     .offset(offset)
@@ -307,6 +318,8 @@ impl UserRepository {
 #[cfg(test)]
 mod tests {
 
+    use db_utils::transaction::Transaction;
+
     use super::*;
     use crate::test_utils::{bob, rey_canisteryo, setup};
 
@@ -314,10 +327,12 @@ mod tests {
     fn test_should_sign_up_user() {
         setup();
 
-        UserRepository::sign_up(rey_canisteryo(), "rey_canisteryo".to_string())
+        UserRepository::oneshot()
+            .sign_up(rey_canisteryo(), "rey_canisteryo".to_string())
             .expect("should sign up user");
 
-        let user = UserRepository::get_user_by_principal(rey_canisteryo())
+        let user = UserRepository::oneshot()
+            .get_user_by_principal(rey_canisteryo())
             .expect("should query user")
             .expect("user should exist");
 
@@ -334,10 +349,11 @@ mod tests {
     fn test_should_reject_duplicate_principal_on_sign_up() {
         setup();
 
-        UserRepository::sign_up(rey_canisteryo(), "rey_canisteryo".to_string())
+        UserRepository::oneshot()
+            .sign_up(rey_canisteryo(), "rey_canisteryo".to_string())
             .expect("should sign up user");
 
-        let result = UserRepository::sign_up(rey_canisteryo(), "alice2".to_string());
+        let result = UserRepository::oneshot().sign_up(rey_canisteryo(), "alice2".to_string());
         assert!(result.is_err(), "duplicate principal should be rejected");
     }
 
@@ -345,10 +361,11 @@ mod tests {
     fn test_should_reject_duplicate_handle_on_sign_up() {
         setup();
 
-        UserRepository::sign_up(rey_canisteryo(), "rey_canisteryo".to_string())
+        UserRepository::oneshot()
+            .sign_up(rey_canisteryo(), "rey_canisteryo".to_string())
             .expect("should sign up user");
 
-        let result = UserRepository::sign_up(bob(), "rey_canisteryo".to_string());
+        let result = UserRepository::oneshot().sign_up(bob(), "rey_canisteryo".to_string());
         assert!(result.is_err(), "duplicate handle should be rejected");
     }
 
@@ -356,14 +373,17 @@ mod tests {
     fn test_should_set_user_canister() {
         setup();
 
-        UserRepository::sign_up(rey_canisteryo(), "rey_canisteryo".to_string())
+        UserRepository::oneshot()
+            .sign_up(rey_canisteryo(), "rey_canisteryo".to_string())
             .expect("should sign up user");
 
         let canister_id = bob();
-        UserRepository::set_user_canister(rey_canisteryo(), canister_id)
+        UserRepository::oneshot()
+            .set_user_canister(rey_canisteryo(), canister_id)
             .expect("should set user canister");
 
-        let user = UserRepository::get_user_by_principal(rey_canisteryo())
+        let user = UserRepository::oneshot()
+            .get_user_by_principal(rey_canisteryo())
             .expect("should query user")
             .expect("user should exist");
 
@@ -381,7 +401,7 @@ mod tests {
     fn test_should_fail_set_user_canister_for_unknown_principal() {
         setup();
 
-        let result = UserRepository::set_user_canister(rey_canisteryo(), bob());
+        let result = UserRepository::oneshot().set_user_canister(rey_canisteryo(), bob());
         assert!(result.is_err(), "should fail for unknown principal");
     }
 
@@ -389,13 +409,16 @@ mod tests {
     fn test_should_set_failed_user_canister_create() {
         setup();
 
-        UserRepository::sign_up(rey_canisteryo(), "rey_canisteryo".to_string())
+        UserRepository::oneshot()
+            .sign_up(rey_canisteryo(), "rey_canisteryo".to_string())
             .expect("should sign up user");
 
-        UserRepository::set_failed_user_canister_create(rey_canisteryo())
+        UserRepository::oneshot()
+            .set_failed_user_canister_create(rey_canisteryo())
             .expect("should set canister creation failed");
 
-        let user = UserRepository::get_user_by_principal(rey_canisteryo())
+        let user = UserRepository::oneshot()
+            .get_user_by_principal(rey_canisteryo())
             .expect("should query user")
             .expect("user should exist");
 
@@ -409,7 +432,7 @@ mod tests {
     fn test_should_fail_set_failed_canister_create_for_unknown_principal() {
         setup();
 
-        let result = UserRepository::set_failed_user_canister_create(rey_canisteryo());
+        let result = UserRepository::oneshot().set_failed_user_canister_create(rey_canisteryo());
         assert!(result.is_err(), "should fail for unknown principal");
     }
 
@@ -417,16 +440,20 @@ mod tests {
     fn test_should_retry_user_canister_creation() {
         setup();
 
-        UserRepository::sign_up(rey_canisteryo(), "rey_canisteryo".to_string())
+        UserRepository::oneshot()
+            .sign_up(rey_canisteryo(), "rey_canisteryo".to_string())
             .expect("should sign up user");
 
-        UserRepository::set_failed_user_canister_create(rey_canisteryo())
+        UserRepository::oneshot()
+            .set_failed_user_canister_create(rey_canisteryo())
             .expect("should set canister creation failed");
 
-        UserRepository::retry_user_canister_creation(rey_canisteryo())
+        UserRepository::oneshot()
+            .retry_user_canister_creation(rey_canisteryo())
             .expect("should retry user canister creation");
 
-        let user = UserRepository::get_user_by_principal(rey_canisteryo())
+        let user = UserRepository::oneshot()
+            .get_user_by_principal(rey_canisteryo())
             .expect("should query user")
             .expect("user should exist");
 
@@ -440,10 +467,12 @@ mod tests {
     fn test_should_get_user_by_principal() {
         setup();
 
-        UserRepository::sign_up(rey_canisteryo(), "rey_canisteryo".to_string())
+        UserRepository::oneshot()
+            .sign_up(rey_canisteryo(), "rey_canisteryo".to_string())
             .expect("should sign up user");
 
-        let user = UserRepository::get_user_by_principal(rey_canisteryo())
+        let user = UserRepository::oneshot()
+            .get_user_by_principal(rey_canisteryo())
             .expect("should query user")
             .expect("user should exist");
 
@@ -455,8 +484,9 @@ mod tests {
     fn test_should_return_none_for_unknown_principal() {
         setup();
 
-        let user =
-            UserRepository::get_user_by_principal(rey_canisteryo()).expect("should query user");
+        let user = UserRepository::oneshot()
+            .get_user_by_principal(rey_canisteryo())
+            .expect("should query user");
         assert!(user.is_none(), "should return None for unknown principal");
     }
 
@@ -464,10 +494,12 @@ mod tests {
     fn test_should_get_user_by_handle() {
         setup();
 
-        UserRepository::sign_up(rey_canisteryo(), "rey_canisteryo".to_string())
+        UserRepository::oneshot()
+            .sign_up(rey_canisteryo(), "rey_canisteryo".to_string())
             .expect("should sign up user");
 
-        let user = UserRepository::get_user_by_handle("rey_canisteryo")
+        let user = UserRepository::oneshot()
+            .get_user_by_handle("rey_canisteryo")
             .expect("should query user")
             .expect("user should exist");
 
@@ -479,7 +511,9 @@ mod tests {
     fn test_should_return_none_for_unknown_handle() {
         setup();
 
-        let user = UserRepository::get_user_by_handle("nonexistent").expect("should query");
+        let user = UserRepository::oneshot()
+            .get_user_by_handle("nonexistent")
+            .expect("should query");
         assert!(user.is_none(), "should return None for unknown handle");
     }
 
@@ -518,10 +552,11 @@ mod tests {
     /// Seeds two Active users named `alice` and `alicia`, both with a canister id.
     /// Used by tests that exercise matching/pagination behavior.
     fn seed_two_active_alikes() {
-        UserRepository::sign_up(alice_user(), "alice".to_string()).unwrap();
-        UserRepository::set_user_canister(alice_user(), canister(100)).unwrap();
-        UserRepository::sign_up(other_user(), "alicia".to_string()).unwrap();
-        UserRepository::set_user_canister(other_user(), canister(101)).unwrap();
+        let repo = UserRepository::oneshot();
+        repo.sign_up(alice_user(), "alice".to_string()).unwrap();
+        repo.set_user_canister(alice_user(), canister(100)).unwrap();
+        repo.sign_up(other_user(), "alicia".to_string()).unwrap();
+        repo.set_user_canister(other_user(), canister(101)).unwrap();
     }
 
     #[test]
@@ -529,7 +564,9 @@ mod tests {
         setup();
         seed_two_active_alikes();
 
-        let users = UserRepository::search_profiles("alice", 0, 50).expect("search should succeed");
+        let users = UserRepository::oneshot()
+            .search_profiles("alice", 0, 50)
+            .expect("search should succeed");
         let handles: Vec<_> = users.iter().map(|u| u.handle.0.as_str()).collect();
         assert!(handles.contains(&"alice"));
     }
@@ -539,7 +576,9 @@ mod tests {
         setup();
         seed_two_active_alikes();
 
-        let users = UserRepository::search_profiles("ali", 0, 50).expect("search should succeed");
+        let users = UserRepository::oneshot()
+            .search_profiles("ali", 0, 50)
+            .expect("search should succeed");
         let handles: Vec<_> = users.iter().map(|u| u.handle.0.as_str()).collect();
         assert!(handles.contains(&"alice"));
         assert!(handles.contains(&"alicia"));
@@ -551,7 +590,9 @@ mod tests {
         setup();
         seed_two_active_alikes();
 
-        let users = UserRepository::search_profiles("lic", 0, 50).expect("search should succeed");
+        let users = UserRepository::oneshot()
+            .search_profiles("lic", 0, 50)
+            .expect("search should succeed");
         let handles: Vec<_> = users.iter().map(|u| u.handle.0.as_str()).collect();
         assert!(handles.contains(&"alice"));
         assert!(handles.contains(&"alicia"));
@@ -562,7 +603,9 @@ mod tests {
         setup();
         seed_two_active_alikes();
 
-        let users = UserRepository::search_profiles("", 0, 50).expect("search should succeed");
+        let users = UserRepository::oneshot()
+            .search_profiles("", 0, 50)
+            .expect("search should succeed");
         assert_eq!(users.len(), 2);
     }
 
@@ -571,14 +614,20 @@ mod tests {
         setup();
         seed_two_active_alikes();
 
-        let page1 = UserRepository::search_profiles("", 0, 1).expect("search should succeed");
+        let page1 = UserRepository::oneshot()
+            .search_profiles("", 0, 1)
+            .expect("search should succeed");
         assert_eq!(page1.len(), 1);
 
-        let page2 = UserRepository::search_profiles("", 1, 1).expect("search should succeed");
+        let page2 = UserRepository::oneshot()
+            .search_profiles("", 1, 1)
+            .expect("search should succeed");
         assert_eq!(page2.len(), 1);
         assert_ne!(page1[0].handle.0, page2[0].handle.0);
 
-        let page3 = UserRepository::search_profiles("", 2, 1).expect("search should succeed");
+        let page3 = UserRepository::oneshot()
+            .search_profiles("", 2, 1)
+            .expect("search should succeed");
         assert!(page3.is_empty());
     }
 
@@ -587,8 +636,9 @@ mod tests {
         setup();
         seed_two_active_alikes();
 
-        let users =
-            UserRepository::search_profiles("zorblax", 0, 50).expect("search should succeed");
+        let users = UserRepository::oneshot()
+            .search_profiles("zorblax", 0, 50)
+            .expect("search should succeed");
         assert!(users.is_empty());
     }
 
@@ -596,41 +646,202 @@ mod tests {
     fn test_search_profiles_should_exclude_creation_pending() {
         setup();
         // CreationPending: signed up, no canister set yet.
-        UserRepository::sign_up(alice_user(), "alice".to_string()).unwrap();
+        UserRepository::oneshot()
+            .sign_up(alice_user(), "alice".to_string())
+            .unwrap();
 
-        let users = UserRepository::search_profiles("alice", 0, 50).expect("search should succeed");
+        let users = UserRepository::oneshot()
+            .search_profiles("alice", 0, 50)
+            .expect("search should succeed");
         assert!(users.is_empty(), "CreationPending users must be excluded");
     }
 
     #[test]
     fn test_search_profiles_should_exclude_creation_failed() {
         setup();
-        UserRepository::sign_up(alice_user(), "alice".to_string()).unwrap();
-        UserRepository::set_failed_user_canister_create(alice_user()).unwrap();
+        UserRepository::oneshot()
+            .sign_up(alice_user(), "alice".to_string())
+            .unwrap();
+        UserRepository::oneshot()
+            .set_failed_user_canister_create(alice_user())
+            .unwrap();
 
-        let users = UserRepository::search_profiles("alice", 0, 50).expect("search should succeed");
+        let users = UserRepository::oneshot()
+            .search_profiles("alice", 0, 50)
+            .expect("search should succeed");
         assert!(users.is_empty(), "CreationFailed users must be excluded");
     }
 
     #[test]
     fn test_search_profiles_should_exclude_deletion_pending() {
         setup();
-        UserRepository::sign_up(alice_user(), "alice".to_string()).unwrap();
-        UserRepository::set_user_canister(alice_user(), canister(100)).unwrap();
-        UserRepository::mark_user_for_deletion(alice_user()).unwrap();
+        UserRepository::oneshot()
+            .sign_up(alice_user(), "alice".to_string())
+            .unwrap();
+        UserRepository::oneshot()
+            .set_user_canister(alice_user(), canister(100))
+            .unwrap();
+        UserRepository::oneshot()
+            .mark_user_for_deletion(alice_user())
+            .unwrap();
 
-        let users = UserRepository::search_profiles("alice", 0, 50).expect("search should succeed");
+        let users = UserRepository::oneshot()
+            .search_profiles("alice", 0, 50)
+            .expect("search should succeed");
         assert!(users.is_empty(), "DeletionPending users must be excluded");
     }
 
     #[test]
     fn test_search_profiles_should_exclude_suspended() {
         setup();
-        UserRepository::sign_up(alice_user(), "alice".to_string()).unwrap();
-        UserRepository::set_user_canister(alice_user(), canister(100)).unwrap();
+        UserRepository::oneshot()
+            .sign_up(alice_user(), "alice".to_string())
+            .unwrap();
+        UserRepository::oneshot()
+            .set_user_canister(alice_user(), canister(100))
+            .unwrap();
         set_canister_status(alice_user(), did::directory::UserCanisterStatus::Suspended);
 
-        let users = UserRepository::search_profiles("alice", 0, 50).expect("search should succeed");
+        let users = UserRepository::oneshot()
+            .search_profiles("alice", 0, 50)
+            .expect("search should succeed");
         assert!(users.is_empty(), "Suspended users must be excluded");
+    }
+
+    // Transaction-aware tests: validate that callers can splice repository
+    // operations into an externally-driven transaction (commit + rollback).
+
+    #[test]
+    fn test_should_sign_up_user_in_transaction_and_commit() {
+        setup();
+
+        Transaction::run::<_, _, _, CanisterError>(Schema, |tx| {
+            UserRepository::with_transaction(tx)
+                .sign_up(rey_canisteryo(), "rey_canisteryo".to_string())
+        })
+        .expect("transaction should commit");
+
+        let user = UserRepository::oneshot()
+            .get_user_by_principal(rey_canisteryo())
+            .expect("should query user")
+            .expect("user should exist after commit");
+        assert_eq!(user.handle.0, "rey_canisteryo");
+    }
+
+    #[test]
+    fn test_should_rollback_sign_up_when_transaction_errors() {
+        setup();
+
+        let result: Result<(), CanisterError> = Transaction::run(Schema, |tx| {
+            UserRepository::with_transaction(tx)
+                .sign_up(rey_canisteryo(), "rey_canisteryo".to_string())?;
+            Err(CanisterError::Internal("boom".to_string()))
+        });
+        assert!(result.is_err());
+
+        let user = UserRepository::oneshot()
+            .get_user_by_principal(rey_canisteryo())
+            .expect("should query user");
+        assert!(
+            user.is_none(),
+            "user must not persist when transaction rolls back"
+        );
+    }
+
+    #[test]
+    fn test_should_atomically_sign_up_and_set_canister_in_one_transaction() {
+        setup();
+
+        Transaction::run::<_, _, _, CanisterError>(Schema, |tx| {
+            let repo = UserRepository::with_transaction(tx);
+            repo.sign_up(rey_canisteryo(), "rey_canisteryo".to_string())?;
+            repo.set_user_canister(rey_canisteryo(), bob())
+        })
+        .expect("transaction should commit");
+
+        let user = UserRepository::oneshot()
+            .get_user_by_principal(rey_canisteryo())
+            .expect("should query user")
+            .expect("user should exist after commit");
+
+        let Nullable::Value(cid) = user.canister_id else {
+            panic!("canister_id should be set");
+        };
+        assert_eq!(cid.0, bob());
+        assert_eq!(
+            did::directory::UserCanisterStatus::from(user.canister_status),
+            did::directory::UserCanisterStatus::Active
+        );
+    }
+
+    #[test]
+    fn test_should_rollback_combined_writes_when_second_step_errors() {
+        setup();
+
+        // First do a valid sign_up.
+        UserRepository::oneshot()
+            .sign_up(rey_canisteryo(), "rey_canisteryo".to_string())
+            .expect("should sign up user");
+
+        // Now try a tx that updates canister id and then errors. The update
+        // must not be visible after rollback.
+        let result: Result<(), CanisterError> = Transaction::run(Schema, |tx| {
+            UserRepository::with_transaction(tx).set_user_canister(rey_canisteryo(), bob())?;
+            Err(CanisterError::Internal("boom".to_string()))
+        });
+        assert!(result.is_err());
+
+        let user = UserRepository::oneshot()
+            .get_user_by_principal(rey_canisteryo())
+            .expect("should query user")
+            .expect("user must still exist");
+        assert!(
+            user.canister_id.is_null(),
+            "canister update must roll back on tx error"
+        );
+        assert_eq!(
+            did::directory::UserCanisterStatus::from(user.canister_status),
+            did::directory::UserCanisterStatus::CreationPending,
+            "status must roll back on tx error"
+        );
+    }
+
+    #[test]
+    fn test_should_remove_user_in_transaction() {
+        setup();
+
+        UserRepository::oneshot()
+            .sign_up(rey_canisteryo(), "rey_canisteryo".to_string())
+            .expect("should sign up user");
+
+        Transaction::run::<_, _, _, CanisterError>(Schema, |tx| {
+            UserRepository::with_transaction(tx).remove_user(rey_canisteryo())
+        })
+        .expect("transaction should commit");
+
+        let user = UserRepository::oneshot()
+            .get_user_by_principal(rey_canisteryo())
+            .expect("should query user");
+        assert!(user.is_none(), "user must be removed after commit");
+    }
+
+    #[test]
+    fn test_should_rollback_remove_user_when_transaction_errors() {
+        setup();
+
+        UserRepository::oneshot()
+            .sign_up(rey_canisteryo(), "rey_canisteryo".to_string())
+            .expect("should sign up user");
+
+        let result: Result<(), CanisterError> = Transaction::run(Schema, |tx| {
+            UserRepository::with_transaction(tx).remove_user(rey_canisteryo())?;
+            Err(CanisterError::Internal("boom".to_string()))
+        });
+        assert!(result.is_err());
+
+        let user = UserRepository::oneshot()
+            .get_user_by_principal(rey_canisteryo())
+            .expect("should query user");
+        assert!(user.is_some(), "user must persist when tx rolls back");
     }
 }

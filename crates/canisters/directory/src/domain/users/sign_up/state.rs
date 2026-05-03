@@ -297,11 +297,11 @@ where
     }
 
     fn commit_sign_up(&self, canister_id: Principal) -> CanisterResult<()> {
-        UserRepository::set_user_canister(self.user_id, canister_id)
+        UserRepository::oneshot().set_user_canister(self.user_id, canister_id)
     }
 
     fn commit_sign_up_failure(&self) -> CanisterResult<()> {
-        UserRepository::set_failed_user_canister_create(self.user_id)
+        UserRepository::oneshot().set_failed_user_canister_create(self.user_id)
     }
 
     /// Finish the sign up process for the user by removing their state from the `USER_SIGN_UP_STATES` thread-local storage.
@@ -734,7 +734,8 @@ mod tests {
             TestFederationClient::ok(),
         );
         // the user must exist in the DB for commit to succeed
-        UserRepository::sign_up(rey_canisteryo(), "alice".to_string())
+        UserRepository::oneshot()
+            .sign_up(rey_canisteryo(), "alice".to_string())
             .expect("sign_up should succeed");
 
         let current = SignUpStateStep {
@@ -756,7 +757,8 @@ mod tests {
             TestManagementClient::ok(user_canister()),
             TestFederationClient::ok(),
         );
-        UserRepository::sign_up(rey_canisteryo(), "alice".to_string())
+        UserRepository::oneshot()
+            .sign_up(rey_canisteryo(), "alice".to_string())
             .expect("sign_up should succeed");
 
         let current = SignUpStateStep {

@@ -34,7 +34,7 @@ pub fn sign_up(user_id: Principal, SignUpRequest { handle }: SignUpRequest) -> S
     }
 
     // 1. Check whether there is already a user with the given `user_id` in the database, if there is, return [`SignUpError::AlreadyRegistered`].
-    match UserRepository::get_user_by_principal(user_id) {
+    match UserRepository::oneshot().get_user_by_principal(user_id) {
         Err(err) => {
             ic_utils::log!("sign_up: internal error checking principal {user_id}: {err}");
             return SignUpResponse::Err(SignUpError::InternalError(format!(
@@ -78,7 +78,7 @@ pub fn sign_up(user_id: Principal, SignUpRequest { handle }: SignUpRequest) -> S
     }
 
     // 4. Check if the handle is already taken by another user in the database, if it is, return [`SignUpError::HandleTaken`].
-    match UserRepository::get_user_by_handle(&sanitized_handle) {
+    match UserRepository::oneshot().get_user_by_handle(&sanitized_handle) {
         Err(err) => {
             ic_utils::log!("sign_up: internal error checking handle {sanitized_handle}: {err}");
             return SignUpResponse::Err(SignUpError::InternalError(format!(
@@ -93,7 +93,7 @@ pub fn sign_up(user_id: Principal, SignUpRequest { handle }: SignUpRequest) -> S
     };
 
     // 5. Insert the new user in the database with the canister status set to [`did::directory::UserCanisterStatus::CreationPending`].
-    if let Err(err) = UserRepository::sign_up(user_id, sanitized_handle.clone()) {
+    if let Err(err) = UserRepository::oneshot().sign_up(user_id, sanitized_handle.clone()) {
         ic_utils::log!("sign_up: failed to insert user {user_id} in the database: {err}");
         return SignUpResponse::Err(SignUpError::InternalError(format!(
             "Failed to insert new user in the database: {err}"
@@ -130,7 +130,7 @@ pub fn retry_sign_up(user_id: Principal) -> RetrySignUpResponse {
 
     // 1. Check whether there is a user with the given `user_id` in the database, if there isn't, return [`RetrySignUpError::NotRegistered`].
     // 2. Check if the user's canister is in a failed state, if it isn't, return [`RetrySignUpError::CanisterNotInFailedState`].
-    let handle = match UserRepository::get_user_by_principal(user_id) {
+    let handle = match UserRepository::oneshot().get_user_by_principal(user_id) {
         Err(err) => {
             ic_utils::log!("retry_sign_up: internal error checking principal {user_id}: {err}");
             return RetrySignUpResponse::Err(RetrySignUpError::InternalError(format!(
@@ -154,7 +154,7 @@ pub fn retry_sign_up(user_id: Principal) -> RetrySignUpResponse {
     };
 
     // 3. Update the user's canister status in the database to [`did::directory::UserCanisterStatus::CreationPending`]
-    if let Err(err) = UserRepository::retry_user_canister_creation(user_id) {
+    if let Err(err) = UserRepository::oneshot().retry_user_canister_creation(user_id) {
         ic_utils::log!("retry_sign_up: failed to update canister status for user {user_id}: {err}");
         return RetrySignUpResponse::Err(RetrySignUpError::InternalError(format!(
             "Failed to update user canister status in the database: {err}"
@@ -236,7 +236,8 @@ mod tests {
         assert_eq!(response, SignUpResponse::Ok);
 
         // verify it was stored sanitized
-        let user = UserRepository::get_user_by_handle("alice")
+        let user = UserRepository::oneshot()
+            .get_user_by_handle("alice")
             .expect("should query user")
             .expect("user should exist");
         assert_eq!(user.handle.0, "alice");
@@ -372,7 +373,8 @@ mod tests {
         );
 
         // simulate canister creation failure
-        UserRepository::set_failed_user_canister_create(bob())
+        UserRepository::oneshot()
+            .set_failed_user_canister_create(bob())
             .expect("should set canister creation failed");
 
         let response = retry_sign_up(bob());

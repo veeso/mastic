@@ -105,7 +105,7 @@ pub struct Report {
     pub resolved_by: Nullable<Principal>,
 }
 
-#[derive(DatabaseSchema, Clone)]
+#[derive(DatabaseSchema, Clone, Copy)]
 #[tables(
     Settings = "settings",
     Moderator = "moderators",
