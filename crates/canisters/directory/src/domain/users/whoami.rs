@@ -13,7 +13,7 @@ use crate::domain::users::repository::UserRepository;
 pub fn whoami(caller: Principal) -> WhoAmIResponse {
     ic_utils::log!("whoami: looking up user {caller}");
 
-    let user = match UserRepository::get_user_by_principal(caller) {
+    let user = match UserRepository::oneshot().get_user_by_principal(caller) {
         Ok(Some(user)) => user,
         Ok(None) => {
             ic_utils::log!("whoami: user {caller} is not registered");

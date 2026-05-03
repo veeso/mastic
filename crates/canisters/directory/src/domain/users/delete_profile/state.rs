@@ -201,7 +201,7 @@ where
     }
 
     fn commit(&self) -> crate::error::CanisterResult<()> {
-        UserRepository::remove_user(self.user_id)
+        UserRepository::oneshot().remove_user(self.user_id)
     }
 
     fn finish(&self) {
@@ -414,15 +414,17 @@ mod tests {
     #[tokio::test]
     async fn test_commit_removes_user_row() {
         setup();
-        UserRepository::sign_up(rey_canisteryo(), "alice".to_string())
+        UserRepository::oneshot()
+            .sign_up(rey_canisteryo(), "alice".to_string())
             .expect("should sign up user");
 
         let sm = machine(TestManagementClient::ok(), TestUserCanisterClient::ok());
 
         sm.commit().expect("commit should succeed");
 
-        let user =
-            UserRepository::get_user_by_principal(rey_canisteryo()).expect("should query user");
+        let user = UserRepository::oneshot()
+            .get_user_by_principal(rey_canisteryo())
+            .expect("should query user");
         assert!(user.is_none());
     }
 
@@ -473,7 +475,8 @@ mod tests {
     #[tokio::test]
     async fn test_step_finishes_on_successful_commit() {
         setup();
-        UserRepository::sign_up(rey_canisteryo(), "alice".to_string())
+        UserRepository::oneshot()
+            .sign_up(rey_canisteryo(), "alice".to_string())
             .expect("should sign up user");
 
         let sm = machine(TestManagementClient::ok(), TestUserCanisterClient::ok());

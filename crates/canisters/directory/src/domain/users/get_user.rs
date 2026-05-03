@@ -41,7 +41,10 @@ fn lookup_by_handle(handle: &str) -> Result<User, GetUserError> {
         return Err(GetUserError::InvalidHandle);
     }
 
-    resolve_user(UserRepository::get_user_by_handle(&handle), &handle)
+    resolve_user(
+        UserRepository::oneshot().get_user_by_handle(&handle),
+        &handle,
+    )
 }
 
 /// Look up a user by their IC principal.
@@ -49,7 +52,7 @@ fn lookup_by_principal(principal: Principal) -> Result<User, GetUserError> {
     ic_utils::log!("get_user: looking up user by principal {principal}");
 
     resolve_user(
-        UserRepository::get_user_by_principal(principal),
+        UserRepository::oneshot().get_user_by_principal(principal),
         &principal.to_string(),
     )
 }

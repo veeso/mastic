@@ -15,4 +15,8 @@ pub enum CanisterError {
     /// Sign up process failed for a user.
     #[error("Sign up failed: {0}")]
     SignUpFailed(String),
+    /// Internal error not caused by misuse.
+    #[error("Internal error: {0}")]
+    #[allow(dead_code)]
+    Internal(String),
 }

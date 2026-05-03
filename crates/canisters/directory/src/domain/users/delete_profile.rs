@@ -29,7 +29,7 @@ pub fn delete_profile(caller: Principal) -> DeleteProfileResponse {
         return DeleteProfileResponse::Err(DeleteProfileError::AnonymousPrincipal);
     }
 
-    let user = match UserRepository::get_user_by_principal(caller) {
+    let user = match UserRepository::oneshot().get_user_by_principal(caller) {
         Ok(Some(user)) => user,
         Ok(None) => {
             ic_utils::log!("delete_profile: user {caller} not registered");
@@ -62,7 +62,7 @@ pub fn delete_profile(caller: Principal) -> DeleteProfileResponse {
         return DeleteProfileResponse::Err(DeleteProfileError::Internal(err.to_string()));
     }
 
-    if let Err(err) = UserRepository::mark_user_for_deletion(caller) {
+    if let Err(err) = UserRepository::oneshot().mark_user_for_deletion(caller) {
         ic_utils::log!("delete_profile: failed to mark user {caller} for deletion: {err}");
         return DeleteProfileResponse::Err(DeleteProfileError::Internal(err.to_string()));
     }
@@ -86,7 +86,7 @@ pub fn retry_delete_profile(caller: Principal) -> RetryDeleteProfileResponse {
         return RetryDeleteProfileResponse::Err(RetryDeleteProfileError::NotRegistered);
     }
 
-    let user = match UserRepository::get_user_by_principal(caller) {
+    let user = match UserRepository::oneshot().get_user_by_principal(caller) {
         Ok(Some(user)) => user,
         Ok(None) => {
             ic_utils::log!("retry_delete_profile: user {caller} not registered");
@@ -178,7 +178,9 @@ mod tests {
     #[test]
     fn test_should_reject_when_canister_not_active() {
         setup();
-        UserRepository::sign_up(bob(), "bob".to_string()).expect("should sign up");
+        UserRepository::oneshot()
+            .sign_up(bob(), "bob".to_string())
+            .expect("should sign up");
 
         let response = delete_profile(bob());
 
@@ -196,7 +198,8 @@ mod tests {
         let response = delete_profile(bob());
         assert_eq!(response, DeleteProfileResponse::Ok);
 
-        let user = UserRepository::get_user_by_principal(bob())
+        let user = UserRepository::oneshot()
+            .get_user_by_principal(bob())
             .expect("should query user")
             .expect("user should still exist pre-commit");
         assert_eq!(user.canister_status.0, UserCanisterStatus::DeletionPending);

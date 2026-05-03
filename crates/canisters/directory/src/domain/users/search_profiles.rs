@@ -36,7 +36,7 @@ pub fn search_profiles(
         "search_profiles called with query: {query}, sanitized handle: {handle}, limit: {limit}, offset: {offset}"
     );
 
-    match UserRepository::search_profiles(&handle, offset as usize, limit as usize) {
+    match UserRepository::oneshot().search_profiles(&handle, offset as usize, limit as usize) {
         Err(err) => {
             ic_utils::log!("Error searching profiles: {err}");
             SearchProfilesResponse::Err(did::directory::SearchProfilesError::Internal(
@@ -172,7 +172,9 @@ mod tests {
     fn test_should_exclude_deletion_pending_user() {
         setup();
         setup_registered_user_with_canister(rey_canisteryo(), "rey_canisteryo", bob());
-        UserRepository::mark_user_for_deletion(rey_canisteryo()).unwrap();
+        UserRepository::oneshot()
+            .mark_user_for_deletion(rey_canisteryo())
+            .unwrap();
 
         let SearchProfilesResponse::Ok(results) = search_profiles(args("rey", 0, 50)) else {
             panic!("expected Ok");

@@ -57,6 +57,7 @@ pub fn setup_registered_user_with_canister(
     canister_id: Principal,
 ) {
     setup_registered_user(principal, handle);
-    crate::domain::users::repository::UserRepository::set_user_canister(principal, canister_id)
+    crate::domain::users::repository::UserRepository::oneshot()
+        .set_user_canister(principal, canister_id)
         .expect("setup_registered_user_with_canister: failed to set user canister");
 }

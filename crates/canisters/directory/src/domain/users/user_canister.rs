@@ -14,7 +14,7 @@ use crate::domain::users::repository::UserRepository;
 pub fn user_canister(user: Principal) -> UserCanisterResponse {
     ic_utils::log!("user_canister: looking up user {user}");
 
-    let user_data = match UserRepository::get_user_by_principal(user) {
+    let user_data = match UserRepository::oneshot().get_user_by_principal(user) {
         Ok(Some(user)) => user,
         Ok(None) => {
             ic_utils::log!("whoami: user {user} is not registered");
