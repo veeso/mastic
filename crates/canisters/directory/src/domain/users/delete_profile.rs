@@ -57,7 +57,7 @@ pub fn delete_profile(caller: Principal) -> DeleteProfileResponse {
 
     let handle = user.handle.0.clone();
 
-    if let Err(err) = TombstoneRepository::insert_or_update(caller, handle.clone()) {
+    if let Err(err) = TombstoneRepository::oneshot().insert_or_update(caller, handle.clone()) {
         ic_utils::log!("delete_profile: failed to insert tombstone for {caller}: {err}");
         return DeleteProfileResponse::Err(DeleteProfileError::Internal(err.to_string()));
     }
@@ -201,7 +201,11 @@ mod tests {
             .expect("user should still exist pre-commit");
         assert_eq!(user.canister_status.0, UserCanisterStatus::DeletionPending);
 
-        assert!(TombstoneRepository::is_tombstoned("bob").expect("should query tombstone"));
+        assert!(
+            TombstoneRepository::oneshot()
+                .is_tombstoned("bob")
+                .expect("should query tombstone")
+        );
     }
 
     #[test]
