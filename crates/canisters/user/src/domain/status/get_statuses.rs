@@ -52,18 +52,15 @@ async fn get_statuses_inner(
 
     // query statuses
     let visibility_filter = visibility_filter_for_relationship(relationship);
-    StatusRepository::get_paginated_by_visibility(
-        &visibility_filter,
-        offset as usize,
-        limit as usize,
-    )
-    .map(|statuses| {
-        statuses
-            .into_iter()
-            .map(|s| status_to_did(&owner_actor_uri, s))
-            .collect()
-    })
-    .map(GetStatusesResponse::Ok)
+    StatusRepository::oneshot()
+        .get_paginated_by_visibility(&visibility_filter, offset as usize, limit as usize)
+        .map(|statuses| {
+            statuses
+                .into_iter()
+                .map(|s| status_to_did(&owner_actor_uri, s))
+                .collect()
+        })
+        .map(GetStatusesResponse::Ok)
 }
 
 /// Determines the relationship of the caller with the user, which affects the visibility of statuses.

@@ -211,7 +211,8 @@ mod tests {
 
         assert!(!BoostRepository::is_boosted(STATUS_URI_A).expect("query"));
         assert!(
-            crate::domain::status::StatusRepository::find_by_id(77)
+            crate::domain::status::StatusRepository::oneshot()
+                .find_by_id(77)
                 .expect("query")
                 .is_none(),
             "wrapper status row removed"
@@ -234,7 +235,8 @@ mod tests {
         .expect("insert");
 
         // Wrapper Status row
-        let wrapper = crate::domain::status::StatusRepository::find_by_id(42)
+        let wrapper = crate::domain::status::StatusRepository::oneshot()
+            .find_by_id(42)
             .expect("query")
             .expect("wrapper exists");
         assert_eq!(wrapper.content.0, "boosted text");

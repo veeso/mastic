@@ -1,30 +1,55 @@
 //! Status repository
 
 use did::common::Visibility;
-use ic_dbms_canister::prelude::DBMS_CONTEXT;
+use ic_dbms_canister::prelude::{DBMS_CONTEXT, IcAccessControlList, IcMemoryProvider};
 use wasm_dbms::WasmDbmsDatabase;
+use wasm_dbms::prelude::DbmsContext;
 use wasm_dbms_api::prelude::*;
 
 use crate::domain::snowflake::Snowflake;
-use crate::error::CanisterResult;
+use crate::error::{CanisterError, CanisterResult};
 use crate::schema::{
     FeedEntry, FeedEntryInsertRequest, FeedSource, Schema, Status, StatusInsertRequest,
     StatusRecord, StatusUpdateRequest,
 };
 
 /// Interface for the [`Status`] repository.
-pub struct StatusRepository;
+pub struct StatusRepository {
+    tx: Option<TransactionId>,
+}
 
 impl StatusRepository {
+    pub const fn oneshot() -> Self {
+        Self { tx: None }
+    }
+
+    pub const fn with_transaction(tx: TransactionId) -> Self {
+        Self { tx: Some(tx) }
+    }
+
+    fn db<'a>(
+        &self,
+        ctx: &'a DbmsContext<IcMemoryProvider, IcAccessControlList>,
+    ) -> WasmDbmsDatabase<'a, IcMemoryProvider, IcAccessControlList> {
+        match self.tx {
+            Some(id) => WasmDbmsDatabase::from_transaction(ctx, Schema, id),
+            None => WasmDbmsDatabase::oneshot(ctx, Schema),
+        }
+    }
+
     /// Create a new [`Status`] with the given content, timestamp and visibility.
     ///
-    /// A new [`Snowflake`] ID is generated for the status, and the current timestamp is used as the creation time.
+    /// A new [`Snowflake`] ID is generated for the status, and the current
+    /// timestamp is used as the creation time.
     ///
-    /// Both the `statuses` row and the corresponding `feed` entry are
-    /// inserted inside a single transaction.
+    /// Both the `statuses` row and the corresponding `feed` entry are inserted,
+    /// but transaction lifecycle is owned by the caller — typically via
+    /// `Transaction::run` — to keep the two writes atomic.
     ///
-    /// In case of success the [`Snowflake`] ID of the newly created status is returned.
+    /// In case of success the [`Snowflake`] ID of the newly created status is
+    /// returned.
     pub fn create(
+        &self,
         content: String,
         visibility: Visibility,
         created_at: u64,
@@ -32,9 +57,7 @@ impl StatusRepository {
         let snowflake_id = Snowflake::new();
 
         DBMS_CONTEXT.with(|ctx| {
-            let tx_id =
-                ctx.begin_transaction(db_utils::transaction::transaction_caller(ic_utils::now()));
-            let mut db = WasmDbmsDatabase::from_transaction(ctx, Schema, tx_id);
+            let db = self.db(ctx);
 
             db.insert::<Status>(StatusInsertRequest {
                 id: snowflake_id.into(),
@@ -55,7 +78,7 @@ impl StatusRepository {
                 created_at: created_at.into(),
             })?;
 
-            db.commit()
+            Ok::<(), CanisterError>(())
         })?;
 
         Ok(snowflake_id)
@@ -65,12 +88,13 @@ impl StatusRepository {
     ///
     /// This function is used to implement the `get_statuses` API, and the returned statuses are filtered based on the relationship of the caller with the user (owner, follower, or other).
     pub fn get_paginated_by_visibility(
+        &self,
         visibility: &[Visibility],
         offset: usize,
         limit: usize,
     ) -> CanisterResult<Vec<Status>> {
         DBMS_CONTEXT.with(|ctx| {
-            let db = WasmDbmsDatabase::oneshot(ctx, Schema);
+            let db = self.db(ctx);
 
             let mut query = Query::builder()
                 .all()
@@ -89,10 +113,9 @@ impl StatusRepository {
 
     /// Look up a single [`Status`] by its [`Snowflake`] id, returning [`None`]
     /// if no row matches.
-    pub fn find_by_id(id: u64) -> CanisterResult<Option<Status>> {
+    pub fn find_by_id(&self, id: u64) -> CanisterResult<Option<Status>> {
         DBMS_CONTEXT.with(|ctx| {
-            let db = WasmDbmsDatabase::oneshot(ctx, Schema);
-            let rows = db.select::<Status>(
+            let rows = self.db(ctx).select::<Status>(
                 Query::builder()
                     .all()
                     .and_where(Filter::eq(Status::primary_key(), Value::from(id)))
@@ -108,20 +131,20 @@ impl StatusRepository {
     /// Returns `Ok(true)` when the row exists and was updated, `Ok(false)`
     /// when no row matched (silently ignored: a missing target means we are
     /// not the author of that status, so the counter does not concern us).
-    pub fn increment_like_count(id: u64) -> CanisterResult<bool> {
-        Self::adjust_like_count(id, 1, true)
+    pub fn increment_like_count(&self, id: u64) -> CanisterResult<bool> {
+        self.adjust_like_count(id, 1, true)
     }
 
     /// Saturating-decrement the cached `like_count` of the [`Status`] with the
     /// given id. Decrementing from `0` is a no-op rather than an underflow.
     ///
     /// Returns `Ok(true)` when the row exists, `Ok(false)` when no row matched.
-    pub fn decrement_like_count(id: u64) -> CanisterResult<bool> {
-        Self::adjust_like_count(id, 1, false)
+    pub fn decrement_like_count(&self, id: u64) -> CanisterResult<bool> {
+        self.adjust_like_count(id, 1, false)
     }
 
-    fn adjust_like_count(id: u64, delta: u64, increment: bool) -> CanisterResult<bool> {
-        let Some(status) = Self::find_by_id(id)? else {
+    fn adjust_like_count(&self, id: u64, delta: u64, increment: bool) -> CanisterResult<bool> {
+        let Some(status) = self.find_by_id(id)? else {
             return Ok(false);
         };
         let current = status.like_count.0;
@@ -140,10 +163,7 @@ impl StatusRepository {
             ..Default::default()
         };
 
-        DBMS_CONTEXT.with(|ctx| {
-            let db = WasmDbmsDatabase::oneshot(ctx, Schema);
-            db.update::<Status>(patch)
-        })?;
+        DBMS_CONTEXT.with(|ctx| self.db(ctx).update::<Status>(patch))?;
         Ok(true)
     }
 
@@ -152,20 +172,20 @@ impl StatusRepository {
     /// Returns `Ok(true)` when the row exists and was updated, `Ok(false)`
     /// when no row matched (silently ignored: a missing target means we are
     /// not the author of that status, so the counter does not concern us).
-    pub fn increment_boost_count(id: u64) -> CanisterResult<bool> {
-        Self::adjust_boost_count(id, 1, true)
+    pub fn increment_boost_count(&self, id: u64) -> CanisterResult<bool> {
+        self.adjust_boost_count(id, 1, true)
     }
 
     /// Saturating-decrement the cached `boost_count` of the [`Status`] with the
     /// given id. Decrementing from `0` is a no-op rather than an underflow.
     ///
     /// Returns `Ok(true)` when the row exists, `Ok(false)` when no row matched.
-    pub fn decrement_boost_count(id: u64) -> CanisterResult<bool> {
-        Self::adjust_boost_count(id, 1, false)
+    pub fn decrement_boost_count(&self, id: u64) -> CanisterResult<bool> {
+        self.adjust_boost_count(id, 1, false)
     }
 
-    fn adjust_boost_count(id: u64, delta: u64, increment: bool) -> CanisterResult<bool> {
-        let Some(status) = Self::find_by_id(id)? else {
+    fn adjust_boost_count(&self, id: u64, delta: u64, increment: bool) -> CanisterResult<bool> {
+        let Some(status) = self.find_by_id(id)? else {
             return Ok(false);
         };
         let current = status.boost_count.0;
@@ -182,10 +202,7 @@ impl StatusRepository {
             where_clause: Some(Filter::eq(Status::primary_key(), Value::from(id))),
             ..Default::default()
         };
-        DBMS_CONTEXT.with(|ctx| {
-            let db = WasmDbmsDatabase::oneshot(ctx, Schema);
-            db.update::<Status>(patch)
-        })?;
+        DBMS_CONTEXT.with(|ctx| self.db(ctx).update::<Status>(patch))?;
         Ok(true)
     }
 
@@ -208,16 +225,18 @@ impl StatusRepository {
 #[cfg(test)]
 mod tests {
 
+    use db_utils::transaction::Transaction;
     use did::common::Visibility;
 
-    use super::StatusRepository;
+    use super::*;
     use crate::test_utils::{insert_status, setup};
 
     #[test]
     fn test_should_return_empty_when_no_statuses() {
         setup();
 
-        let result = StatusRepository::get_paginated_by_visibility(&[Visibility::Public], 0, 10)
+        let result = StatusRepository::oneshot()
+            .get_paginated_by_visibility(&[Visibility::Public], 0, 10)
             .expect("should query");
 
         assert!(result.is_empty());
@@ -230,7 +249,8 @@ mod tests {
         insert_status(2, "Mid", Visibility::Public, 2000);
         insert_status(3, "New", Visibility::Public, 3000);
 
-        let result = StatusRepository::get_paginated_by_visibility(&[Visibility::Public], 0, 10)
+        let result = StatusRepository::oneshot()
+            .get_paginated_by_visibility(&[Visibility::Public], 0, 10)
             .expect("should query");
 
         assert_eq!(result.len(), 3);
@@ -247,7 +267,8 @@ mod tests {
         }
 
         // skip 1, take 2 → newest-first: 5,4,3,2,1 → skip 1 → 4,3
-        let result = StatusRepository::get_paginated_by_visibility(&[Visibility::Public], 1, 2)
+        let result = StatusRepository::oneshot()
+            .get_paginated_by_visibility(&[Visibility::Public], 1, 2)
             .expect("should query");
 
         assert_eq!(result.len(), 2);
@@ -263,7 +284,8 @@ mod tests {
         insert_status(3, "FollowersOnly", Visibility::FollowersOnly, 3000);
         insert_status(4, "Direct", Visibility::Direct, 4000);
 
-        let result = StatusRepository::get_paginated_by_visibility(&[Visibility::Public], 0, 10)
+        let result = StatusRepository::oneshot()
+            .get_paginated_by_visibility(&[Visibility::Public], 0, 10)
             .expect("should query");
 
         assert_eq!(result.len(), 1);
@@ -278,16 +300,17 @@ mod tests {
         insert_status(3, "FollowersOnly", Visibility::FollowersOnly, 3000);
         insert_status(4, "Direct", Visibility::Direct, 4000);
 
-        let result = StatusRepository::get_paginated_by_visibility(
-            &[
-                Visibility::Public,
-                Visibility::Unlisted,
-                Visibility::FollowersOnly,
-            ],
-            0,
-            10,
-        )
-        .expect("should query");
+        let result = StatusRepository::oneshot()
+            .get_paginated_by_visibility(
+                &[
+                    Visibility::Public,
+                    Visibility::Unlisted,
+                    Visibility::FollowersOnly,
+                ],
+                0,
+                10,
+            )
+            .expect("should query");
 
         assert_eq!(result.len(), 3);
         // ordered newest-first
@@ -304,17 +327,18 @@ mod tests {
         insert_status(3, "FollowersOnly", Visibility::FollowersOnly, 3000);
         insert_status(4, "Direct", Visibility::Direct, 4000);
 
-        let result = StatusRepository::get_paginated_by_visibility(
-            &[
-                Visibility::Public,
-                Visibility::Unlisted,
-                Visibility::FollowersOnly,
-                Visibility::Direct,
-            ],
-            0,
-            10,
-        )
-        .expect("should query");
+        let result = StatusRepository::oneshot()
+            .get_paginated_by_visibility(
+                &[
+                    Visibility::Public,
+                    Visibility::Unlisted,
+                    Visibility::FollowersOnly,
+                    Visibility::Direct,
+                ],
+                0,
+                10,
+            )
+            .expect("should query");
 
         assert_eq!(result.len(), 4);
     }
@@ -324,7 +348,8 @@ mod tests {
         setup();
         insert_status(1, "Only one", Visibility::Public, 1000);
 
-        let result = StatusRepository::get_paginated_by_visibility(&[Visibility::Public], 100, 10)
+        let result = StatusRepository::oneshot()
+            .get_paginated_by_visibility(&[Visibility::Public], 100, 10)
             .expect("should query");
 
         assert!(result.is_empty());
@@ -334,12 +359,18 @@ mod tests {
     fn test_create_should_insert_status_and_feed_entry() {
         setup();
 
-        let snowflake =
-            StatusRepository::create("Hello world".to_string(), Visibility::Public, 42_000)
-                .expect("should create");
+        let snowflake = Transaction::run::<_, _, _, CanisterError>(Schema, |tx| {
+            StatusRepository::with_transaction(tx).create(
+                "Hello world".to_string(),
+                Visibility::Public,
+                42_000,
+            )
+        })
+        .expect("should create");
 
         // verify the status was inserted
-        let statuses = StatusRepository::get_paginated_by_visibility(&[Visibility::Public], 0, 10)
+        let statuses = StatusRepository::oneshot()
+            .get_paginated_by_visibility(&[Visibility::Public], 0, 10)
             .expect("should query");
 
         assert_eq!(statuses.len(), 1);
@@ -349,30 +380,82 @@ mod tests {
     }
 
     #[test]
+    fn test_create_should_rollback_on_error() {
+        setup();
+
+        // First create a status with a known ID via transaction
+        let snowflake = Transaction::run::<_, _, _, CanisterError>(Schema, |tx| {
+            StatusRepository::with_transaction(tx).create(
+                "first".to_string(),
+                Visibility::Public,
+                1_000,
+            )
+        })
+        .expect("first create");
+
+        let initial_count = StatusRepository::oneshot()
+            .get_paginated_by_visibility(&[Visibility::Public], 0, 100)
+            .expect("query")
+            .len();
+        assert_eq!(initial_count, 1);
+        let _ = snowflake;
+
+        // run a transaction that errors out — nothing must be persisted
+        let result: Result<(), CanisterError> = Transaction::run(Schema, |tx| {
+            StatusRepository::with_transaction(tx).create(
+                "rollback".to_string(),
+                Visibility::Public,
+                2_000,
+            )?;
+            Err(CanisterError::Internal("boom".to_string()))
+        });
+        assert!(result.is_err());
+
+        let after_count = StatusRepository::oneshot()
+            .get_paginated_by_visibility(&[Visibility::Public], 0, 100)
+            .expect("query")
+            .len();
+        assert_eq!(after_count, 1, "errored tx must not persist its insert");
+    }
+
+    #[test]
     fn test_should_increment_boost_count() {
         setup();
         insert_status(7, "Hi", Visibility::Public, 1_000);
 
-        assert!(StatusRepository::increment_boost_count(7).expect("should adjust"));
+        assert!(
+            StatusRepository::oneshot()
+                .increment_boost_count(7)
+                .expect("should adjust")
+        );
 
-        let row = StatusRepository::find_by_id(7).unwrap().unwrap();
+        let row = StatusRepository::oneshot().find_by_id(7).unwrap().unwrap();
         assert_eq!(row.boost_count.0, 1);
     }
 
     #[test]
     fn test_increment_boost_count_returns_false_when_missing() {
         setup();
-        assert!(!StatusRepository::increment_boost_count(99).expect("should adjust"));
+        assert!(
+            !StatusRepository::oneshot()
+                .increment_boost_count(99)
+                .expect("should adjust")
+        );
     }
 
     #[test]
     fn test_should_decrement_boost_count_saturating() {
         setup();
         insert_status(7, "Hi", Visibility::Public, 1_000);
-        StatusRepository::increment_boost_count(7).expect("inc");
-        StatusRepository::decrement_boost_count(7).expect("dec");
+        StatusRepository::oneshot()
+            .increment_boost_count(7)
+            .expect("inc");
+        StatusRepository::oneshot()
+            .decrement_boost_count(7)
+            .expect("dec");
         assert_eq!(
-            StatusRepository::find_by_id(7)
+            StatusRepository::oneshot()
+                .find_by_id(7)
                 .unwrap()
                 .unwrap()
                 .boost_count
@@ -380,9 +463,12 @@ mod tests {
             0
         );
 
-        StatusRepository::decrement_boost_count(7).expect("dec at zero");
+        StatusRepository::oneshot()
+            .decrement_boost_count(7)
+            .expect("dec at zero");
         assert_eq!(
-            StatusRepository::find_by_id(7)
+            StatusRepository::oneshot()
+                .find_by_id(7)
                 .unwrap()
                 .unwrap()
                 .boost_count

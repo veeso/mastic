@@ -301,7 +301,8 @@ fn resolve_boost_original(
     original_id: u64,
 ) -> (String, Visibility, Option<String>, bool) {
     if let Ok(Some((_, _))) = crate::domain::urls::parse_local_status_uri(original_uri)
-        && let Ok(Some(row)) = crate::domain::status::StatusRepository::find_by_id(original_id)
+        && let Ok(Some(row)) =
+            crate::domain::status::StatusRepository::oneshot().find_by_id(original_id)
     {
         let content = row.content.0.to_string();
         let visibility: Visibility = row.visibility.into();

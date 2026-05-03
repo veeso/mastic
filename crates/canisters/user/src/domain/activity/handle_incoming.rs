@@ -290,10 +290,13 @@ fn handle_like(activity: &Activity) -> Result<(), ReceiveActivityError> {
         return Ok(());
     };
 
-    if !StatusRepository::increment_like_count(id).map_err(|e| {
-        ic_utils::log!("handle_incoming: failed to increment like_count: {e}");
-        ReceiveActivityError::Internal(e.to_string())
-    })? {
+    if !StatusRepository::oneshot()
+        .increment_like_count(id)
+        .map_err(|e| {
+            ic_utils::log!("handle_incoming: failed to increment like_count: {e}");
+            ReceiveActivityError::Internal(e.to_string())
+        })?
+    {
         ic_utils::log!("handle_incoming: Like target status {id} not found, ignoring");
     }
     Ok(())
@@ -313,10 +316,13 @@ fn handle_undo_like(inner: &Activity, sender_uri: &str) -> Result<(), ReceiveAct
         return Ok(());
     };
 
-    if !StatusRepository::decrement_like_count(id).map_err(|e| {
-        ic_utils::log!("handle_incoming: failed to decrement like_count: {e}");
-        ReceiveActivityError::Internal(e.to_string())
-    })? {
+    if !StatusRepository::oneshot()
+        .decrement_like_count(id)
+        .map_err(|e| {
+            ic_utils::log!("handle_incoming: failed to decrement like_count: {e}");
+            ReceiveActivityError::Internal(e.to_string())
+        })?
+    {
         ic_utils::log!("handle_incoming: Undo(Like) target status {id} not found, ignoring");
     }
     Ok(())
@@ -378,10 +384,12 @@ fn handle_announce(activity: &Activity, activity_json: &str) -> Result<(), Recei
         })?;
 
     if let Some((_handle, id)) = parse_local_status(&target_uri)?
-        && !StatusRepository::increment_boost_count(id).map_err(|e| {
-            ic_utils::log!("handle_incoming: failed to increment boost_count: {e}");
-            ReceiveActivityError::Internal(e.to_string())
-        })?
+        && !StatusRepository::oneshot()
+            .increment_boost_count(id)
+            .map_err(|e| {
+                ic_utils::log!("handle_incoming: failed to increment boost_count: {e}");
+                ReceiveActivityError::Internal(e.to_string())
+            })?
     {
         ic_utils::log!("handle_incoming: Announce target status {id} not found, ignoring");
     }
@@ -440,10 +448,12 @@ fn handle_undo_announce(inner: &Activity, sender_uri: &str) -> Result<(), Receiv
         })?;
 
     if let Some((_handle, id)) = parse_local_status(&target_uri)?
-        && !StatusRepository::decrement_boost_count(id).map_err(|e| {
-            ic_utils::log!("handle_incoming: failed to decrement boost_count: {e}");
-            ReceiveActivityError::Internal(e.to_string())
-        })?
+        && !StatusRepository::oneshot()
+            .decrement_boost_count(id)
+            .map_err(|e| {
+                ic_utils::log!("handle_incoming: failed to decrement boost_count: {e}");
+                ReceiveActivityError::Internal(e.to_string())
+            })?
     {
         ic_utils::log!("handle_incoming: Undo(Announce) target status {id} not found, ignoring");
     }
@@ -963,7 +973,8 @@ mod tests {
         });
         assert_eq!(response, ReceiveActivityResponse::Ok);
 
-        let status = StatusRepository::find_by_id(42)
+        let status = StatusRepository::oneshot()
+            .find_by_id(42)
             .expect("should query")
             .expect("should find");
         assert_eq!(status.like_count.0, 1);
@@ -997,7 +1008,8 @@ mod tests {
             ReceiveActivityResponse::Ok
         );
 
-        let status = StatusRepository::find_by_id(42)
+        let status = StatusRepository::oneshot()
+            .find_by_id(42)
             .expect("should query")
             .expect("should find");
         assert_eq!(status.like_count.0, 0);
@@ -1034,7 +1046,8 @@ mod tests {
             ReceiveActivityResponse::Ok
         );
 
-        let status = StatusRepository::find_by_id(42)
+        let status = StatusRepository::oneshot()
+            .find_by_id(42)
             .expect("should query")
             .expect("should find");
         assert_eq!(
@@ -1075,7 +1088,8 @@ mod tests {
             ReceiveActivityResponse::Ok
         );
 
-        let status = StatusRepository::find_by_id(42)
+        let status = StatusRepository::oneshot()
+            .find_by_id(42)
             .expect("should query")
             .expect("should find");
         assert_eq!(status.like_count.0, 0);
@@ -1138,7 +1152,7 @@ mod tests {
         assert_eq!(resp, ReceiveActivityResponse::Ok);
 
         // boost_count incremented
-        let s = StatusRepository::find_by_id(42).unwrap().unwrap();
+        let s = StatusRepository::oneshot().find_by_id(42).unwrap().unwrap();
         assert_eq!(s.boost_count.0, 1);
 
         // inbox row + feed entry exist with is_boost=true
@@ -1184,7 +1198,7 @@ mod tests {
         });
         assert_eq!(resp, ReceiveActivityResponse::Ok);
 
-        let s = StatusRepository::find_by_id(42).unwrap().unwrap();
+        let s = StatusRepository::oneshot().find_by_id(42).unwrap().unwrap();
         assert_eq!(s.boost_count.0, 0);
 
         // Inbox boost row removed
@@ -1229,7 +1243,7 @@ mod tests {
         });
         assert_eq!(resp, ReceiveActivityResponse::Ok);
 
-        let s = StatusRepository::find_by_id(42).unwrap().unwrap();
+        let s = StatusRepository::oneshot().find_by_id(42).unwrap().unwrap();
         assert_eq!(s.boost_count.0, 0);
     }
 

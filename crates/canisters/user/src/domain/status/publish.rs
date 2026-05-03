@@ -3,14 +3,15 @@
 use activitypub::activity::{Activity, ActivityObject, ActivityType};
 use activitypub::context::ACTIVITY_STREAMS_CONTEXT;
 use activitypub::object::{BaseObject, ObjectType, OneOrMany};
+use db_utils::transaction::Transaction;
 use did::common::{Status, Visibility};
 use did::federation::{SendActivityArgs, SendActivityArgsObject};
 use did::user::{PublishStatusArgs, PublishStatusError, PublishStatusResponse};
 
 use crate::domain::follower::FollowerRepository;
 use crate::domain::status::StatusRepository;
-use crate::error::CanisterResult;
-use crate::schema::StatusContentSanitizer;
+use crate::error::{CanisterError, CanisterResult};
+use crate::schema::{Schema, StatusContentSanitizer};
 
 /// The ActivityStreams public addressing constant.
 const AS_PUBLIC: &str = "https://www.w3.org/ns/activitystreams#Public";
@@ -72,7 +73,9 @@ async fn save_status_and_publish_to_federation(
 ) -> CanisterResult<Status> {
     // insert
     let created_at = ic_utils::now();
-    let snowflake_id = StatusRepository::create(content.clone(), visibility, created_at)?;
+    let snowflake_id = Transaction::run::<_, _, _, CanisterError>(Schema, |tx| {
+        StatusRepository::with_transaction(tx).create(content.clone(), visibility, created_at)
+    })?;
     ic_utils::log!("Status created with ID: {snowflake_id}");
 
     // build owner actor URI

@@ -47,7 +47,7 @@ fn get_local_status_inner(
     }: GetLocalStatusArgs,
 ) -> CanisterResult<Option<Status>> {
     let scope = resolve_scope(caller, requester_actor_uri.as_deref());
-    let Some(record) = StatusRepository::find_by_id(id)? else {
+    let Some(record) = StatusRepository::oneshot().find_by_id(id)? else {
         return Ok(None);
     };
 
