@@ -57,7 +57,7 @@ pub fn sign_up(user_id: Principal, SignUpRequest { handle }: SignUpRequest) -> S
     }
 
     // 3. check whether is tombstoned
-    match TombstoneRepository::is_tombstoned(&sanitized_handle) {
+    match TombstoneRepository::oneshot().is_tombstoned(&sanitized_handle) {
         Ok(true) => {
             ic_utils::log!("sign_up: handle {sanitized_handle} is currently tombstoned");
             return SignUpResponse::Err(SignUpError::HandleTombstoned);
