@@ -36,13 +36,18 @@ async fn boost_status(args: BoostStatusArgs) -> BoostStatusResponse {
 }
 
 #[ic_cdk::update]
-async fn follow_user(args: FollowUserArgs) -> FollowUserResponse {
-    api::follow_user(args).await
+async fn delete_status(args: DeleteStatusArgs) -> DeleteStatusResponse {
+    api::delete_status(args).await
 }
 
 #[ic_cdk::update]
 async fn emit_delete_profile_activity() -> EmitDeleteProfileActivityResponse {
     api::emit_delete_profile_activity().await
+}
+
+#[ic_cdk::update]
+async fn follow_user(args: FollowUserArgs) -> FollowUserResponse {
+    api::follow_user(args).await
 }
 
 #[ic_cdk::query]

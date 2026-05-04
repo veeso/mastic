@@ -1,11 +1,13 @@
 //! Status domain
 
 use db_utils::repository::Repository;
+mod delete_status;
 mod get_local_status;
 mod get_statuses;
 mod publish;
 mod repository;
 
+pub use delete_status::delete_status;
 use did::common::Visibility;
 use wasm_dbms_api::prelude::TransactionId;
 

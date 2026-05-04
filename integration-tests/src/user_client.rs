@@ -1,13 +1,14 @@
 use candid::{Encode, Principal};
 use did::common::Visibility;
 use did::user::{
-    AcceptFollowArgs, AcceptFollowResponse, BoostStatusArgs, BoostStatusResponse, FollowUserArgs,
-    FollowUserResponse, GetFollowRequestsArgs, GetFollowRequestsResponse, GetFollowersArgs,
-    GetFollowersResponse, GetFollowingArgs, GetFollowingResponse, GetLikedArgs, GetLikedResponse,
-    GetProfileResponse, GetStatusesArgs, GetStatusesResponse, LikeStatusArgs, LikeStatusResponse,
-    PublishStatusArgs, PublishStatusResponse, ReadFeedArgs, ReadFeedResponse, RejectFollowArgs,
-    RejectFollowResponse, UndoBoostArgs, UndoBoostResponse, UnfollowUserArgs, UnfollowUserResponse,
-    UnlikeStatusArgs, UnlikeStatusResponse, UpdateProfileArgs, UpdateProfileResponse,
+    AcceptFollowArgs, AcceptFollowResponse, BoostStatusArgs, BoostStatusResponse, DeleteStatusArgs,
+    DeleteStatusResponse, FollowUserArgs, FollowUserResponse, GetFollowRequestsArgs,
+    GetFollowRequestsResponse, GetFollowersArgs, GetFollowersResponse, GetFollowingArgs,
+    GetFollowingResponse, GetLikedArgs, GetLikedResponse, GetProfileResponse, GetStatusesArgs,
+    GetStatusesResponse, LikeStatusArgs, LikeStatusResponse, PublishStatusArgs,
+    PublishStatusResponse, ReadFeedArgs, ReadFeedResponse, RejectFollowArgs, RejectFollowResponse,
+    UndoBoostArgs, UndoBoostResponse, UnfollowUserArgs, UnfollowUserResponse, UnlikeStatusArgs,
+    UnlikeStatusResponse, UpdateProfileArgs, UpdateProfileResponse,
 };
 use pocket_ic_harness::PocketIcTestEnv;
 
@@ -258,6 +259,24 @@ impl UserClient<'_> {
             )
             .await
             .expect("Failed to call boost_status")
+    }
+
+    pub async fn delete_status(
+        &self,
+        caller: Principal,
+        status_uri: String,
+    ) -> DeleteStatusResponse {
+        let args = DeleteStatusArgs { status_uri };
+
+        self.env
+            .update(
+                self.canister_id,
+                caller,
+                "delete_status",
+                Encode!(&args).expect("Failed to encode delete_status arguments"),
+            )
+            .await
+            .expect("Failed to call delete_status")
     }
 
     pub async fn undo_boost(&self, caller: Principal, status_url: String) -> UndoBoostResponse {

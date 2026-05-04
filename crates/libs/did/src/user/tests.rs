@@ -372,7 +372,7 @@ fn test_should_roundtrip_publish_status_response_err() {
 #[test]
 fn test_should_roundtrip_delete_status_args() {
     let args = DeleteStatusArgs {
-        status_id: "test-id".to_string(),
+        status_uri: "https://mastic.social/users/alice/statuses/123".to_string(),
     };
     let bytes = Encode!(&args).unwrap();
     let decoded = Decode!(&bytes, DeleteStatusArgs).unwrap();
@@ -389,7 +389,11 @@ fn test_should_roundtrip_delete_status_response_ok() {
 
 #[test]
 fn test_should_roundtrip_delete_status_response_err() {
-    for error in [DeleteStatusError::Unauthorized, DeleteStatusError::NotFound] {
+    for error in [
+        DeleteStatusError::Internal("err".to_string()),
+        DeleteStatusError::NotFound,
+        DeleteStatusError::InvalidUri,
+    ] {
         let resp = DeleteStatusResponse::Err(error);
         let bytes = Encode!(&resp).unwrap();
         let decoded = Decode!(&bytes, DeleteStatusResponse).unwrap();
