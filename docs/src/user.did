@@ -26,6 +26,22 @@ type BoostStatusError = variant {
 };
 // Response type for the `boost_status` method.
 type BoostStatusResponse = variant { Ok; Err : BoostStatusError };
+// Request arguments for the `delete_status` method.
+type DeleteStatusArgs = record {
+  // The unique URI of the status to delete.
+  status_uri : text;
+};
+// Error types for the `delete_status` method.
+type DeleteStatusError = variant {
+  // Internal error occurred while deleting the status.
+  Internal : text;
+  // No status exists with the given URI.
+  NotFound;
+  // Invalid status URI format.
+  InvalidUri;
+};
+// Response type for the `delete_status` method.
+type DeleteStatusResponse = variant { Ok; Err : DeleteStatusError };
 // Error types for the `emit_delete_profile_activity` method.
 // 
 // Called by the Directory Canister during delete_profile flow to aggregate and
@@ -324,6 +340,7 @@ type Visibility = variant {
 service : (UserInstallArgs) -> {
   accept_follow : (AcceptFollowArgs) -> (AcceptFollowResponse);
   boost_status : (BoostStatusArgs) -> (BoostStatusResponse);
+  delete_status : (DeleteStatusArgs) -> (DeleteStatusResponse);
   emit_delete_profile_activity : () -> (EmitDeleteProfileActivityResponse);
   follow_user : (FollowUserArgs) -> (FollowUserResponse);
   get_follow_requests : (GetFollowRequestsArgs) -> (

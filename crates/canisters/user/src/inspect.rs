@@ -6,6 +6,7 @@ pub fn inspect() {
     match method_name.as_str() {
         "accept_follow"
         | "boost_status"
+        | "delete_status"
         | "follow_user"
         | "get_follow_requests"
         | "like_status"

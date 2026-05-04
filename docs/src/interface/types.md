@@ -821,18 +821,24 @@ type PublishStatusError = variant {
 ### DeleteStatus
 
 Request, response, and error types for the `delete_status` method. Removes a
-status post from the caller's outbox.
+status authored by the canister owner. The cascade drops the row from
+`statuses` (which propagates via FK to `media`, `boosts`, `edit_history`,
+`status_hashtags`, `pinned_statuses`), the matching `feed` entry, and any
+`liked` row that defensively references the same URI. A `Delete(Note)`
+activity is emitted to followers (excluding blocked actors) so receivers
+can purge their cached inbox + feed entries.
 
-| Field       | Description                            |
-| ----------- | -------------------------------------- |
-| `status_id` | The unique ID of the status to delete. |
+| Field        | Description                              |
+| ------------ | ---------------------------------------- |
+| `status_uri` | Canonical URI of the status to delete.   |
 
-- **Unauthorized**: the caller is not the canister owner.
-- **NotFound**: no status exists with the given ID.
+- **NotFound**: no status exists with the given URI on this canister.
+- **InvalidUri**: the URI does not match the `…/statuses/{id}` shape.
+- **Internal**: an unexpected error occurred during the delete or dispatch.
 
 ```candid
 type DeleteStatusArgs = record {
-  status_id : text;
+  status_uri : text;
 };
 
 type DeleteStatusResponse = variant {
@@ -841,8 +847,9 @@ type DeleteStatusResponse = variant {
 };
 
 type DeleteStatusError = variant {
-  Unauthorized;
   NotFound;
+  InvalidUri;
+  Internal : text;
 };
 ```
 

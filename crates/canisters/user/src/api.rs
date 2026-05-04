@@ -96,6 +96,15 @@ pub async fn boost_status(args: BoostStatusArgs) -> BoostStatusResponse {
     crate::domain::boost::boost_status(args).await
 }
 
+/// Deletes a status.
+pub async fn delete_status(args: DeleteStatusArgs) -> DeleteStatusResponse {
+    if !inspect::is_owner(ic_utils::caller()) {
+        ic_utils::trap!("Only the owner can delete statuses");
+    }
+
+    crate::domain::status::delete_status(args).await
+}
+
 /// Emit a `Delete(Person)` activity to followers on profile deletion.
 ///
 /// This function can only be called by the directory canister.

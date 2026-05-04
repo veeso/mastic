@@ -84,7 +84,7 @@ impl StatusRepository {
     pub fn delete_by_id(&self, snowflake_id: u64) -> CanisterResult<()> {
         DBMS_CONTEXT.with(|ctx| {
             self.db(ctx).delete::<Status>(
-                DeleteBehavior::Restrict,
+                DeleteBehavior::Cascade,
                 Some(Filter::eq(Status::primary_key(), Value::from(snowflake_id))),
             )?;
             Ok(())

@@ -324,21 +324,23 @@ pub enum PublishStatusResponse {
 /// Request arguments for the `delete_status` method.
 #[derive(Debug, Clone, PartialEq, Eq, CandidType, Serialize, Deserialize)]
 pub struct DeleteStatusArgs {
-    /// The unique ID of the status to delete.
-    pub status_id: String,
+    /// The unique URI of the status to delete.
+    pub status_uri: String,
 }
 
 /// Error types for the `delete_status` method.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, CandidType, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, CandidType, Serialize, Deserialize)]
 pub enum DeleteStatusError {
-    /// The caller is not the canister owner.
-    Unauthorized,
-    /// No status exists with the given ID.
+    /// No status exists with the given URI.
     NotFound,
+    /// Invalid status URI format.
+    InvalidUri,
+    /// Internal error occurred while deleting the status.
+    Internal(String),
 }
 
 /// Response type for the `delete_status` method.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, CandidType, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, CandidType, Serialize, Deserialize)]
 pub enum DeleteStatusResponse {
     Ok,
     Err(DeleteStatusError),
