@@ -9,11 +9,11 @@ use did::federation::{SendActivityArgs, SendActivityArgsObject};
 use did::user::{UpdateProfileArgs, UpdateProfileError, UpdateProfileResponse};
 
 use crate::adapters::federation;
-use crate::domain::block::BlockRepository;
-use crate::domain::follower::FollowerRepository;
-use crate::domain::profile::ProfileRepository;
 use crate::domain::urls;
 use crate::error::CanisterResult;
+use crate::repository::block::BlockRepository;
+use crate::repository::follower::FollowerRepository;
+use crate::repository::profile::ProfileRepository;
 use crate::schema::Profile;
 
 /// The ActivityStreams public-audience constant.

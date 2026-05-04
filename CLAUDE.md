@@ -82,6 +82,13 @@ Authorization is principal-based: User→UserCanister (owner principal), Federat
 - Workspace dependencies defined in root `Cargo.toml` — crates reference them with `workspace = true`.
 - Key dependencies: `ic-cdk` 0.20, `candid` 0.10, `ic-stable-structures` 0.7, `pocket-ic` 12.
 
+### Repositories
+
+- All canister-local repositories live under `crate::repository` (file: `src/repository.rs`, submodules under `src/repository/`). One submodule per domain table — e.g. `crate::repository::status::StatusRepository`.
+- Every repository **must** implement the `db_utils::repository::Repository` trait. This provides the `oneshot()`, `with_transaction(tx)`, `tx()`, `schema()`, and default `db()` methods used by the transaction layer.
+- Domain modules (`src/domain/<domain>.rs`) hold flow logic only — they import repositories via `use crate::repository::<domain>::FooRepository;`. Do **not** put repository structs under `src/domain/<domain>/repository.rs`.
+- When adding a new domain table: create `src/repository/<name>.rs`, register it with `pub mod <name>;` in `src/repository.rs`, and impl `Repository` for the struct.
+
 ### Candid Interfaces
 
 Canonical `.did` files live in `docs/src/`. The build pipeline also auto-extracts `.did` from WASM to `.artifact/`. When adding or modifying canister methods, update **both**:

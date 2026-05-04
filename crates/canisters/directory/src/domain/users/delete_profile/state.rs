@@ -14,7 +14,7 @@ use db_utils::repository::Repository;
 
 use crate::adapters::management_canister::ManagementCanister;
 use crate::adapters::user_canister::UserCanister;
-use crate::domain::users::repository::UserRepository;
+use crate::repository::users::UserRepository;
 
 thread_local! {
     /// Active delete_profile states, keyed by user principal.

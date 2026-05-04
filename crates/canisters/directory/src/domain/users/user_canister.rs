@@ -4,7 +4,7 @@ use candid::Principal;
 use db_utils::repository::Repository;
 use did::directory::{UserCanisterError, UserCanisterResponse};
 
-use crate::domain::users::repository::UserRepository;
+use crate::repository::users::UserRepository;
 
 /// Given a [`Principal`] of a user, returns the [`Principal`] of their User Canister if they are registered in the directory.
 ///

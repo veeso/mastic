@@ -73,7 +73,7 @@ pub(super) fn parse_local_status(
         return Ok(None);
     };
 
-    let own = crate::domain::profile::ProfileRepository::oneshot()
+    let own = crate::repository::profile::ProfileRepository::oneshot()
         .get_profile()
         .map_err(|e| {
             ic_utils::log!("handle_incoming: failed to load own profile: {e}");

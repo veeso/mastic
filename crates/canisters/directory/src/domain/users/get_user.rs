@@ -5,8 +5,8 @@ use db_utils::handle::{HandleSanitizer, HandleValidator};
 use db_utils::repository::Repository;
 use did::directory::{GetUser, GetUserArgs, GetUserError, GetUserResponse};
 
-use crate::domain::users::repository::UserRepository;
 use crate::error::CanisterResult;
+use crate::repository::users::UserRepository;
 use crate::schema::User;
 
 /// Retrieves a user's information by handle or principal.

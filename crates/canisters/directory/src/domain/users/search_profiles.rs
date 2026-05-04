@@ -20,7 +20,7 @@ use db_utils::handle::HandleSanitizer;
 use db_utils::repository::Repository;
 use did::directory::{SearchProfileEntry, SearchProfilesArgs, SearchProfilesResponse};
 
-use crate::domain::users::repository::UserRepository;
+use crate::repository::users::UserRepository;
 
 /// Implements the `search_profiles` Directory query. See module docs for
 /// behavior. Returns [`SearchProfilesResponse::Err`] only on internal storage
@@ -66,7 +66,7 @@ mod tests {
     use did::directory::{SearchProfilesArgs, SearchProfilesResponse, UserCanisterStatus};
 
     use super::*;
-    use crate::domain::users::repository::UserRepository;
+    use crate::repository::users::UserRepository;
     use crate::test_utils::{bob, rey_canisteryo, setup, setup_registered_user_with_canister};
 
     fn args(query: &str, offset: u64, limit: u64) -> SearchProfilesArgs {

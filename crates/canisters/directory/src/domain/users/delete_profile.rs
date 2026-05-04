@@ -9,8 +9,8 @@ use did::directory::{
     UserCanisterStatus,
 };
 
-use crate::domain::tombstone::TombstoneRepository;
-use crate::domain::users::repository::UserRepository;
+use crate::repository::tombstone::TombstoneRepository;
+use crate::repository::users::UserRepository;
 
 /// Handles the `delete_profile` method call to delete the caller's profile and User Canister.
 ///

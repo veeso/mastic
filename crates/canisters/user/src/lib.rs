@@ -3,6 +3,7 @@ mod api;
 mod domain;
 mod error;
 mod inspect;
+mod repository;
 mod schema;
 mod settings;
 #[cfg(test)]

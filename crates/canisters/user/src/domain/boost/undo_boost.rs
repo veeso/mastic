@@ -25,13 +25,13 @@ use did::federation::{SendActivityArgs, SendActivityArgsObject};
 use did::user::{UndoBoostArgs, UndoBoostError, UndoBoostResponse};
 use wasm_dbms_api::prelude::TransactionId;
 
-use crate::domain::boost::repository::BoostRepository;
-use crate::domain::feed::FeedRepository;
-use crate::domain::follower::FollowerRepository;
-use crate::domain::profile::ProfileRepository;
-use crate::domain::status::StatusRepository;
 use crate::domain::urls;
 use crate::error::{CanisterError, CanisterResult};
+use crate::repository::boost::BoostRepository;
+use crate::repository::feed::FeedRepository;
+use crate::repository::follower::FollowerRepository;
+use crate::repository::profile::ProfileRepository;
+use crate::repository::status::StatusRepository;
 use crate::schema::Schema;
 
 const AS_PUBLIC: &str = "https://www.w3.org/ns/activitystreams#Public";
@@ -157,11 +157,11 @@ mod tests {
     use super::*;
     use crate::adapters::federation::mock::{captured, push_fetch_status_response, reset_captured};
     use crate::domain::boost::boost_status::boost_status;
-    use crate::domain::boost::repository::BoostRepository;
-    use crate::domain::feed::FeedRepository;
-    use crate::domain::follower::FollowerRepository;
-    use crate::domain::status::StatusRepository;
     use crate::error::CanisterError;
+    use crate::repository::boost::BoostRepository;
+    use crate::repository::feed::FeedRepository;
+    use crate::repository::follower::FollowerRepository;
+    use crate::repository::status::StatusRepository;
     use crate::test_utils::setup;
 
     const STATUS_URI: &str = "https://remote.example/users/bob/statuses/42";

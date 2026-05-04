@@ -19,9 +19,9 @@ use db_utils::repository::Repository;
 use did::federation::{SendActivityArgs, SendActivityArgsObject};
 use did::user::{UnlikeStatusArgs, UnlikeStatusError, UnlikeStatusResponse};
 
-use crate::domain::liked::repository::LikedRepository;
-use crate::domain::profile::ProfileRepository;
 use crate::error::CanisterResult;
+use crate::repository::liked::LikedRepository;
+use crate::repository::profile::ProfileRepository;
 
 /// Execute the unlike-status flow.
 pub async fn unlike_status(

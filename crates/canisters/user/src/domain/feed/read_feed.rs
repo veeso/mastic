@@ -10,9 +10,9 @@ use ic_dbms_canister::prelude::DBMS_CONTEXT;
 use wasm_dbms::WasmDbmsDatabase;
 use wasm_dbms_api::prelude::{ColumnDef, Database, Filter, Query, Value};
 
-use crate::domain::boost::BoostRepository;
-use crate::domain::liked::LikedRepository;
 use crate::error::CanisterResult;
+use crate::repository::boost::BoostRepository;
+use crate::repository::liked::LikedRepository;
 use crate::schema::{FeedSource, Schema, Visibility as DbVisibility};
 
 /// The ActivityStreams public addressing constant.
@@ -52,7 +52,7 @@ pub fn read_feed(ReadFeedArgs { limit, offset }: ReadFeedArgs) -> ReadFeedRespon
 /// Sorting, offset and limit are fully handled at the database level,
 /// keeping memory usage bounded regardless of feed size.
 fn read_feed_inner(limit: u64, offset: u64) -> CanisterResult<Vec<FeedItem>> {
-    let own_profile = crate::domain::profile::ProfileRepository::oneshot().get_profile()?;
+    let own_profile = crate::repository::profile::ProfileRepository::oneshot().get_profile()?;
     let owner_actor_uri = crate::domain::urls::actor_uri(&own_profile.handle.0)?;
 
     DBMS_CONTEXT.with(|ctx| {
@@ -305,7 +305,7 @@ fn resolve_boost_original(
 ) -> (String, Visibility, Option<String>, bool) {
     if let Ok(Some((_, _))) = crate::domain::urls::parse_local_status_uri(original_uri)
         && let Ok(Some(row)) =
-            crate::domain::status::StatusRepository::oneshot().find_by_id(original_id)
+            crate::repository::status::StatusRepository::oneshot().find_by_id(original_id)
     {
         let content = row.content.0.to_string();
         let visibility: Visibility = row.visibility.into();
@@ -984,7 +984,7 @@ mod tests {
         insert_status(1, "Mine", Visibility::Public, 1_000);
         let owner_uri = crate::domain::urls::actor_uri("rey_canisteryo").unwrap();
         let status_uri = format!("{owner_uri}/statuses/1");
-        crate::domain::liked::LikedRepository::oneshot()
+        crate::repository::liked::LikedRepository::oneshot()
             .like_status(&status_uri)
             .expect("like");
 
@@ -1032,7 +1032,7 @@ mod tests {
         // Viewer's local status acts as the boosted target.
         insert_status(99, "Bob's post", Visibility::Public, 1_000);
         let original_uri = "https://mastic.social/users/rey_canisteryo/statuses/99";
-        crate::domain::liked::LikedRepository::oneshot()
+        crate::repository::liked::LikedRepository::oneshot()
             .like_status(original_uri)
             .expect("like");
 
@@ -1063,7 +1063,7 @@ mod tests {
         // Build an inbox Create(Note) whose note carries an explicit `id`,
         // and like that id from the viewer's perspective.
         let note_uri = "https://remote.example/users/bob/statuses/42";
-        crate::domain::liked::LikedRepository::oneshot()
+        crate::repository::liked::LikedRepository::oneshot()
             .like_status(note_uri)
             .expect("like");
 

@@ -3,8 +3,8 @@
 use candid::Principal;
 use db_utils::repository::Repository;
 
-use crate::domain::profile::ProfileRepository;
 use crate::error::CanisterResult;
+use crate::repository::profile::ProfileRepository;
 
 /// Create a brand new profile.
 ///

@@ -4,8 +4,8 @@ use db_utils::repository::Repository;
 use did::common::UserProfile;
 use did::user::{GetProfileError, GetProfileResponse};
 
-use crate::domain::profile::ProfileRepository;
 use crate::error::CanisterError;
+use crate::repository::profile::ProfileRepository;
 
 /// Gets the profile of the user.
 pub fn get_profile() -> GetProfileResponse {

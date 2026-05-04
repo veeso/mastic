@@ -3,8 +3,8 @@
 use db_utils::repository::Repository;
 use did::user::{GetFollowersArgs, GetFollowersError, GetFollowersResponse};
 
-use crate::domain::follower::FollowerRepository;
 use crate::error::CanisterResult;
+use crate::repository::follower::FollowerRepository;
 
 /// Gets a paginated list of followers.
 ///
@@ -32,7 +32,7 @@ fn inner_get_followers(
 mod tests {
 
     use super::*;
-    use crate::domain::follower::FollowerRepository;
+    use crate::repository::follower::FollowerRepository;
     use crate::test_utils::setup;
 
     #[test]

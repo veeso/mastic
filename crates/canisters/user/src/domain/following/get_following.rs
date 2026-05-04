@@ -3,8 +3,8 @@
 use db_utils::repository::Repository;
 use did::user::{GetFollowingArgs, GetFollowingError, GetFollowingResponse};
 
-use crate::domain::following::FollowingRepository;
 use crate::error::CanisterResult;
+use crate::repository::following::FollowingRepository;
 
 /// Gets a paginated list of following.
 ///
@@ -34,8 +34,8 @@ mod tests {
     use db_utils::transaction::Transaction;
 
     use super::*;
-    use crate::domain::following::FollowingRepository;
     use crate::error::CanisterError;
+    use crate::repository::following::FollowingRepository;
     use crate::schema::{FollowStatus, Schema};
     use crate::test_utils::setup;
 

@@ -5,9 +5,9 @@ use db_utils::repository::Repository;
 use db_utils::transaction::Transaction;
 use did::user::ReceiveActivityError;
 
-use crate::domain::activity::InboxActivityRepository;
-use crate::domain::feed::FeedRepository;
 use crate::error::{CanisterError, CanisterResult};
+use crate::repository::activity::InboxActivityRepository;
+use crate::repository::feed::FeedRepository;
 use crate::schema::Schema;
 
 /// Handle an incoming `Delete` activity.

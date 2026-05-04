@@ -13,10 +13,10 @@ use db_utils::repository::Repository;
 use did::common::{Status, Visibility};
 use did::user::{GetLocalStatusArgs, GetLocalStatusError, GetLocalStatusResponse};
 
-use crate::domain::follower::FollowerRepository;
-use crate::domain::status::StatusRepository;
 use crate::domain::urls;
 use crate::error::CanisterResult;
+use crate::repository::follower::FollowerRepository;
+use crate::repository::status::StatusRepository;
 
 /// Public entry point. Pulls `ic_utils::caller()` and forwards to
 /// [`get_local_status_with_caller`].
@@ -57,7 +57,7 @@ fn get_local_status_inner(
         return Ok(None);
     }
 
-    let own_profile = crate::domain::profile::ProfileRepository::oneshot().get_profile()?;
+    let own_profile = crate::repository::profile::ProfileRepository::oneshot().get_profile()?;
     let author_uri = urls::actor_uri(&own_profile.handle.0)?;
 
     Ok(Some(Status {
@@ -112,7 +112,7 @@ mod tests {
     use did::user::{GetLocalStatusArgs, GetLocalStatusError, GetLocalStatusResponse};
 
     use super::get_local_status_with_caller;
-    use crate::domain::follower::FollowerRepository;
+    use crate::repository::follower::FollowerRepository;
     use crate::test_utils::{admin, federation, insert_status, setup};
 
     const FOLLOWER_URI: &str = "https://remote.example/users/bob";

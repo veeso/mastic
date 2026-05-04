@@ -1,12 +1,10 @@
 //! Moderation functions for the Directory canister.
 
-use db_utils::repository::Repository;
-mod repository;
-
 use candid::Principal;
+use db_utils::repository::Repository;
 
-use crate::domain::moderators::repository::ModeratorsRepository;
 use crate::error::CanisterResult;
+use crate::repository::moderators::ModeratorsRepository;
 
 /// Adds a moderator to the directory canister.
 pub fn add_moderator(principal: Principal) -> CanisterResult<()> {

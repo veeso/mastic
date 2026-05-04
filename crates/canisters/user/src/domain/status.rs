@@ -5,7 +5,6 @@ mod delete_status;
 mod get_local_status;
 mod get_statuses;
 mod publish;
-mod repository;
 
 pub use delete_status::delete_status;
 use did::common::Visibility;
@@ -14,9 +13,9 @@ use wasm_dbms_api::prelude::TransactionId;
 pub use self::get_local_status::get_local_status;
 pub use self::get_statuses::get_statuses;
 pub use self::publish::publish_status;
-pub use self::repository::StatusRepository;
-use crate::domain::feed::FeedRepository;
 use crate::error::CanisterResult;
+use crate::repository::feed::FeedRepository;
+use crate::repository::status::StatusRepository;
 
 /// Maximum allowed length for the status content.
 pub const MAX_STATUS_LENGTH: usize = 500;

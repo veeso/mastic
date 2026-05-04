@@ -4,7 +4,7 @@ use activitypub::Activity;
 use db_utils::repository::Repository;
 use did::user::ReceiveActivityError;
 
-use crate::domain::status::StatusRepository;
+use crate::repository::status::StatusRepository;
 
 /// Handle an incoming `Like` activity.
 ///
@@ -86,7 +86,7 @@ mod tests {
 
     use super::super::handle_incoming;
     use super::super::test_helpers::{make_like_json, make_undo_like_json};
-    use crate::domain::status::StatusRepository;
+    use crate::repository::status::StatusRepository;
     use crate::test_utils::setup;
 
     #[test]

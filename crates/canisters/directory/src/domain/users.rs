@@ -2,7 +2,6 @@
 
 mod delete_profile;
 mod get_user;
-pub(crate) mod repository;
 mod search_profiles;
 mod sign_up;
 mod user_canister;

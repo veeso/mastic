@@ -15,9 +15,9 @@ use db_utils::repository::Repository;
 use did::federation::{SendActivityArgs, SendActivityArgsObject};
 use did::user::{UnfollowUserArgs, UnfollowUserError, UnfollowUserResponse};
 
-use crate::domain::following::FollowingRepository;
-use crate::domain::profile::ProfileRepository;
 use crate::error::CanisterResult;
+use crate::repository::following::FollowingRepository;
+use crate::repository::profile::ProfileRepository;
 
 /// Execute the unfollow-user flow.
 pub async fn unfollow_user(

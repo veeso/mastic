@@ -13,9 +13,9 @@ use db_utils::repository::Repository;
 use did::federation::{SendActivityArgs, SendActivityArgsObject};
 use did::user::{RejectFollowArgs, RejectFollowError, RejectFollowResponse};
 
-use crate::domain::follow_request::FollowRequestRepository;
-use crate::domain::profile::ProfileRepository;
 use crate::error::CanisterError;
+use crate::repository::follow_request::FollowRequestRepository;
+use crate::repository::profile::ProfileRepository;
 
 /// Execute the reject-follow flow.
 pub async fn reject_follow(

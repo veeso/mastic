@@ -7,8 +7,8 @@ use did::user::ReceiveActivityError;
 use wasm_dbms_api::prelude::{Database, DeleteBehavior, Filter, Nullable, Query, Value};
 
 use crate::domain::snowflake::Snowflake;
-use crate::domain::status::StatusRepository;
 use crate::error::CanisterError;
+use crate::repository::status::StatusRepository;
 use crate::schema::{
     ActivityType as DbActivityType, FeedEntry, FeedEntryInsertRequest, FeedSource, InboxActivity,
     InboxActivityInsertRequest, Schema,
@@ -160,7 +160,7 @@ mod tests {
     use super::super::test_helpers::{
         LOCAL_STATUS_URI, REMOTE_BOOSTER, make_announce_json, make_undo_announce_json,
     };
-    use crate::domain::status::StatusRepository;
+    use crate::repository::status::StatusRepository;
     use crate::test_utils::setup;
 
     #[test]

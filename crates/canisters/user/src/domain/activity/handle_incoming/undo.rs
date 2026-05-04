@@ -5,8 +5,8 @@ use activitypub::activity::{ActivityObject, ActivityType};
 use db_utils::repository::Repository;
 use did::user::ReceiveActivityError;
 
-use crate::domain::follow_request::FollowRequestRepository;
-use crate::domain::follower::FollowerRepository;
+use crate::repository::follow_request::FollowRequestRepository;
+use crate::repository::follower::FollowerRepository;
 
 /// Handle an incoming `Undo(Follow)` or `Undo(Like)` activity.
 ///
@@ -65,8 +65,8 @@ mod tests {
 
     use super::super::handle_incoming;
     use super::super::test_helpers::make_undo_follow_json;
-    use crate::domain::follow_request::FollowRequestRepository;
-    use crate::domain::follower::FollowerRepository;
+    use crate::repository::follow_request::FollowRequestRepository;
+    use crate::repository::follower::FollowerRepository;
     use crate::test_utils::setup;
 
     #[test]

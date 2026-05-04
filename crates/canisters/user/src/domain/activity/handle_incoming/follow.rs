@@ -6,9 +6,9 @@ use db_utils::repository::Repository;
 use db_utils::transaction::Transaction;
 use did::user::ReceiveActivityError;
 
-use crate::domain::follow_request::FollowRequestRepository;
-use crate::domain::following::FollowingRepository;
 use crate::error::CanisterError;
+use crate::repository::follow_request::FollowRequestRepository;
+use crate::repository::following::FollowingRepository;
 use crate::schema::{FollowStatus, Schema};
 
 /// Handle an incoming `Follow` activity.
@@ -123,8 +123,8 @@ mod tests {
     use super::super::test_helpers::{
         make_accept_follow_json, make_follow_json, make_reject_follow_json,
     };
-    use crate::domain::follow_request::FollowRequestRepository;
-    use crate::domain::following::FollowingRepository;
+    use crate::repository::follow_request::FollowRequestRepository;
+    use crate::repository::following::FollowingRepository;
     use crate::schema::FollowStatus;
     use crate::test_utils::setup;
 
