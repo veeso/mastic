@@ -25,15 +25,15 @@ use did::federation::{SendActivityArgs, SendActivityArgsObject};
 use did::user::{DeleteStatusArgs, DeleteStatusError, DeleteStatusResponse};
 
 use crate::adapters::federation;
-use crate::domain::block::BlockRepository;
-use crate::domain::boost::BoostRepository;
-use crate::domain::feed::FeedRepository;
-use crate::domain::follower::FollowerRepository;
-use crate::domain::liked::LikedRepository;
-use crate::domain::profile::ProfileRepository;
-use crate::domain::status::StatusRepository;
 use crate::domain::urls;
 use crate::error::{CanisterError, CanisterResult};
+use crate::repository::block::BlockRepository;
+use crate::repository::boost::BoostRepository;
+use crate::repository::feed::FeedRepository;
+use crate::repository::follower::FollowerRepository;
+use crate::repository::liked::LikedRepository;
+use crate::repository::profile::ProfileRepository;
+use crate::repository::status::StatusRepository;
 use crate::schema::Schema;
 
 const AS_PUBLIC: &str = "https://www.w3.org/ns/activitystreams#Public";
@@ -150,10 +150,10 @@ mod tests {
 
     use super::*;
     use crate::adapters::federation::mock::captured;
-    use crate::domain::boost::BoostRepository;
-    use crate::domain::feed::FeedRepository;
-    use crate::domain::liked::LikedRepository;
-    use crate::domain::status::StatusRepository;
+    use crate::repository::boost::BoostRepository;
+    use crate::repository::feed::FeedRepository;
+    use crate::repository::liked::LikedRepository;
+    use crate::repository::status::StatusRepository;
     use crate::schema::{
         Block, BlockInsertRequest, FeedEntry, Follower, FollowerInsertRequest, Media,
         MediaInsertRequest, Schema,

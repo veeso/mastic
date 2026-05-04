@@ -10,7 +10,7 @@
 use db_utils::repository::Repository;
 use did::user::{GetLikedArgs, GetLikedError, GetLikedResponse};
 
-use crate::domain::liked::repository::LikedRepository;
+use crate::repository::liked::LikedRepository;
 
 /// Execute the get-liked flow.
 ///
@@ -36,7 +36,7 @@ mod tests {
     use did::user::{GetLikedArgs, GetLikedResponse};
 
     use super::get_liked;
-    use crate::domain::liked::repository::LikedRepository;
+    use crate::repository::liked::LikedRepository;
     use crate::test_utils::setup;
 
     #[test]

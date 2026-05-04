@@ -9,8 +9,8 @@ use ic_management_canister_types::CanisterSettings;
 
 use crate::adapters::federation_canister::FederationCanister;
 use crate::adapters::management_canister::ManagementCanister;
-use crate::domain::users::repository::UserRepository;
 use crate::error::CanisterResult;
+use crate::repository::users::UserRepository;
 
 thread_local! {
     /// If a canister is being created for a user, we store the state of the sign up process here.

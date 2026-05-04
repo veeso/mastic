@@ -3,8 +3,8 @@
 use db_utils::repository::Repository;
 use did::user::{GetFollowRequestsArgs, GetFollowRequestsError, GetFollowRequestsResponse};
 
-use crate::domain::follow_request::FollowRequestRepository;
 use crate::error::{CanisterError, CanisterResult};
+use crate::repository::follow_request::FollowRequestRepository;
 
 /// Gets a paginated list of pending follow requests.
 ///
@@ -43,7 +43,7 @@ impl From<CanisterError> for GetFollowRequestsError {
 mod tests {
 
     use super::*;
-    use crate::domain::follow_request::FollowRequestRepository;
+    use crate::repository::follow_request::FollowRequestRepository;
     use crate::test_utils::setup;
 
     #[test]

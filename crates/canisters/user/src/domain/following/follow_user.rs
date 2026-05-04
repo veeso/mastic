@@ -14,9 +14,9 @@ use db_utils::repository::Repository;
 use did::federation::{SendActivityArgs, SendActivityArgsObject};
 use did::user::{FollowUserArgs, FollowUserError, FollowUserResponse};
 
-use super::FollowingRepository;
-use crate::domain::profile::ProfileRepository;
 use crate::error::{CanisterError, CanisterResult};
+use crate::repository::following::FollowingRepository;
+use crate::repository::profile::ProfileRepository;
 
 /// Execute the follow-user flow.
 pub async fn follow_user(args: FollowUserArgs) -> FollowUserResponse {

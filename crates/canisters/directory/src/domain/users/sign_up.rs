@@ -7,8 +7,8 @@ use did::directory::{
     RetrySignUpError, RetrySignUpResponse, SignUpError, SignUpRequest, SignUpResponse,
 };
 
-use crate::domain::tombstone::TombstoneRepository;
-use crate::domain::users::repository::UserRepository;
+use crate::repository::tombstone::TombstoneRepository;
+use crate::repository::users::UserRepository;
 
 mod state;
 

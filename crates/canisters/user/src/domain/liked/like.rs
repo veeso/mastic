@@ -22,9 +22,9 @@ use db_utils::repository::Repository;
 use did::federation::{SendActivityArgs, SendActivityArgsObject};
 use did::user::{LikeStatusArgs, LikeStatusError, LikeStatusResponse};
 
-use crate::domain::liked::repository::LikedRepository;
-use crate::domain::profile::ProfileRepository;
 use crate::error::CanisterResult;
+use crate::repository::liked::LikedRepository;
+use crate::repository::profile::ProfileRepository;
 
 /// Execute the like-status flow.
 pub async fn like_status(LikeStatusArgs { status_url }: LikeStatusArgs) -> LikeStatusResponse {

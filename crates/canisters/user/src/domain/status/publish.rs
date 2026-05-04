@@ -9,9 +9,9 @@ use did::common::{Status, Visibility};
 use did::federation::{SendActivityArgs, SendActivityArgsObject};
 use did::user::{PublishStatusArgs, PublishStatusError, PublishStatusResponse};
 
-use crate::domain::follower::FollowerRepository;
 use crate::domain::snowflake::Snowflake;
 use crate::error::{CanisterError, CanisterResult};
+use crate::repository::follower::FollowerRepository;
 use crate::schema::{Schema, StatusContentSanitizer};
 
 /// The ActivityStreams public addressing constant.
@@ -87,7 +87,7 @@ async fn save_status_and_publish_to_federation(
     ic_utils::log!("Status created with ID: {snowflake_id}");
 
     // build owner actor URI
-    let own_profile = crate::domain::profile::ProfileRepository::oneshot().get_profile()?;
+    let own_profile = crate::repository::profile::ProfileRepository::oneshot().get_profile()?;
     let owner_actor_uri = crate::domain::urls::actor_uri(&own_profile.handle.0)?;
 
     // make status object

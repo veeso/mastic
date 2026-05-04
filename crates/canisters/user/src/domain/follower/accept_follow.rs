@@ -17,9 +17,9 @@ use ic_dbms_canister::prelude::DBMS_CONTEXT;
 use wasm_dbms::WasmDbmsDatabase;
 use wasm_dbms_api::prelude::*;
 
-use crate::domain::follow_request::FollowRequestRepository;
-use crate::domain::profile::ProfileRepository;
 use crate::error::{CanisterError, CanisterResult};
+use crate::repository::follow_request::FollowRequestRepository;
+use crate::repository::profile::ProfileRepository;
 use crate::schema::{FollowRequest, Follower, FollowerInsertRequest, Schema};
 
 /// Execute the accept-follow flow.
@@ -143,7 +143,7 @@ fn make_accept_activity(own_actor_uri: &str, follower_actor_uri: &str) -> Activi
 mod tests {
 
     use super::*;
-    use crate::domain::follower::FollowerRepository;
+    use crate::repository::follower::FollowerRepository;
     use crate::test_utils::setup;
 
     #[tokio::test]

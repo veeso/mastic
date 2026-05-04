@@ -8,11 +8,11 @@ use did::federation::{SendActivityArgs, SendActivityArgsObject};
 use did::user::{EmitDeleteProfileActivityError, EmitDeleteProfileActivityResponse};
 
 use crate::adapters::federation;
-use crate::domain::block::BlockRepository;
-use crate::domain::follower::FollowerRepository;
-use crate::domain::profile::ProfileRepository;
 use crate::domain::urls;
 use crate::error::CanisterResult;
+use crate::repository::block::BlockRepository;
+use crate::repository::follower::FollowerRepository;
+use crate::repository::profile::ProfileRepository;
 
 /// The ActivityStreams public-audience constant.
 const AS_PUBLIC: &str = "https://www.w3.org/ns/activitystreams#Public";
